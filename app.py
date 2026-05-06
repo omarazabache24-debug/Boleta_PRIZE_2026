@@ -26,10 +26,7 @@ from datetime import datetime
 from functools import wraps
 from zoneinfo import ZoneInfo
 
-try:
-    import pandas as pd
-except Exception:
-    pd = None
+from openpyxl import load_workbook
 
 try:
     import psycopg2
@@ -327,16 +324,29 @@ def guardar_pdf(file_storage, tipo="Utilidad", periodo=""):
 
 
 def importar_trabajadores_excel(file_storage):
-    if pd is None:
-        raise RuntimeError("Pandas no está instalado. Revisa requirements.txt.")
-    df = pd.read_excel(file_storage)
-    df.columns = [str(c).strip().upper() for c in df.columns]
-    col_dni = next((c for c in ["DNI", "DOCUMENTO", "NRO_DOCUMENTO", "NUMERO_DOCUMENTO"] if c in df.columns), None)
-    col_nombre = next((c for c in ["NOMBRE", "TRABAJADOR", "APELLIDOS Y NOMBRES", "APELLIDOS_NOMBRES"] if c in df.columns), None)
+    """Importa trabajadores desde Excel sin pandas.
+    Esto evita errores de compilación en Render cuando intenta construir pandas.
+    Columnas aceptadas: DNI/DOCUMENTO, NOMBRE/TRABAJADOR, CORREO/EMAIL, CARGO, AREA/ÁREA, EMPRESA, PLANILLA.
+    """
+    filename = (file_storage.filename or "").lower()
+    if not filename.endswith((".xlsx", ".xlsm")):
+        raise ValueError("Carga un Excel en formato .xlsx o .xlsm.")
+
+    wb = load_workbook(filename=BytesIO(file_storage.read()), data_only=True, read_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        raise ValueError("El Excel está vacío.")
+
+    headers = [str(c or "").strip().upper() for c in rows[0]]
+    col_dni = next((c for c in ["DNI", "DOCUMENTO", "NRO_DOCUMENTO", "NUMERO_DOCUMENTO"] if c in headers), None)
+    col_nombre = next((c for c in ["NOMBRE", "TRABAJADOR", "APELLIDOS Y NOMBRES", "APELLIDOS_NOMBRES"] if c in headers), None)
     if not col_dni or not col_nombre:
         raise ValueError("El Excel debe tener columnas DNI y NOMBRE/TRABAJADOR.")
+
     inserted = updated = skipped = 0
-    for _, row in df.iterrows():
+    for values in rows[1:]:
+        row = {headers[i]: values[i] if i < len(values) else "" for i in range(len(headers))}
         dni = normalizar_dni(row.get(col_dni))
         nombre = clean_text(row.get(col_nombre))
         if not dni or not nombre or dni == "00000000":
@@ -359,6 +369,10 @@ def importar_trabajadores_excel(file_storage):
                 VALUES(?,?,?,?,?,?,?,?,?,?)
             """, (dni, nombre, correo, cargo, area, empresa, planilla, 1, now_txt(), now_txt()))
             inserted += 1
+    try:
+        wb.close()
+    except Exception:
+        pass
     return inserted, updated, skipped
 
 # =========================================================
