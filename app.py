@@ -246,7 +246,9 @@ def guardar_documento(file_storage, dni, tipo, periodo, detalle="", observacion=
     if dni:
         folder = folder / dni
     folder.mkdir(parents=True, exist_ok=True)
-    final = f"{dni + '_' if dni else ''}{re.sub(r'[^A-Za-z0-9_\-]+','_', tipo)}_{periodo}_{now_file()}_{original}"
+    tipo_file = re.sub(r"[^A-Za-z0-9_\-]+", "_", tipo)
+    prefijo_dni = f"{dni}_" if dni else ""
+    final = f"{prefijo_dni}{tipo_file}_{periodo}_{now_file()}_{original}"
     path = folder / final
     file_storage.save(path)
     with db() as con:
