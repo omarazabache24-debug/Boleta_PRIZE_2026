@@ -1,706 +1,50 @@
 # -*- coding: utf-8 -*-
 """
-PRIZE - Portal Web/App de Boletas
-Integración PRO: portal visual + API de boletas + estructura Render/local.
+Portal de Documentos PRIZE - Versión Ultra Mejorada
+Listo para Render / GitHub / uso local.
 
-Listo para GitHub y Render:
-- Un solo servidor Flask (no requiere levantar API y portal por separado).
-- SQLite local o PostgreSQL en Render si defines DATABASE_URL.
-- Login trabajador: DNI + correo.
-- Login administrador: usuario + clave.
-- Carga masiva de trabajadores por Excel.
-- Carga individual/masiva de PDFs por DNI.
-- API compatible: /api/health, /api/login, /api/boleta/<dni>, /api/pdf/<dni>.
+Usuarios demo:
+- Administrador: admin / admin123
+- Trabajador: DNI 74324033 / correo omar@demo.com
 
-Credenciales admin demo iniciales:
-- admin / admin123
-- adm1 / adm1
+Variables Render opcionales:
+- SECRET_KEY
+- PERSIST_DIR=/data
+- APP_TIMEZONE=America/Lima
 """
 
 import os
 import re
 import sqlite3
-from io import BytesIO
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from functools import wraps
 from zoneinfo import ZoneInfo
 
-from openpyxl import load_workbook
-
-try:
-    import psycopg2
-    import psycopg2.extras
-except Exception:
-    psycopg2 = None
-
-from flask import (
-    Flask, request, redirect, url_for, session, send_file,
-    render_template_string, flash, jsonify, abort
-)
+from flask import Flask, request, redirect, url_for, session, send_file, render_template_string, flash, jsonify, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from openpyxl import load_workbook
 
-# =========================================================
-# CONFIGURACIÓN GENERAL
-# =========================================================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PERSIST_DIR = os.getenv("PERSIST_DIR", "/data" if os.path.isdir("/data") else BASE_DIR)
-UPLOAD_DIR = os.path.join(PERSIST_DIR, "uploads")
-PDF_DIR = os.path.join(UPLOAD_DIR, "pdf_boletas")
-REPORT_DIR = os.path.join(PERSIST_DIR, "reportes")
-DB_PATH = os.path.join(PERSIST_DIR, "boletas_prize.db")
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
-USE_POSTGRES = bool(DATABASE_URL)
+BASE_DIR = Path(__file__).resolve().parent
+PERSIST_DIR = Path(os.getenv("PERSIST_DIR", "/data" if Path("/data").is_dir() else str(BASE_DIR)))
+STATIC_DIR = BASE_DIR / "static"
+UPLOAD_DIR = PERSIST_DIR / "uploads"
+DB_PATH = PERSIST_DIR / "boletas_prize.db"
 APP_TZ = ZoneInfo(os.getenv("APP_TIMEZONE", "America/Lima"))
-EMPRESA_NOMBRE = os.getenv("EMPRESA_NOMBRE", "PRIZE SUPERFRUITS")
 
-for folder in [PERSIST_DIR, UPLOAD_DIR, PDF_DIR, REPORT_DIR]:
-    os.makedirs(folder, exist_ok=True)
+for d in (PERSIST_DIR, STATIC_DIR, UPLOAD_DIR):
+    d.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "prize-boletas-web-app-2026")
+app.secret_key = os.getenv("SECRET_KEY", "prize_documentos_ultra_2026")
+app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024
 
-# =========================================================
-# UTILIDADES DB
-# =========================================================
-def now_app():
-    return datetime.now(APP_TZ)
-
-
-def now_txt():
-    return now_app().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def today_iso():
-    return now_app().date().isoformat()
-
-
-def normalizar_dni(dni):
-    solo = "".join(c for c in str(dni or "") if c.isdigit())
-    return solo.zfill(8)[-8:] if solo else ""
-
-
-def clean_text(v):
-    return str(v or "").strip()
-
-
-def get_conn():
-    if USE_POSTGRES:
-        if psycopg2 is None:
-            raise RuntimeError("DATABASE_URL definido, pero psycopg2 no está instalado.")
-        return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def sql_params(sql):
-    return sql.replace("?", "%s") if USE_POSTGRES else sql
-
-
-def q_all(sql, params=()):
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(sql_params(sql), params)
-        rows = cur.fetchall()
-        cur.close()
-        return [dict(r) for r in rows]
-
-
-def q_one(sql, params=()):
-    rows = q_all(sql, params)
-    return rows[0] if rows else None
-
-
-def q_exec(sql, params=()):
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute(sql_params(sql), params)
-        conn.commit()
-        cur.close()
-
-
-def q_exec_return_id(sql, params=()):
-    with get_conn() as conn:
-        cur = conn.cursor()
-        if USE_POSTGRES:
-            cur.execute(sql_params(sql + " RETURNING id"), params)
-            rid = cur.fetchone()["id"]
-        else:
-            cur.execute(sql, params)
-            rid = cur.lastrowid
-        conn.commit()
-        cur.close()
-        return rid
-
-
-def init_db():
-    with get_conn() as conn:
-        cur = conn.cursor()
-        if USE_POSTGRES:
-            cur.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id SERIAL PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'admin',
-                active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT
-            )""")
-            cur.execute("""
-            CREATE TABLE IF NOT EXISTS trabajadores (
-                id SERIAL PRIMARY KEY,
-                dni TEXT UNIQUE NOT NULL,
-                nombre TEXT NOT NULL,
-                correo TEXT,
-                cargo TEXT,
-                area TEXT,
-                empresa TEXT,
-                planilla TEXT,
-                active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT,
-                updated_at TEXT
-            )""")
-            cur.execute("""
-            CREATE TABLE IF NOT EXISTS boletas (
-                id SERIAL PRIMARY KEY,
-                dni TEXT NOT NULL,
-                tipo TEXT NOT NULL DEFAULT 'Utilidad',
-                periodo TEXT,
-                archivo_nombre TEXT,
-                ruta_pdf TEXT,
-                fecha_subida TEXT,
-                uploaded_by TEXT
-            )""")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_boletas_dni ON boletas(dni)")
-        else:
-            cur.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'admin',
-                active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT
-            )""")
-            cur.execute("""
-            CREATE TABLE IF NOT EXISTS trabajadores (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                dni TEXT UNIQUE NOT NULL,
-                nombre TEXT NOT NULL,
-                correo TEXT,
-                cargo TEXT,
-                area TEXT,
-                empresa TEXT,
-                planilla TEXT,
-                active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT,
-                updated_at TEXT
-            )""")
-            cur.execute("""
-            CREATE TABLE IF NOT EXISTS boletas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                dni TEXT NOT NULL,
-                tipo TEXT NOT NULL DEFAULT 'Utilidad',
-                periodo TEXT,
-                archivo_nombre TEXT,
-                ruta_pdf TEXT,
-                fecha_subida TEXT,
-                uploaded_by TEXT
-            )""")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_boletas_dni ON boletas(dni)")
-        conn.commit()
-        cur.close()
-
-    for user, pw in [("admin", "admin123"), ("adm1", "adm1")]:
-        if not q_one("SELECT id FROM usuarios WHERE username=?", (user,)):
-            q_exec(
-                "INSERT INTO usuarios(username,password_hash,role,active,created_at) VALUES(?,?,?,?,?)",
-                (user, generate_password_hash(pw), "admin", 1, now_txt()),
-            )
-
-    demos = [
-        ("74324033", "AZABACHE LUJAN, OMAR EDUARDO", "omar@demo.com", "ANALISTA", "RRHH", EMPRESA_NOMBRE, "GENERAL"),
-        ("45148597", "CONCEPCION ZAVALETA, VICTOR", "victor@demo.com", "OPERARIO", "PRODUCCION", EMPRESA_NOMBRE, "GENERAL"),
-    ]
-    for dni, nom, correo, cargo, area, emp, planilla in demos:
-        if not q_one("SELECT id FROM trabajadores WHERE dni=?", (dni,)):
-            q_exec("""
-                INSERT INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,active,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?)
-            """, (dni, nom, correo, cargo, area, emp, planilla, 1, now_txt(), now_txt()))
-
-
-init_db()
-
-# =========================================================
-# SEGURIDAD
-# =========================================================
-def admin_required(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        if session.get("admin_user"):
-            return fn(*args, **kwargs)
-        flash("Ingresa como administrador.", "error")
-        return redirect(url_for("admin_login"))
-    return wrapper
-
-
-def worker_required(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        if session.get("worker_dni"):
-            return fn(*args, **kwargs)
-        return redirect(url_for("login"))
-    return wrapper
-
-# =========================================================
-# HELPERS BOLETAS
-# =========================================================
-def latest_boleta(dni, tipo=None):
-    dni = normalizar_dni(dni)
-    if tipo:
-        return q_one("SELECT * FROM boletas WHERE dni=? AND tipo=? ORDER BY fecha_subida DESC,id DESC", (dni, tipo))
-    return q_one("SELECT * FROM boletas WHERE dni=? ORDER BY fecha_subida DESC,id DESC", (dni,))
-
-
-def trabajador_data(dni):
-    return q_one("SELECT * FROM trabajadores WHERE dni=? AND active=1", (normalizar_dni(dni),))
-
-
-def preparar_resultado(dni):
-    t = trabajador_data(dni)
-    if not t:
-        return None
-    b = latest_boleta(dni)
-    return {
-        "dni": t.get("dni", ""),
-        "nombre": t.get("nombre", ""),
-        "correo": t.get("correo", ""),
-        "cargo": t.get("cargo", ""),
-        "area": t.get("area", ""),
-        "empresa": t.get("empresa", EMPRESA_NOMBRE) or EMPRESA_NOMBRE,
-        "planilla": t.get("planilla", ""),
-        "tiene_pdf": bool(b and b.get("ruta_pdf") and os.path.exists(b.get("ruta_pdf"))),
-        "url_pdf": b.get("ruta_pdf") if b else "",
-        "archivo_nombre": b.get("archivo_nombre") if b else "",
-        "tipo": b.get("tipo") if b else "Sin documento",
-        "periodo": b.get("periodo") if b else "",
-        "fecha_subida": b.get("fecha_subida") if b else "Sin fecha registrada",
-        "estado_pdf": "Disponible" if b else "No disponible",
-        "ultima_actualizacion": now_app().strftime("%d/%m/%Y %I:%M %p"),
-    }
-
-
-def guardar_pdf(file_storage, tipo="Utilidad", periodo=""):
-    filename_raw = secure_filename(file_storage.filename or "")
-    if not filename_raw.lower().endswith(".pdf"):
-        raise ValueError("Solo se permite PDF.")
-    stem = Path(filename_raw).stem
-    dni = normalizar_dni(stem)
-    if len(dni) != 8:
-        m = re.search(r"(\d{8})", filename_raw)
-        dni = m.group(1) if m else ""
-    if not dni:
-        raise ValueError(f"No se detectó DNI en el nombre: {filename_raw}. Usa 12345678.pdf")
-    if not trabajador_data(dni):
-        raise ValueError(f"DNI {dni} no existe en trabajadores. Carga primero la base de trabajadores.")
-    safe_periodo = re.sub(r"[^A-Za-z0-9_\-]", "_", periodo or today_iso())
-    tipo_safe = re.sub(r"[^A-Za-z0-9_\-]", "_", tipo or "Utilidad")
-    folder = os.path.join(PDF_DIR, tipo_safe, safe_periodo)
-    os.makedirs(folder, exist_ok=True)
-    final_name = f"{dni}.pdf"
-    path = os.path.join(folder, final_name)
-    file_storage.save(path)
-    q_exec("""
-        INSERT INTO boletas(dni,tipo,periodo,archivo_nombre,ruta_pdf,fecha_subida,uploaded_by)
-        VALUES(?,?,?,?,?,?,?)
-    """, (dni, tipo, periodo, final_name, path, now_txt(), session.get("admin_user", "admin")))
-    return dni
-
-
-def importar_trabajadores_excel(file_storage):
-    """Importa trabajadores desde Excel sin pandas.
-    Esto evita errores de compilación en Render cuando intenta construir pandas.
-    Columnas aceptadas: DNI/DOCUMENTO, NOMBRE/TRABAJADOR, CORREO/EMAIL, CARGO, AREA/ÁREA, EMPRESA, PLANILLA.
-    """
-    filename = (file_storage.filename or "").lower()
-    if not filename.endswith((".xlsx", ".xlsm")):
-        raise ValueError("Carga un Excel en formato .xlsx o .xlsm.")
-
-    wb = load_workbook(filename=BytesIO(file_storage.read()), data_only=True, read_only=True)
-    ws = wb.active
-    rows = list(ws.iter_rows(values_only=True))
-    if not rows:
-        raise ValueError("El Excel está vacío.")
-
-    headers = [str(c or "").strip().upper() for c in rows[0]]
-    col_dni = next((c for c in ["DNI", "DOCUMENTO", "NRO_DOCUMENTO", "NUMERO_DOCUMENTO"] if c in headers), None)
-    col_nombre = next((c for c in ["NOMBRE", "TRABAJADOR", "APELLIDOS Y NOMBRES", "APELLIDOS_NOMBRES"] if c in headers), None)
-    if not col_dni or not col_nombre:
-        raise ValueError("El Excel debe tener columnas DNI y NOMBRE/TRABAJADOR.")
-
-    inserted = updated = skipped = 0
-    for values in rows[1:]:
-        row = {headers[i]: values[i] if i < len(values) else "" for i in range(len(headers))}
-        dni = normalizar_dni(row.get(col_dni))
-        nombre = clean_text(row.get(col_nombre))
-        if not dni or not nombre or dni == "00000000":
-            skipped += 1
-            continue
-        correo = clean_text(row.get("CORREO") or row.get("EMAIL") or "")
-        cargo = clean_text(row.get("CARGO") or "")
-        area = clean_text(row.get("AREA") or row.get("ÁREA") or "")
-        empresa = clean_text(row.get("EMPRESA") or EMPRESA_NOMBRE)
-        planilla = clean_text(row.get("PLANILLA") or "")
-        exists = q_one("SELECT id FROM trabajadores WHERE dni=?", (dni,))
-        if exists:
-            q_exec("""
-                UPDATE trabajadores SET nombre=?, correo=?, cargo=?, area=?, empresa=?, planilla=?, active=1, updated_at=? WHERE dni=?
-            """, (nombre, correo, cargo, area, empresa, planilla, now_txt(), dni))
-            updated += 1
-        else:
-            q_exec("""
-                INSERT INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,active,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?)
-            """, (dni, nombre, correo, cargo, area, empresa, planilla, 1, now_txt(), now_txt()))
-            inserted += 1
-    try:
-        wb.close()
-    except Exception:
-        pass
-    return inserted, updated, skipped
-
-# =========================================================
-# UI BASE
-# =========================================================
-BASE_HTML = r'''
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>{{ title or 'PRIZE Boletas' }}</title>
-<style>
-:root{--bg:#eef4fb;--nav:#142239;--nav2:#1e314f;--card:#fff;--line:#d8e4f0;--text:#112033;--muted:#66758a;--blue:#1697f6;--blue2:#0f70c5;--yellow:#f6c516;--green:#16a34a;--red:#dc2626;--shadow:0 18px 44px rgba(15,23,42,.12)}
-*{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--text);background:radial-gradient(circle at 12% 10%,rgba(22,151,246,.12),transparent 20%),radial-gradient(circle at 90% 12%,rgba(246,197,22,.14),transparent 18%),linear-gradient(180deg,#eef4fb,#f8fafc)}
-a{text-decoration:none;color:inherit}.btn,.btn-blue,.btn-red{border:0;border-radius:14px;padding:11px 14px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px}.btn{background:#fff;border:1px solid var(--line);color:#17233a}.btn-blue{background:linear-gradient(180deg,var(--blue),var(--blue2));color:#fff;box-shadow:0 12px 22px rgba(15,112,197,.22)}.btn-red{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}.badge{display:inline-flex;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900}.badge.ok{background:#dcfce7;color:#166534}.badge.no{background:#fee2e2;color:#991b1b}.badge.warn{background:#fef3c7;color:#92400e}
-.login-page{min-height:100vh;display:grid;grid-template-columns:330px 1fr}.login-left{background:linear-gradient(180deg,var(--nav),#1c2d49);color:#eaf2fb;padding:30px 24px;display:flex;flex-direction:column;justify-content:space-between}.login-left h1{font-size:30px;line-height:1.1;margin:18px 0 10px}.login-left p{color:#c8d7e6;line-height:1.55}.pill{display:inline-flex;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.08);border-radius:999px;padding:8px 12px;font-size:12px;font-weight:800}.login-main{display:flex;align-items:center;justify-content:center;padding:26px}.login-card{width:100%;max-width:470px;background:rgba(255,255,255,.95);border:1px solid rgba(255,255,255,.8);border-radius:30px;padding:30px;box-shadow:var(--shadow)}.brand{text-align:center;margin-bottom:12px}.brand .prize{font-size:42px;font-weight:900;color:#14304e;letter-spacing:-1px}.brand .super{font-size:13px;font-weight:900;color:#f0b90b;letter-spacing:3px}.login-title{text-align:center;margin:8px 0 5px;font-size:26px}.login-sub{text-align:center;color:var(--muted);margin:0 0 22px}.field{margin-bottom:13px}.field label{font-size:12px;font-weight:900;color:#42526a;display:block;margin:0 0 6px 4px}.field input,.field select{width:100%;border:1px solid var(--line);border-radius:18px;background:#fff;padding:14px 15px;font-size:15px;outline:none;box-shadow:0 8px 20px rgba(15,23,42,.04)}.alert{border-radius:16px;padding:12px 14px;margin-bottom:14px;line-height:1.45;font-size:14px}.alert.error{background:#fff1f2;border:1px solid #fecdd3;color:#be123c}.alert.ok{background:#effcf6;border:1px solid #bbf7d0;color:#166534}
-.app-shell{min-height:100vh;display:grid;grid-template-columns:280px 1fr}.sidebar{background:linear-gradient(180deg,var(--nav),#1b2f4d);color:#eaf2fb;padding:22px 16px;position:sticky;top:0;height:100vh}.side-brand{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:16px;margin-bottom:18px}.side-brand .prize{font-size:32px;font-weight:900}.side-brand .super{color:var(--yellow);font-weight:900;letter-spacing:2px;font-size:11px}.side-nav{display:grid;gap:8px}.side-nav a{padding:12px 14px;border-radius:16px;color:#dce8f4;font-weight:800}.side-nav a:hover,.side-nav a.active{background:rgba(255,255,255,.12);color:#fff}.content{padding:24px;min-width:0}.topbar{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:18px}.topbar h1{margin:0;font-size:28px}.topbar p{margin:5px 0 0;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.card{background:rgba(255,255,255,.96);border:1px solid rgba(216,228,240,.9);border-radius:24px;box-shadow:0 12px 28px rgba(15,23,42,.08);padding:18px;min-width:0}.span-3{grid-column:span 3}.span-4{grid-column:span 4}.span-5{grid-column:span 5}.span-6{grid-column:span 6}.span-7{grid-column:span 7}.span-8{grid-column:span 8}.span-12{grid-column:span 12}.metric{display:flex;align-items:center;justify-content:space-between}.metric h3{margin:0;color:#64748b;font-size:13px}.metric strong{font-size:30px}.metric .ico{width:46px;height:46px;border-radius:16px;background:#eff6ff;display:grid;place-items:center;font-size:22px}.table-wrap{overflow:auto;border-radius:16px;border:1px solid var(--line)}table{width:100%;border-collapse:collapse;background:#fff}th,td{padding:11px 12px;border-bottom:1px solid #edf2f7;text-align:left;font-size:13px;vertical-align:middle}th{background:#f8fafc;color:#475569;font-size:12px;text-transform:uppercase}.info{display:grid;grid-template-columns:150px 1fr;gap:8px 12px}.info .label{color:#64748b;font-weight:900}.info .value{font-weight:700;word-break:break-word}.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.tile{background:#f8fbfe;border:1px solid var(--line);border-radius:18px;padding:15px}.tile h4{margin:0 0 7px}.tile p{margin:0;color:#64748b;line-height:1.45;font-size:13px}.actions{display:flex;gap:10px;flex-wrap:wrap}.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:end}.section-title{font-size:18px;margin:0 0 12px}.mobile-tabs{display:none;position:sticky;bottom:0;background:rgba(20,34,57,.96);padding:8px;z-index:10;gap:6px;overflow-x:auto}.mobile-tabs a{white-space:nowrap;color:#eaf2fb;background:rgba(255,255,255,.08);border-radius:999px;padding:10px 12px;font-size:12px;font-weight:900}
-@media(max-width:980px){.login-page{grid-template-columns:1fr}.login-left{display:none}.app-shell{display:block}.sidebar{display:none}.content{padding:16px 14px 82px}.grid{grid-template-columns:1fr}.span-3,.span-4,.span-5,.span-6,.span-7,.span-8,.span-12{grid-column:span 1}.topbar{align-items:flex-start;flex-direction:column}.tiles{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.info{grid-template-columns:1fr}.mobile-tabs{display:flex}.card{border-radius:20px}.login-main{padding:16px}.login-card{border-radius:24px;padding:24px 18px}}
-</style>
-</head>
-<body>
-{% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}<div style="position:fixed;right:16px;top:16px;z-index:99;max-width:390px">{% for cat,msg in messages %}<div class="alert {{ 'ok' if cat=='ok' else 'error' }}">{{ msg }}</div>{% endfor %}</div>{% endif %}{% endwith %}
-{{ content|safe }}
-</body>
-</html>
-'''
-
-
-def render_page(content, title="PRIZE Boletas"):
-    return render_template_string(BASE_HTML, content=content, title=title)
-
-
-def layout(content, active="dashboard", title="Panel"):
-    nav = [
-        ("dashboard", "🏠 Dashboard", url_for("admin_dashboard") if session.get("admin_user") else url_for("panel")),
-        ("trabajadores", "👥 Trabajadores", url_for("trabajadores")),
-        ("boletas", "📄 Boletas", url_for("boletas_admin")),
-        ("api", "🔌 API", url_for("api_status")),
-        ("logout", "🚪 Salir", url_for("logout")),
-    ]
-    if not session.get("admin_user"):
-        nav = [("panel", "📄 Mis boletas", url_for("panel")), ("logout", "🚪 Salir", url_for("logout"))]
-    links = "".join([f'<a class="{ "active" if k==active else "" }" href="{u}">{label}</a>' for k,label,u in nav])
-    mobile = "".join([f'<a href="{u}">{label}</a>' for k,label,u in nav])
-    shell = f'''
-    <div class="app-shell">
-      <aside class="sidebar">
-        <div class="side-brand"><div class="prize">Prize</div><div class="super">SUPERFRUITS</div><p style="color:#c8d7e6;margin:8px 0 0;font-size:13px">Portal web/app de boletas</p></div>
-        <nav class="side-nav">{links}</nav>
-      </aside>
-      <main class="content">{content}</main>
-      <nav class="mobile-tabs">{mobile}</nav>
-    </div>'''
-    return render_page(shell, title)
-
-# =========================================================
-# LOGIN TRABAJADOR Y PANEL
-# =========================================================
-@app.route("/", methods=["GET", "POST"])
-def login():
-    if session.get("worker_dni"):
-        return redirect(url_for("panel"))
-    if session.get("admin_user"):
-        return redirect(url_for("admin_dashboard"))
-    if request.method == "POST":
-        dni = normalizar_dni(request.form.get("dni"))
-        correo = clean_text(request.form.get("correo")).lower()
-        t = trabajador_data(dni)
-        if not t:
-            flash("DNI no encontrado. Verifica que esté cargado en la base.", "error")
-        elif clean_text(t.get("correo")).lower() != correo:
-            flash("El correo no coincide con el registrado.", "error")
-        else:
-            session.clear()
-            session["worker_dni"] = dni
-            return redirect(url_for("panel"))
-    content = '''
-    <div class="login-page">
-      <aside class="login-left"><div><span class="pill">Portal corporativo · estilo app</span><h1>Acceso moderno para boletas y documentos</h1><p>Integrado en un solo sistema web responsive, listo para celular, GitHub y Render.</p></div><p>Admin demo: <b>admin / admin123</b><br>Trabajador demo: <b>74324033 / omar@demo.com</b></p></aside>
-      <main class="login-main"><form class="login-card" method="post"><div class="brand"><div class="prize">Prize</div><div class="super">SUPERFRUITS</div></div><h2 class="login-title">Portal de Boletas</h2><p class="login-sub">Ingresa con DNI y correo registrado.</p><div class="field"><label>DNI</label><input name="dni" inputmode="numeric" maxlength="8" placeholder="Ej. 74324033" required></div><div class="field"><label>Correo</label><input name="correo" type="email" placeholder="correo@empresa.com" required></div><button class="btn-blue" style="width:100%">Ingresar</button><div class="actions" style="margin-top:14px;justify-content:center"><a class="btn" href="/admin/login">Soy administrador</a></div></form></main>
-    </div>'''
-    return render_page(content, "Login trabajador")
-
-
-@app.route("/panel")
-@worker_required
-def panel():
-    r = preparar_resultado(session["worker_dni"])
-    if not r:
-        session.clear()
-        return redirect(url_for("login"))
-    boletas = q_all("SELECT * FROM boletas WHERE dni=? ORDER BY fecha_subida DESC,id DESC", (r["dni"],))
-    rows = "".join([f"<tr><td>{b['tipo']}</td><td>{b.get('periodo') or ''}</td><td>{b['fecha_subida']}</td><td><a class='btn-blue' href='/ver_pdf/{b['id']}' target='_blank'>Ver PDF</a></td></tr>" for b in boletas]) or "<tr><td colspan='4'>Aún no hay documentos cargados.</td></tr>"
-    content = f'''
-    <div class="topbar"><div><h1>Hola, {r['nombre']}</h1><p>DNI {r['dni']} · {r['empresa']} · última actualización {r['ultima_actualizacion']}</p></div><div class="actions"><a class="btn" href="/panel">Actualizar</a><a class="btn-red" href="/logout">Salir</a></div></div>
-    <div class="grid">
-      <section class="card span-4"><div class="metric"><div><h3>Estado PDF</h3><strong>{'OK' if r['tiene_pdf'] else 'NO'}</strong></div><div class="ico">📄</div></div><p>{'<span class="badge ok">Disponible</span>' if r['tiene_pdf'] else '<span class="badge no">No disponible</span>'}</p></section>
-      <section class="card span-4"><div class="metric"><div><h3>Documentos</h3><strong>{len(boletas)}</strong></div><div class="ico">🗂️</div></div></section>
-      <section class="card span-4"><div class="metric"><div><h3>Portal</h3><strong>APP</strong></div><div class="ico">📱</div></div></section>
-      <section class="card span-6"><h3 class="section-title">Datos del colaborador</h3><div class="info"><div class="label">DNI</div><div class="value">{r['dni']}</div><div class="label">Nombre</div><div class="value">{r['nombre']}</div><div class="label">Correo</div><div class="value">{r['correo']}</div><div class="label">Cargo</div><div class="value">{r['cargo']}</div><div class="label">Área</div><div class="value">{r['area']}</div><div class="label">Empresa</div><div class="value">{r['empresa']}</div></div></section>
-      <section class="card span-6"><h3 class="section-title">Accesos rápidos</h3><div class="tiles"><div class="tile"><h4>Boleta</h4><p>Documento principal del trabajador.</p>{'<a class="btn-blue" href="/pdf/'+r['dni']+'" target="_blank">Abrir PDF</a>' if r['tiene_pdf'] else '<span class="badge no">Sin PDF</span>'}</div><div class="tile"><h4>Responsive</h4><p>Diseño listo para PC y celular.</p></div></div></section>
-      <section class="card span-12"><h3 class="section-title">Historial de documentos</h3><div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Periodo</th><th>Subida</th><th>Acción</th></tr></thead><tbody>{rows}</tbody></table></div></section>
-    </div>'''
-    return layout(content, "panel", "Mi panel")
-
-# =========================================================
-# ADMIN
-# =========================================================
-@app.route("/admin/login", methods=["GET", "POST"])
-def admin_login():
-    if request.method == "POST":
-        username = clean_text(request.form.get("username"))
-        password = request.form.get("password", "")
-        u = q_one("SELECT * FROM usuarios WHERE username=? AND active=1", (username,))
-        if u and check_password_hash(u["password_hash"], password):
-            session.clear()
-            session["admin_user"] = username
-            session["role"] = u.get("role", "admin")
-            return redirect(url_for("admin_dashboard"))
-        flash("Usuario o clave incorrecta.", "error")
-    content = '''
-    <div class="login-page"><aside class="login-left"><div><span class="pill">Administrador</span><h1>Gestión de boletas PRIZE</h1><p>Carga trabajadores, PDFs y revisa la API desde un solo panel.</p></div></aside><main class="login-main"><form class="login-card" method="post"><div class="brand"><div class="prize">Prize</div><div class="super">ADMIN</div></div><h2 class="login-title">Acceso administrador</h2><div class="field"><label>Usuario</label><input name="username" required></div><div class="field"><label>Clave</label><input name="password" type="password" required></div><button class="btn-blue" style="width:100%">Ingresar</button><div class="actions" style="margin-top:14px;justify-content:center"><a class="btn" href="/">Portal trabajador</a></div></form></main></div>'''
-    return render_page(content, "Login admin")
-
-
-@app.route("/admin")
-@admin_required
-def admin_dashboard():
-    total_t = q_one("SELECT COUNT(*) c FROM trabajadores")["c"]
-    total_b = q_one("SELECT COUNT(*) c FROM boletas")["c"]
-    con_pdf = q_one("SELECT COUNT(DISTINCT dni) c FROM boletas")["c"]
-    ultimos = q_all("""
-        SELECT b.id,b.dni,b.tipo,b.periodo,b.fecha_subida,t.nombre,t.empresa
-        FROM boletas b LEFT JOIN trabajadores t ON t.dni=b.dni
-        ORDER BY b.fecha_subida DESC,b.id DESC LIMIT 10
-    """)
-    rows = "".join([f"<tr><td>{r['dni']}</td><td>{r.get('nombre') or ''}</td><td>{r['tipo']}</td><td>{r.get('periodo') or ''}</td><td>{r['fecha_subida']}</td><td><a class='btn' href='/ver_pdf/{r['id']}' target='_blank'>Ver</a></td></tr>" for r in ultimos]) or "<tr><td colspan='6'>Sin boletas cargadas.</td></tr>"
-    content = f'''
-    <div class="topbar"><div><h1>Dashboard de Boletas</h1><p>Panel tipo web/app integrado para GitHub y Render.</p></div><div class="actions"><a class="btn" href="/admin">Actualizar</a><a class="btn-red" href="/logout">Salir</a></div></div>
-    <div class="grid">
-      <section class="card span-3"><div class="metric"><div><h3>Trabajadores</h3><strong>{total_t}</strong></div><div class="ico">👥</div></div></section>
-      <section class="card span-3"><div class="metric"><div><h3>Boletas</h3><strong>{total_b}</strong></div><div class="ico">📄</div></div></section>
-      <section class="card span-3"><div class="metric"><div><h3>Con PDF</h3><strong>{con_pdf}</strong></div><div class="ico">✅</div></div></section>
-      <section class="card span-3"><div class="metric"><div><h3>Modo</h3><strong>{'PG' if USE_POSTGRES else 'SQL'}</strong></div><div class="ico">☁️</div></div></section>
-      <section class="card span-12"><h3 class="section-title">Últimas boletas cargadas</h3><div class="table-wrap"><table><thead><tr><th>DNI</th><th>Trabajador</th><th>Tipo</th><th>Periodo</th><th>Fecha</th><th>PDF</th></tr></thead><tbody>{rows}</tbody></table></div></section>
-    </div>'''
-    return layout(content, "dashboard", "Admin")
-
-
-@app.route("/admin/trabajadores", methods=["GET", "POST"])
-@admin_required
-def trabajadores():
-    if request.method == "POST":
-        file = request.files.get("excel")
-        if not file or not file.filename:
-            flash("Selecciona un Excel.", "error")
-        else:
-            try:
-                ins, upd, skip = importar_trabajadores_excel(file)
-                flash(f"Carga terminada: insertados {ins}, actualizados {upd}, omitidos {skip}.", "ok")
-            except Exception as e:
-                flash(str(e), "error")
-        return redirect(url_for("trabajadores"))
-    buscar = clean_text(request.args.get("buscar"))
-    params = []
-    where = "WHERE 1=1"
-    if buscar:
-        where += " AND (dni LIKE ? OR nombre LIKE ? OR correo LIKE ? OR empresa LIKE ?)"
-        b = f"%{buscar}%"; params = [b,b,b,b]
-    rows_data = q_all(f"SELECT * FROM trabajadores {where} ORDER BY updated_at DESC,id DESC LIMIT 300", tuple(params))
-    rows = "".join([f"<tr><td>{r['dni']}</td><td>{r['nombre']}</td><td>{r.get('correo') or ''}</td><td>{r.get('cargo') or ''}</td><td>{r.get('area') or ''}</td><td>{r.get('empresa') or ''}</td></tr>" for r in rows_data]) or "<tr><td colspan='6'>Sin registros.</td></tr>"
-    content = f'''
-    <div class="topbar"><div><h1>Trabajadores</h1><p>Carga Excel con columnas DNI, NOMBRE/TRABAJADOR, CORREO, CARGO, AREA, EMPRESA.</p></div></div>
-    <div class="grid">
-      <section class="card span-12"><form method="post" enctype="multipart/form-data" class="form-grid"><div class="field"><label>Excel trabajadores</label><input type="file" name="excel" accept=".xlsx,.xls" required></div><button class="btn-blue">Importar / reemplazar</button><a class="btn" href="/admin/trabajadores">Actualizar</a></form></section>
-      <section class="card span-12"><form method="get" class="form-grid"><div class="field"><label>Buscar</label><input name="buscar" value="{buscar}" placeholder="DNI, nombre, correo, empresa"></div><button class="btn-blue">Filtrar</button></form></section>
-      <section class="card span-12"><div class="table-wrap"><table><thead><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Área</th><th>Empresa</th></tr></thead><tbody>{rows}</tbody></table></div></section>
-    </div>'''
-    return layout(content, "trabajadores", "Trabajadores")
-
-
-@app.route("/admin/boletas", methods=["GET", "POST"])
-@admin_required
-def boletas_admin():
-    if request.method == "POST":
-        tipo = clean_text(request.form.get("tipo")) or "Utilidad"
-        periodo = clean_text(request.form.get("periodo")) or today_iso()
-        files = request.files.getlist("pdfs")
-        ok = errores = 0
-        msgs = []
-        for f in files:
-            if not f or not f.filename:
-                continue
-            try:
-                guardar_pdf(f, tipo, periodo)
-                ok += 1
-            except Exception as e:
-                errores += 1
-                msgs.append(str(e))
-        if ok:
-            flash(f"PDFs cargados correctamente: {ok}.", "ok")
-        if errores:
-            flash("Errores: " + " | ".join(msgs[:5]), "error")
-        return redirect(url_for("boletas_admin"))
-    buscar = clean_text(request.args.get("buscar"))
-    params = []
-    where = "WHERE 1=1"
-    if buscar:
-        where += " AND (b.dni LIKE ? OR t.nombre LIKE ? OR b.tipo LIKE ? OR b.periodo LIKE ?)"
-        b = f"%{buscar}%"; params = [b,b,b,b]
-    rows_data = q_all(f"""
-        SELECT b.*,t.nombre,t.correo,t.empresa FROM boletas b LEFT JOIN trabajadores t ON t.dni=b.dni
-        {where} ORDER BY b.fecha_subida DESC,b.id DESC LIMIT 300
-    """, tuple(params))
-    rows = "".join([f"<tr><td>{r['dni']}</td><td>{r.get('nombre') or ''}</td><td>{r['tipo']}</td><td>{r.get('periodo') or ''}</td><td>{r['fecha_subida']}</td><td><a class='btn-blue' href='/ver_pdf/{r['id']}' target='_blank'>Ver</a></td></tr>" for r in rows_data]) or "<tr><td colspan='6'>Sin PDFs cargados.</td></tr>"
-    content = f'''
-    <div class="topbar"><div><h1>Boletas / Documentos</h1><p>Carga PDFs nombrados con DNI, ejemplo: 74324033.pdf. También detecta DNI dentro del nombre.</p></div></div>
-    <div class="grid">
-      <section class="card span-12"><form method="post" enctype="multipart/form-data" class="form-grid"><div class="field"><label>Tipo</label><select name="tipo"><option>Utilidad</option><option>Normal</option><option>CTS</option><option>Gratificación</option><option>Vacaciones</option><option>Liquidación</option><option>Contrato</option><option>Otros</option></select></div><div class="field"><label>Periodo</label><input name="periodo" value="{today_iso()}" placeholder="01_2026 / 2026 / Semana 01"></div><div class="field"><label>PDFs</label><input type="file" name="pdfs" accept=".pdf" multiple required></div><button class="btn-blue">Subir PDFs</button></form></section>
-      <section class="card span-12"><form method="get" class="form-grid"><div class="field"><label>Buscar</label><input name="buscar" value="{buscar}" placeholder="DNI, trabajador, tipo, periodo"></div><button class="btn-blue">Filtrar</button><a class="btn" href="/admin/boletas">Actualizar</a></form></section>
-      <section class="card span-12"><div class="table-wrap"><table><thead><tr><th>DNI</th><th>Trabajador</th><th>Tipo</th><th>Periodo</th><th>Subida</th><th>PDF</th></tr></thead><tbody>{rows}</tbody></table></div></section>
-    </div>'''
-    return layout(content, "boletas", "Boletas")
-
-
-@app.route("/admin/api")
-@admin_required
-def api_status():
-    health = {"ok": True, "db": "PostgreSQL" if USE_POSTGRES else "SQLite", "database": "DATABASE_URL" if USE_POSTGRES else DB_PATH, "pdf_dir": PDF_DIR}
-    content = f'''
-    <div class="topbar"><div><h1>Estado API</h1><p>Endpoints integrados en el mismo app.py.</p></div></div>
-    <div class="grid"><section class="card span-12"><pre style="white-space:pre-wrap;background:#0f172a;color:#e2e8f0;border-radius:18px;padding:16px">{health}</pre><div class="tiles"><div class="tile"><h4>/api/health</h4><p>Estado del sistema.</p></div><div class="tile"><h4>/api/boleta/&lt;dni&gt;</h4><p>Consulta de trabajador y último PDF.</p></div><div class="tile"><h4>/api/login</h4><p>Validación DNI + correo por POST JSON.</p></div><div class="tile"><h4>/api/pdf/&lt;dni&gt;</h4><p>Abre PDF por DNI.</p></div></div></section></div>'''
-    return layout(content, "api", "API")
-
-# =========================================================
-# PDF Y API
-# =========================================================
-@app.route("/ver_pdf/<int:boleta_id>")
-def ver_pdf(boleta_id):
-    b = q_one("SELECT * FROM boletas WHERE id=?", (boleta_id,))
-    if not b or not b.get("ruta_pdf") or not os.path.exists(b["ruta_pdf"]):
-        abort(404)
-    if session.get("admin_user") or session.get("worker_dni") == b["dni"]:
-        return send_file(b["ruta_pdf"], mimetype="application/pdf", as_attachment=False, download_name=b.get("archivo_nombre") or os.path.basename(b["ruta_pdf"]))
-    abort(403)
-
-
-@app.route("/pdf/<dni>")
-@worker_required
-def pdf_worker(dni):
-    if session.get("worker_dni") != normalizar_dni(dni):
-        abort(403)
-    b = latest_boleta(dni)
-    if not b:
-        abort(404)
-    return redirect(url_for("ver_pdf", boleta_id=b["id"]))
-
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
-
-
-@app.after_request
-def add_headers(resp):
-    resp.headers["Cache-Control"] = "no-store"
-    return resp
-
-
-@app.errorhandler(404)
-def not_found(e):
-    return render_page("<div class='login-main'><div class='login-card'><h2>No encontrado</h2><p>La ruta o documento no existe.</p><a class='btn-blue' href='/'>Volver</a></div></div>", "404"), 404
-
-
-@app.errorhandler(500)
-def server_error(e):
-    app.logger.exception("Error interno: %s", e)
-    return render_page("<div class='login-main'><div class='login-card'><h2>Error interno controlado</h2><p>Revisa los logs de Render o vuelve a ingresar.</p><a class='btn-blue' href='/logout'>Limpiar sesión</a></div></div>", "Error"), 500
-
-
-@app.route("/api/health")
-def api_health():
-    try:
-        q_one("SELECT COUNT(*) c FROM trabajadores")
-        return jsonify({"ok": True, "mensaje": "API y BD operativas", "db": "postgres" if USE_POSTGRES else "sqlite"})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/api/boleta/<dni>")
-def api_boleta(dni):
-    r = preparar_resultado(dni)
-    if not r:
-        return jsonify({"ok": False, "mensaje": "DNI no encontrado"}), 404
-    out = dict(r)
-    out["ok"] = True
-    out["pdf_url"] = url_for("api_pdf", dni=r["dni"], _external=True) if r["tiene_pdf"] else ""
-    return jsonify(out)
-
-
-@app.route("/api/login", methods=["POST"])
-def api_login():
-    data = request.get_json(silent=True) or {}
-    dni = normalizar_dni(data.get("dni"))
-    correo = clean_text(data.get("correo")).lower()
-    t = trabajador_data(dni)
-    if not t:
-        return jsonify({"ok": False, "mensaje": "DNI no encontrado"}), 404
-    if clean_text(t.get("correo")).lower() != correo:
-        return jsonify({"ok": False, "mensaje": "Correo no coincide"}), 401
-    r = preparar_resultado(dni)
-    r["ok"] = True
-    return jsonify(r)
-
-
-@app.route("/api/pdf/<dni>")
-def api_pdf(dni):
-    b = latest_boleta(dni)
-    if not b or not b.get("ruta_pdf") or not os.path.exists(b["ruta_pdf"]):
-        return jsonify({"ok": False, "mensaje": "PDF no disponible"}), 404
-    return send_file(b["ruta_pdf"], mimetype="application/pdf", as_attachment=False, download_name=b.get("archivo_nombre") or os.path.basename(b["ruta_pdf"]))
-
-
-# =========================================================
-# UI PRIZE PRO - Menú completo + logo dinámico + estilo oscuro
-# =========================================================
+# =============================
+# CONFIGURACIÓN FUNCIONAL
+# =============================
 TIPOS_PAGO = [
     ("Utilidad", "Boletas utilidades", "📄"),
     ("Vacaciones", "Boletas vacaciones", "📄"),
@@ -710,256 +54,529 @@ TIPOS_PAGO = [
     ("Liquidación", "Boletas liquidación", "📄"),
     ("Gratificación", "Boletas gratificación", "📄"),
 ]
-TIPOS_EMPRESA = [("Documentos Empresa", "Documentos de la empresa", "🏢")]
-TIPOS_PERSONALES = [("Otros", "Otros documentos", "🗂️"), ("Contrato", "Contrato de Trabajo", "📑")]
-TODOS_TIPOS = TIPOS_PAGO + TIPOS_EMPRESA + TIPOS_PERSONALES
+TIPOS_EMPRESA = [
+    ("Contrato de Trabajo", "Contrato de Trabajo", "📑"),
+    ("Reglamento Interno", "Reglamento Interno", "📘"),
+    ("Reglamento de SST", "Reglamento de SST", "🦺"),
+    ("Código de Conducta", "Código de Conducta", "⚖️"),
+    ("Políticas", "Políticas", "📌"),
+    ("Comunicados", "Comunicados", "📣"),
+    ("Formatos", "Formatos", "🧾"),
+]
+TIPOS_PERSONALES = [
+    ("Otros", "Otros documentos", "🗂️"),
+    ("Contrato Personal", "Contrato de Trabajo", "📑"),
+]
+ALL_TIPOS = {k: (label, icon, "pago") for k, label, icon in TIPOS_PAGO}
+ALL_TIPOS.update({k: (label, icon, "empresa") for k, label, icon in TIPOS_EMPRESA})
+ALL_TIPOS.update({k: (label, icon, "personal") for k, label, icon in TIPOS_PERSONALES})
+EXT_ALLOWED = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx", ".xls", ".xlsx"}
 
-BASE_HTML = r'''
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>{{ title or 'PRIZE Portal' }}</title>
+
+def now_txt():
+    return datetime.now(APP_TZ).strftime("%d/%m/%Y %I:%M %p")
+
+
+def now_file():
+    return datetime.now(APP_TZ).strftime("%Y%m%d_%H%M%S")
+
+
+def clean(v):
+    return str(v or "").strip()
+
+
+def normalizar_dni(v):
+    d = re.sub(r"\D", "", str(v or ""))
+    return d[-8:].zfill(8) if d else ""
+
+
+def safe_periodo(p):
+    return re.sub(r"[^A-Za-z0-9_\- ]", "", clean(p))[:50] or datetime.now(APP_TZ).strftime("%Y-%m")
+
+
+def logo_url():
+    # Reconoce logo en la carpeta raíz o static: logo_prize.png, logo.png, prize.png, etc.
+    nombres = ["logo_prize.png", "logo.png", "prize.png", "LOGO.png", "Logo.png", "logo_prize.jpg", "logo_prize.jpeg"]
+    for folder in (BASE_DIR, STATIC_DIR):
+        for name in nombres:
+            p = folder / name
+            if p.exists():
+                if folder == STATIC_DIR:
+                    return url_for("static", filename=name)
+                return url_for("logo_file", filename=name)
+    return url_for("logo_svg")
+
+
+def db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    with db() as con:
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios_admin(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario TEXT UNIQUE,
+            clave_hash TEXT,
+            nombre TEXT,
+            rol TEXT DEFAULT 'admin',
+            activo INTEGER DEFAULT 1
+        )""")
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS trabajadores(
+            dni TEXT PRIMARY KEY,
+            nombre TEXT,
+            correo TEXT,
+            cargo TEXT,
+            area TEXT,
+            empresa TEXT,
+            activo INTEGER DEFAULT 1,
+            fecha_registro TEXT
+        )""")
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS documentos(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dni TEXT,
+            categoria TEXT,
+            tipo TEXT,
+            periodo TEXT,
+            detalle TEXT,
+            observacion TEXT,
+            archivo_nombre TEXT,
+            ruta_archivo TEXT,
+            extension TEXT,
+            fecha_subida TEXT,
+            uploaded_by TEXT
+        )""")
+        # Datos demo seguros
+        if not con.execute("SELECT 1 FROM usuarios_admin WHERE usuario='admin'").fetchone():
+            con.execute("INSERT INTO usuarios_admin(usuario,clave_hash,nombre,rol) VALUES(?,?,?,?)",
+                        ("admin", generate_password_hash("admin123"), "Administrador PRIZE", "admin"))
+        if not con.execute("SELECT 1 FROM trabajadores WHERE dni='74324033'").fetchone():
+            con.execute("INSERT INTO trabajadores(dni,nombre,correo,cargo,area,empresa,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?)",
+                        ("74324033", "AZABACHE LUJAN, OMAR EDUARDO", "omar@demo.com", "Analista", "RR.HH.", "PRIZE SUPERFRUITS", 1, now_txt()))
+        con.commit()
+
+
+init_db()
+
+# =============================
+# SEGURIDAD / DECORADORES
+# =============================
+def admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not session.get("admin_id"):
+            return redirect(url_for("admin_login"))
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def worker_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not session.get("dni"):
+            return redirect(url_for("login"))
+        return fn(*args, **kwargs)
+    return wrapper
+
+# =============================
+# DB HELPERS
+# =============================
+def get_trabajador(dni):
+    dni = normalizar_dni(dni)
+    with db() as con:
+        return con.execute("SELECT * FROM trabajadores WHERE dni=?", (dni,)).fetchone()
+
+
+def listar_documentos(dni=None, tipo=None, categoria=None, periodo=None, buscar=None, limit=300):
+    where, params = [], []
+    if dni:
+        where.append("(dni=? OR categoria='empresa')")
+        params.append(normalizar_dni(dni))
+    if tipo:
+        where.append("tipo=?")
+        params.append(tipo)
+    if categoria:
+        where.append("categoria=?")
+        params.append(categoria)
+    if periodo:
+        where.append("periodo=?")
+        params.append(periodo)
+    if buscar:
+        b = f"%{buscar}%"
+        where.append("(dni LIKE ? OR tipo LIKE ? OR periodo LIKE ? OR detalle LIKE ? OR observacion LIKE ? OR archivo_nombre LIKE ?)")
+        params += [b, b, b, b, b, b]
+    sql = "SELECT * FROM documentos"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+    with db() as con:
+        return con.execute(sql, params).fetchall()
+
+
+def periodos_disponibles(dni=None, tipo=None, categoria=None):
+    where, params = ["periodo IS NOT NULL", "periodo<>''"], []
+    if dni:
+        where.append("(dni=? OR categoria='empresa')"); params.append(normalizar_dni(dni))
+    if tipo:
+        where.append("tipo=?"); params.append(tipo)
+    if categoria:
+        where.append("categoria=?"); params.append(categoria)
+    sql = "SELECT DISTINCT periodo FROM documentos WHERE " + " AND ".join(where) + " ORDER BY periodo DESC LIMIT 80"
+    with db() as con:
+        return [r[0] for r in con.execute(sql, params).fetchall() if r[0]]
+
+
+def guardar_documento(file_storage, dni, tipo, periodo, detalle="", observacion="", uploaded_by="sistema"):
+    if not file_storage or not file_storage.filename:
+        return None
+    original = secure_filename(file_storage.filename)
+    ext = Path(original).suffix.lower()
+    if ext not in EXT_ALLOWED:
+        raise ValueError(f"Extensión no permitida: {ext}")
+    tipo_info = ALL_TIPOS.get(tipo, (tipo, "📄", "personal"))
+    categoria = tipo_info[2]
+    dni = normalizar_dni(dni) if categoria != "empresa" else ""
+    periodo = safe_periodo(periodo)
+    folder = UPLOAD_DIR / categoria / re.sub(r"[^A-Za-z0-9_\-]", "_", tipo) / periodo
+    if dni:
+        folder = folder / dni
+    folder.mkdir(parents=True, exist_ok=True)
+    final = f"{dni + '_' if dni else ''}{re.sub(r'[^A-Za-z0-9_\-]+','_', tipo)}_{periodo}_{now_file()}_{original}"
+    path = folder / final
+    file_storage.save(path)
+    with db() as con:
+        con.execute("""
+        INSERT INTO documentos(dni,categoria,tipo,periodo,detalle,observacion,archivo_nombre,ruta_archivo,extension,fecha_subida,uploaded_by)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)
+        """, (dni, categoria, tipo, periodo, clean(detalle), clean(observacion), original, str(path), ext, now_txt(), uploaded_by))
+        con.commit()
+    return str(path)
+
+# =============================
+# ESTILOS Y LAYOUT
+# =============================
+BASE = r'''
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ title }}</title>
 <style>
-:root{--bg:#f4f8fb;--nav:#111c2e;--nav2:#1c2d46;--nav3:#263a59;--card:#ffffff;--line:#dbe6f0;--text:#0f1f34;--muted:#65758a;--blue:#4da3d9;--blue2:#1e6798;--green:#28a745;--green2:#148a3d;--orange:#f4a019;--red:#dc2626;--shadow:0 25px 65px rgba(13,27,45,.18)}
-*{box-sizing:border-box}html,body{min-height:100%}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--text);background:radial-gradient(circle at 3% 86%,rgba(77,163,217,.18),transparent 23%),radial-gradient(circle at 93% 83%,rgba(40,167,69,.18),transparent 22%),linear-gradient(135deg,#f7fbff 0%,#eef5f3 100%)}
-a{text-decoration:none;color:inherit}.btn,.btn-blue,.btn-red,.btn-green{border:0;border-radius:14px;padding:11px 14px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px}.btn{background:#fff;border:1px solid var(--line);color:#17233a}.btn-blue{background:linear-gradient(180deg,var(--blue),var(--blue2));color:#fff;box-shadow:0 12px 22px rgba(30,103,152,.22)}.btn-green{background:linear-gradient(180deg,var(--green),var(--green2));color:#fff;box-shadow:0 12px 22px rgba(20,138,61,.22)}.btn-red{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}.badge{display:inline-flex;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900}.badge.ok{background:#dcfce7;color:#166534}.badge.no{background:#fee2e2;color:#991b1b}.badge.warn{background:#fef3c7;color:#92400e}
-.login-page{min-height:100vh;display:grid;place-items:center;padding:28px;position:relative;overflow:hidden}.login-page:before{content:"";position:absolute;width:520px;height:520px;border-radius:50%;left:-120px;bottom:-170px;background:rgba(77,163,217,.20);filter:blur(4px)}.login-page:after{content:"";position:absolute;width:520px;height:520px;border-radius:50%;right:-70px;bottom:-110px;background:rgba(40,167,69,.20);filter:blur(4px)}.login-card{position:relative;z-index:1;width:100%;max-width:485px;background:linear-gradient(180deg,#121d2f,#0d1525);border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:34px 34px 0;box-shadow:0 30px 70px rgba(8,15,28,.35);overflow:hidden}.login-card:after{content:"";display:block;height:92px;margin:26px -34px 0;background:radial-gradient(circle at 20% 100%,#116aa3 0 34%,transparent 35%),radial-gradient(circle at 88% 100%,#159447 0 48%,transparent 49%)}.logo-login{text-align:center;margin-bottom:18px}.logo-login img{max-width:255px;max-height:122px;object-fit:contain;filter:drop-shadow(0 10px 25px rgba(77,163,217,.22))}.login-title{text-align:center;margin:8px 0 5px;font-size:23px;color:#c7ddf3}.login-sub{text-align:center;color:#99acc4;margin:0 0 26px;font-weight:700}.field{margin-bottom:14px}.field label{font-size:12px;font-weight:900;color:#aac1da;display:block;margin:0 0 7px 4px}.field input,.field select{width:100%;border:1px solid rgba(219,230,240,.7);border-radius:13px;background:#fff;padding:15px 16px;font-size:15px;outline:none;box-shadow:0 8px 20px rgba(15,23,42,.08)}.login-card .btn-green{width:100%;font-size:18px;padding:15px;border-radius:14px}.login-actions{display:flex;justify-content:center;margin-top:15px}.login-actions .btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.10);color:#e7eef7}.alert{border-radius:16px;padding:12px 14px;margin-bottom:14px;line-height:1.45;font-size:14px}.alert.error{background:#fff1f2;border:1px solid #fecdd3;color:#be123c}.alert.ok{background:#effcf6;border:1px solid #bbf7d0;color:#166534}
-.app-shell{min-height:100vh;display:grid;grid-template-columns:290px 1fr}.sidebar{background:linear-gradient(180deg,#101a2c,#17273e);color:#eaf2fb;padding:0;position:sticky;top:0;height:100vh;overflow:auto;box-shadow:8px 0 24px rgba(15,23,42,.16)}.side-top{height:42px;background:#0d1625;display:flex;align-items:center;gap:9px;padding:0 13px;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;font-weight:900}.side-logo{padding:16px 14px;text-align:center;border-bottom:1px solid rgba(255,255,255,.07)}.side-logo img{max-width:170px;max-height:74px;object-fit:contain}.side-group{margin:10px 8px;border-radius:0;overflow:hidden}.group-head{display:flex;align-items:center;justify-content:space-between;background:#344963;color:#fff;padding:12px 12px;font-weight:900;font-size:13px}.group-head span:first-child{display:flex;gap:10px;align-items:center}.side-list{background:#172437;padding:7px 0}.side-list a{display:flex;align-items:center;gap:10px;color:#dce8f4;padding:11px 14px 11px 38px;font-weight:800;font-size:12px;border-left:3px solid transparent}.side-list a:hover,.side-list a.active{background:rgba(255,255,255,.08);border-left-color:#69b7e5;color:#fff}.admin-list a{padding-left:16px}.content{padding:24px;min-width:0}.topbar{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:18px}.topbar h1{margin:0;font-size:29px}.topbar p{margin:5px 0 0;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.card{background:rgba(255,255,255,.96);border:1px solid rgba(216,228,240,.9);border-radius:24px;box-shadow:0 12px 28px rgba(15,23,42,.08);padding:18px;min-width:0}.span-3{grid-column:span 3}.span-4{grid-column:span 4}.span-5{grid-column:span 5}.span-6{grid-column:span 6}.span-7{grid-column:span 7}.span-8{grid-column:span 8}.span-12{grid-column:span 12}.metric{display:flex;align-items:center;justify-content:space-between}.metric h3{margin:0;color:#64748b;font-size:13px}.metric strong{font-size:30px}.metric .ico{width:46px;height:46px;border-radius:16px;background:#eff6ff;display:grid;place-items:center;font-size:22px}.table-wrap{overflow:auto;border-radius:16px;border:1px solid var(--line)}table{width:100%;border-collapse:collapse;background:#fff}th,td{padding:11px 12px;border-bottom:1px solid #edf2f7;text-align:left;font-size:13px;vertical-align:middle}th{background:#f8fafc;color:#475569;font-size:12px;text-transform:uppercase}.info{display:grid;grid-template-columns:150px 1fr;gap:8px 12px}.info .label{color:#64748b;font-weight:900}.info .value{font-weight:700;word-break:break-word}.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.tile{background:#f8fbfe;border:1px solid var(--line);border-radius:18px;padding:15px}.tile h4{margin:0 0 7px}.tile p{margin:0;color:#64748b;line-height:1.45;font-size:13px}.actions{display:flex;gap:10px;flex-wrap:wrap}.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;align-items:end}.section-title{font-size:18px;margin:0 0 12px}.mobile-tabs{display:none;position:sticky;bottom:0;background:rgba(16,26,44,.97);padding:8px;z-index:10;gap:6px;overflow-x:auto}.mobile-tabs a{white-space:nowrap;color:#eaf2fb;background:rgba(255,255,255,.08);border-radius:999px;padding:10px 12px;font-size:12px;font-weight:900}
-@media(max-width:980px){.app-shell{display:block}.sidebar{position:fixed;left:0;top:0;width:270px;z-index:30;transform:translateX(-100%);transition:.2s}.sidebar.open{transform:translateX(0)}.content{padding:16px 14px 82px}.grid{grid-template-columns:1fr}.span-3,.span-4,.span-5,.span-6,.span-7,.span-8,.span-12{grid-column:span 1}.topbar{align-items:flex-start;flex-direction:column}.tiles{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.info{grid-template-columns:1fr}.mobile-tabs{display:flex}.card{border-radius:20px}.login-page{padding:16px}.login-card{border-radius:22px;padding:28px 18px 0}.logo-login img{max-width:220px}.top-mobile{display:flex!important}}
+:root{--ink:#071426;--nav:#101c2d;--nav2:#16263b;--nav3:#243c5a;--line:#d8e5f0;--txt:#06162c;--mut:#60748b;--green:#16a34a;--green2:#22c55e;--blue:#1e75ad;--cyan:#8bd0ec;--card:#ffffff;--soft:#f5f9fc;--warn:#f59e0b;--danger:#ef4444;--shadow:0 20px 50px rgba(15,23,42,.12)}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--txt);background:radial-gradient(circle at 0% 75%,rgba(72,151,207,.20),transparent 26%),radial-gradient(circle at 100% 70%,rgba(34,197,94,.22),transparent 30%),linear-gradient(135deg,#f7fbff 0%,#eef7f6 100%);font-weight:600} a{text-decoration:none;color:inherit} .hidden{display:none!important}
+.btn,.btn-blue,.btn-green,.btn-red{border:1px solid var(--line);border-radius:15px;padding:12px 18px;background:#fff;color:#071426;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 18px rgba(15,23,42,.04)}.btn:hover,.btn-blue:hover{transform:translateY(-1px)}.btn-blue{background:linear-gradient(135deg,#eff8ff,#fff);border-color:#b9d7ef}.btn-green{background:linear-gradient(135deg,var(--green),var(--green2));border:0;color:white}.btn-red{background:#fff1f2;border-color:#fecdd3;color:#be123c}.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:8px 12px;background:#f1f7fb;border:1px solid #dbe8f3;font-size:13px;color:#39506b}.flash{padding:13px 16px;border-radius:16px;margin:10px 0;background:#ecfdf5;border:1px solid #bbf7d0;color:#166534}.flash.err{background:#fff1f2;border-color:#fecdd3;color:#be123c}
+/* LOGIN */
+.login-body{min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at 12% 82%,rgba(42,139,201,.24),transparent 23%),radial-gradient(circle at 88% 78%,rgba(34,197,94,.23),transparent 24%),linear-gradient(125deg,#f9fbfd 0%,#f4fbf6 100%)}.login-card{width:min(92vw,520px);background:linear-gradient(180deg,#111927,#0d1726);border:1px solid rgba(255,255,255,.08);border-radius:26px;padding:34px 36px 0;box-shadow:0 40px 90px rgba(15,23,42,.28);overflow:hidden;position:relative}.login-card:before{content:"";position:absolute;left:-40px;bottom:-82px;width:310px;height:170px;background:#1670a8;border-radius:50% 50% 0 0;transform:rotate(4deg)}.login-card:after{content:"";position:absolute;right:-55px;bottom:-72px;width:300px;height:165px;background:#179b45;border-radius:50% 50% 0 0;transform:rotate(-5deg)}.login-inner{position:relative;z-index:2}.login-logo{text-align:center}.login-logo img{max-width:230px;max-height:105px;object-fit:contain;filter:drop-shadow(0 8px 16px rgba(0,0,0,.25))}.login-title{text-align:center;color:#b7c9dc;margin:18px 0 28px}.login-title h1{margin:0 0 7px;color:#dff1ff;font-size:25px}.field{display:grid;gap:7px}.field label{font-size:13px;color:#223d5a;font-weight:900}.login-card .field label{color:#79a7d2}.input,select,textarea{width:100%;border:1px solid #d7e4ef;border-radius:14px;padding:13px 14px;background:#fff;color:#071426;font:inherit;outline:none}.login-input{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:0 13px;margin-bottom:18px}.login-input input{border:0;padding:16px 8px;width:100%;font:inherit;outline:none}.login-card .btn-green{width:100%;justify-content:center;font-size:18px;margin:6px 0 66px}.login-links{text-align:center;margin-top:-46px;padding-bottom:20px;position:relative;z-index:3}.login-links a{color:#bfdbfe;font-size:13px}
+/* APP */
+.app{display:grid;grid-template-columns:320px 1fr;min-height:100vh}.side{background:linear-gradient(180deg,#0b1422,#14243a);color:#e6eef7;position:sticky;top:0;height:100vh;overflow:auto;transition:.25s;width:320px;z-index:5}.side.collapsed{width:82px}.side-top{height:46px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:#08111f;border-bottom:1px solid rgba(255,255,255,.06)}.toggle{cursor:pointer;background:transparent;border:0;color:white;font-size:20px}.brand{padding:24px 16px;text-align:center}.brand img{max-width:145px;max-height:78px;background:#fff;border-radius:3px;object-fit:contain}.brand p{color:#b8c8d8;font-size:14px;margin-top:18px}.side.collapsed .brand p,.side.collapsed .label,.side.collapsed .chev,.side.collapsed .subtxt{display:none}.side.collapsed .brand img{max-width:48px}.menu-group{margin:10px 9px}.menu-title{display:flex;align-items:center;gap:12px;background:#314963;color:#fff;padding:14px 13px;border-radius:0;font-size:16px;font-weight:1000;cursor:pointer}.menu-title .chev{margin-left:auto}.submenu{background:#14233a;padding:10px 0}.menu-item{display:flex;align-items:center;gap:12px;padding:12px 20px 12px 45px;color:#e4edf8;font-weight:900;font-size:14px;border-left:3px solid transparent}.menu-item:hover,.menu-item.active{background:#26384f;border-left-color:#6fd1ff}.side.collapsed .menu-title{justify-content:center}.side.collapsed .menu-item{padding:14px;justify-content:center}.main{min-width:0;padding:28px 34px 50px;overflow:auto}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.topbar h1{margin:0;font-size:34px;letter-spacing:-1px}.subtitle{color:#516982;font-size:18px;margin-top:5px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}.card{background:rgba(255,255,255,.94);border:1px solid #d6e6f2;border-radius:26px;box-shadow:var(--shadow);padding:22px}.mini{grid-column:span 4;display:flex;align-items:center;justify-content:space-between}.mini b{font-size:28px}.ico{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:#eef6ff;font-size:25px}.span-12{grid-column:span 12}.span-8{grid-column:span 8}.span-4{grid-column:span 4}.doc-grid{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px}.doc-card{background:#f8fbfd;border:1px solid #d9e8f3;border-radius:18px;padding:18px;min-height:144px;transition:.15s}.doc-card:hover{transform:translateY(-2px);box-shadow:0 14px 28px rgba(15,23,42,.08)}.doc-card h3{margin:0 0 10px;font-size:18px}.doc-card p{margin:0 0 12px;color:#526b84;font-weight:500;line-height:1.45}.table-wrap{overflow:auto;border:1px solid #dbe8f3;border-radius:16px}table{width:100%;border-collapse:collapse;background:#fff}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid #edf2f6;vertical-align:top}th{background:#f6f9fc;color:#314963;font-size:13px;text-transform:uppercase}tr:hover td{background:#fbfdff}.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:end}.detail-box{background:linear-gradient(135deg,#f8fcff,#ffffff);border:1px solid #dceaf5;border-radius:18px;padding:15px}.detail-box small{display:block;color:#60748b;margin-bottom:4px}.period-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.mobile-head{display:none}
+@media(max-width:1000px){.app{grid-template-columns:1fr}.side{position:fixed;left:-330px}.side.open{left:0}.side.collapsed{left:-90px}.mobile-head{display:flex;position:sticky;top:0;z-index:4;background:#091321;color:white;padding:11px 14px;align-items:center;justify-content:space-between}.main{padding:18px}.doc-grid{grid-template-columns:1fr}.mini,.span-8,.span-4{grid-column:span 12}.form-grid{grid-template-columns:1fr}.topbar h1{font-size:25px}.subtitle{font-size:14px}}
+@media(max-width:1350px){.doc-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
-<script>function toggleMenu(){document.querySelector('.sidebar')?.classList.toggle('open')}</script>
-</head>
-<body>
-{% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}<div style="position:fixed;right:16px;top:16px;z-index:99;max-width:390px">{% for cat,msg in messages %}<div class="alert {{ 'ok' if cat=='ok' else 'error' }}">{{ msg }}</div>{% endfor %}</div>{% endif %}{% endwith %}
-{{ content|safe }}
-</body>
-</html>
+<script>
+function toggleSide(){const s=document.querySelector('.side'); if(window.innerWidth<1000){s.classList.toggle('open')}else{s.classList.toggle('collapsed'); localStorage.setItem('sideCollapsed',s.classList.contains('collapsed')?'1':'0')}}
+function initSide(){const s=document.querySelector('.side'); if(s && localStorage.getItem('sideCollapsed')==='1' && window.innerWidth>=1000){s.classList.add('collapsed')}}
+function filterCards(){const q=(document.getElementById('cardSearch')?.value||'').toLowerCase();document.querySelectorAll('.doc-card').forEach(c=>{c.style.display=c.innerText.toLowerCase().includes(q)?'block':'none'})}
+window.addEventListener('DOMContentLoaded',initSide)
+</script></head><body>{{ body|safe }}</body></html>
 '''
 
 
-def _logo_candidates():
-    names = ["logo_prize.png", "logo_prize.jpg", "logo_prize.jpeg", "logo.png", "prize.png", "PRIZE.png", "logo_prize(1).png"]
-    folders = [BASE_DIR, os.path.join(BASE_DIR, "static"), PERSIST_DIR, UPLOAD_DIR]
-    for folder in folders:
-        for name in names:
-            path = os.path.join(folder, name)
-            if os.path.exists(path):
-                return path
-    return ""
-
-@app.route("/logo_prize")
-def logo_prize_dynamic():
-    path = _logo_candidates()
-    if path:
-        return send_file(path, mimetype="image/png")
-    svg = """<svg xmlns='http://www.w3.org/2000/svg' width='420' height='160' viewBox='0 0 420 160'><rect width='420' height='160' fill='none'/><text x='40' y='83' font-family='Arial' font-size='72' font-weight='800' fill='#6bb7e6'>Prize</text><text x='96' y='126' font-family='Arial' font-size='25' font-weight='900' fill='#4caf50' letter-spacing='4'>SUPERFRUITS</text><circle cx='300' cy='78' r='28' fill='#f59e0b'/><text x='286' y='92' font-family='Arial' font-size='42' font-weight='800' fill='#1f5f94'>e</text></svg>"""
-    from flask import Response as FlaskResponse
-    return FlaskResponse(svg, mimetype="image/svg+xml")
+def render_page(content, title="Portal de Documentos PRIZE", active="Inicio"):
+    body = f'''
+    <div class="mobile-head"><button class="toggle" onclick="toggleSide()">☰</button><b>PRIZE Documentos</b><a href="/logout">Salir</a></div>
+    <div class="app"><aside class="side"><div class="side-top"><button class="toggle" onclick="toggleSide()">←</button><b class="label">Nisira DMHT</b><button class="toggle" onclick="toggleSide()">☷</button></div>
+      <div class="brand"><img src="{logo_url()}" alt="PRIZE"><p>Portal de documentos</p></div>{sidebar(active)}</aside><main class="main">{flashes()}{content}</main></div>'''
+    return render_template_string(BASE, body=body, title=title)
 
 
-def render_page(content, title="PRIZE Portal"):
-    return render_template_string(BASE_HTML, content=content, title=title)
+def flashes():
+    out = ""
+    for cat, msg in list(getattr(request, 'flashes', []) or []):
+        out += f"<div class='flash {'err' if cat=='error' else ''}'>{msg}</div>"
+    # Flask get_flashed_messages unavailable without import? import below lazily
+    from flask import get_flashed_messages
+    out = "".join([f"<div class='flash {'err' if c=='error' else ''}'>{m}</div>" for c, m in get_flashed_messages(with_categories=True)])
+    return out
 
 
-def _href_tipo(tipo):
-    return url_for("boletas_admin", tipo=tipo) if session.get("admin_user") else url_for("panel", tipo=tipo)
+def item(tipo, label, icon, active):
+    cls = "menu-item active" if active == tipo else "menu-item"
+    return f"<a class='{cls}' href='{url_for('panel_tipo', tipo=tipo)}'><span>{icon}</span><span class='label'>{label}</span></a>"
 
 
-def _menu_group(title, icon, items, active_tipo):
-    links = "".join([f'<a class="{ "active" if active_tipo==tipo else "" }" href="{_href_tipo(tipo)}"><span>{ico}</span>{label}</a>' for tipo,label,ico in items])
-    return f'<div class="side-group"><div class="group-head"><span><b>{icon}</b>{title}</span><span>⌄</span></div><div class="side-list">{links}</div></div>'
+def sidebar(active):
+    pago = ''.join(item(k,l,i,active) for k,l,i in TIPOS_PAGO)
+    emp = ''.join(item(k,l,i,active) for k,l,i in TIPOS_EMPRESA)
+    per = ''.join(item(k,l,i,active) for k,l,i in TIPOS_PERSONALES)
+    admin = ""
+    if session.get('admin_id'):
+        admin = """
+        <div class='menu-group'><div class='menu-title'><span>⚙️</span><span class='label'>Administrador</span><span class='chev'>∨</span></div><div class='submenu'>
+        <a class='menu-item' href='/admin'><span>📊</span><span class='label'>Dashboard</span></a>
+        <a class='menu-item' href='/admin/trabajadores'><span>👥</span><span class='label'>Trabajadores</span></a>
+        <a class='menu-item' href='/admin/documentos'><span>⬆️</span><span class='label'>Subir documentos</span></a>
+        </div></div>"""
+    return f"""
+    <nav>
+      <div class='menu-group'><div class='menu-title'><span>▣</span><span class='label'>Documentos de pago</span><span class='chev'>∨</span></div><div class='submenu'>{pago}</div></div>
+      <div class='menu-group'><div class='menu-title'><span>▦</span><span class='label'>Documentos de la empresa</span><span class='chev'>∨</span></div><div class='submenu'>{emp}</div></div>
+      <div class='menu-group'><div class='menu-title'><span>▤</span><span class='label'>Documentos personales</span><span class='chev'>∨</span></div><div class='submenu'>{per}</div></div>
+      {admin}
+      <div class='menu-group'><div class='menu-title'><span>👤</span><span class='label'>Mi cuenta</span><span class='chev'>∨</span></div><div class='submenu'><a class='menu-item' href='/panel'><span>🏠</span><span class='label'>Inicio</span></a><a class='menu-item' href='/logout'><span>🚪</span><span class='label'>Salir</span></a></div></div>
+    </nav>"""
 
 
-def layout(content, active="dashboard", title="Panel", active_tipo=""):
-    if session.get("admin_user"):
-        admin_links = f'''
-        <div class="side-group"><div class="group-head"><span><b>⚙️</b>Administración</span><span>⌄</span></div>
-        <div class="side-list admin-list">
-          <a class="{ 'active' if active=='dashboard' else '' }" href="{url_for('admin_dashboard')}">🏠 Dashboard</a>
-          <a class="{ 'active' if active=='trabajadores' else '' }" href="{url_for('trabajadores')}">👥 Trabajadores</a>
-          <a class="{ 'active' if active=='boletas' and not active_tipo else '' }" href="{url_for('boletas_admin')}">📤 Carga general</a>
-          <a class="{ 'active' if active=='api' else '' }" href="{url_for('api_status')}">🔌 Estado API</a>
-          <a href="{url_for('logout')}">🚪 Salir</a>
-        </div></div>'''
-    else:
-        admin_links = f'<div class="side-group"><div class="group-head"><span><b>👤</b>Mi cuenta</span><span>⌄</span></div><div class="side-list admin-list"><a href="{url_for("panel")}">🏠 Inicio</a><a href="{url_for("logout")}">🚪 Salir</a></div></div>'
-    side = f'''
-      <aside class="sidebar">
-        <div class="side-top"><span>←</span><span style="flex:1;text-align:center">Nisira DMHT</span><span>☷</span></div>
-        <div class="side-logo"><img src="{url_for('logo_prize_dynamic')}" alt="PRIZE"><div style="font-size:12px;color:#b9cbe0;font-weight:800;margin-top:8px">Portal de documentos</div></div>
-        {_menu_group('Documentos de pago','▣',TIPOS_PAGO,active_tipo)}
-        {_menu_group('Documentos de la empresa','▦',TIPOS_EMPRESA,active_tipo)}
-        {_menu_group('Documentos personales','▤',TIPOS_PERSONALES,active_tipo)}
-        {admin_links}
-      </aside>'''
-    mobile_items = [("Inicio", url_for("admin_dashboard") if session.get("admin_user") else url_for("panel")), ("Utilidades", _href_tipo("Utilidad")), ("CTS", _href_tipo("CTS")), ("Grati", _href_tipo("Gratificación")), ("Salir", url_for("logout"))]
-    mobile = "".join([f'<a href="{u}">{l}</a>' for l,u in mobile_items])
-    shell = f'''
-    <div class="app-shell">
-      {side}
-      <main class="content"><div class="top-mobile" style="display:none;margin-bottom:12px"><button class="btn" onclick="toggleMenu()">☰ Menú</button></div>{content}</main>
-      <nav class="mobile-tabs">{mobile}</nav>
-    </div>'''
-    return render_page(shell, title)
+def login_template(admin=False, error=""):
+    action = url_for('admin_login') if admin else url_for('login')
+    title = "Administrador PRIZE" if admin else "Portal de documentos PRIZE"
+    sub = "Gestión interna de documentos" if admin else "Acceso al sistema"
+    fields = """
+      <div class='field'><label>Usuario</label><div class='login-input'>👤<input name='usuario' placeholder='Ingrese su usuario' required></div></div>
+      <div class='field'><label>Clave</label><div class='login-input'>🔒<input name='clave' type='password' placeholder='Ingrese su clave' required></div></div>
+    """ if admin else """
+      <div class='field'><label>DNI</label><div class='login-input'>🪪<input name='dni' maxlength='8' placeholder='Ingrese su DNI' required></div></div>
+      <div class='field'><label>Correo</label><div class='login-input'>✉️<input name='correo' type='email' placeholder='Ingrese su correo' required></div></div>
+    """
+    body = f"""
+    <div class='login-body'><form class='login-card' method='post' action='{action}'><div class='login-inner'>
+      <div class='login-logo'><img src='{logo_url()}'></div><div class='login-title'><h1>{title}</h1><b>{sub}</b></div>
+      {f"<div class='flash err'>{error}</div>" if error else ""}{fields}<button class='btn-green'>Ingresar</button>
+    </div><div class='login-links'>{'<a href="/">Ir al portal trabajador</a>' if admin else '<a href="/admin/login">Acceso administrador</a>'}</div></form></div>"""
+    return render_template_string(BASE, body=body, title=title)
+
+# =============================
+# ROUTES ESTÁTICAS / LOGO
+# =============================
+@app.route('/_logo/<path:filename>')
+def logo_file(filename):
+    p = BASE_DIR / filename
+    if p.exists():
+        return send_file(p)
+    abort(404)
+
+@app.route('/logo_svg')
+def logo_svg():
+    svg = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 140'><rect width='360' height='140' fill='white'/><text x='45' y='75' font-family='Segoe UI,Arial' font-size='70' font-style='italic' fill='#2b668d'>Prize</text><circle cx='250' cy='63' r='26' fill='#ef8b16'/><circle cx='259' cy='62' r='17' fill='#f8c02a'/><text x='250' y='73' font-family='Arial' font-size='35' font-weight='900' fill='#244d77'>e</text><path d='M255 35c22-28 42-30 54-34-5 20-21 35-48 42z' fill='#35a34a'/><text x='112' y='117' font-family='Arial' font-size='28' font-weight='800' fill='#4cae55'>SUPERFRUITS</text></svg>"""
+    return app.response_class(svg, mimetype='image/svg+xml')
+
+# =============================
+# LOGIN USUARIO
+# =============================
+@app.route('/', methods=['GET','POST'])
+def login():
+    if request.method == 'POST':
+        dni = normalizar_dni(request.form.get('dni'))
+        correo = clean(request.form.get('correo')).lower()
+        t = get_trabajador(dni)
+        if not t or clean(t['correo']).lower() != correo:
+            return login_template(False, "DNI o correo no coincide. Verifique sus datos.")
+        session.clear(); session['dni'] = dni; session['nombre'] = t['nombre']
+        return redirect(url_for('panel'))
+    return login_template(False)
+
+@app.route('/logout')
+def logout():
+    session.clear(); return redirect(url_for('login'))
+
+@app.route('/panel')
+@worker_required
+def panel():
+    dni = session['dni']; t = get_trabajador(dni)
+    docs = listar_documentos(dni=dni, limit=999)
+    ultimo = docs[0]['tipo'] if docs else 'Sin documento'
+    cards = ''.join(doc_card(k,l,i) for k,l,i in (TIPOS_PAGO+TIPOS_EMPRESA+TIPOS_PERSONALES))
+    content = f"""
+    <div class='topbar'><div><h1>Todos mis documentos</h1><div class='subtitle'>{t['nombre']} · DNI {t['dni']} · {t['empresa']}</div></div><a class='btn' href='/panel'>Ver todo</a></div>
+    <section class='grid'><div class='card mini'><div><span>Documentos</span><br><b>{len(docs)}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Último tipo</span><br><b>{ultimo}</b></div><div class='ico'>📄</div></div><div class='card mini'><div><span>Estado</span><br><b>Activo</b></div><div class='ico'>✅</div></div>
+    <div class='card span-12'><div style='display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap'><h2>Accesos por pestaña</h2><input id='cardSearch' onkeyup='filterCards()' class='input' style='max-width:310px' placeholder='Buscar pestaña...'></div><div class='doc-grid'>{cards}</div></div>
+    <div class='card span-12'><h2>Últimos documentos</h2>{tabla_docs(docs)}</div></section>"""
+    return render_page(content, active='Inicio')
 
 
-def login_pro():
-    if session.get("worker_dni"):
-        return redirect(url_for("panel"))
-    if session.get("admin_user"):
-        return redirect(url_for("admin_dashboard"))
-    if request.method == "POST":
-        dni = normalizar_dni(request.form.get("dni"))
-        correo = clean_text(request.form.get("correo")).lower()
-        t = trabajador_data(dni)
-        if not t:
-            flash("DNI no encontrado. Verifica que esté cargado en la base.", "error")
-        elif clean_text(t.get("correo")).lower() != correo:
-            flash("El correo no coincide con el registrado.", "error")
+def doc_card(k,l,i):
+    return f"<div class='doc-card'><h3>{i} {l}</h3><p>Consulta, filtra por periodo y revisa el detalle del documento.</p><a class='btn-blue' href='{url_for('panel_tipo', tipo=k)}'>Abrir</a></div>"
+
+@app.route('/documentos/<tipo>')
+@worker_required
+def panel_tipo(tipo):
+    if tipo not in ALL_TIPOS: abort(404)
+    dni = session['dni']; label, icon, categoria = ALL_TIPOS[tipo]
+    periodo = clean(request.args.get('periodo'))
+    pers = periodos_disponibles(dni=dni, tipo=tipo)
+    docs = listar_documentos(dni=dni, tipo=tipo, periodo=periodo or None, limit=999)
+    opts = "<option value=''>Todos los periodos</option>" + ''.join([f"<option {'selected' if p==periodo else ''}>{p}</option>" for p in pers])
+    detalle = detalle_tipo(tipo, docs)
+    upload_extra = ""
+    if tipo == 'Otros':
+        upload_extra = f"""
+        <div class='card span-12'><h2>Adjuntar nuevo documento personal</h2><form method='post' action='/subir_personal' enctype='multipart/form-data' class='form-grid'>
+        <input type='hidden' name='tipo' value='Otros'><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Certificado, solicitud, evidencia'></div><div class='field'><label>Archivo</label><input type='file' name='archivo' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2' placeholder='Comentario u observación'></textarea></div><button class='btn-green'>Subir documento</button></form></div>"""
+    content = f"""
+    <div class='topbar'><div><h1>{icon} {label}</h1><div class='subtitle'>Solo se muestran documentos del tipo seleccionado.</div></div><a class='btn' href='/panel'>Volver</a></div>
+    <section class='grid'><div class='card mini'><div><span>Total</span><br><b>{len(docs)}</b></div><div class='ico'>{icon}</div></div><div class='card mini'><div><span>Periodo</span><br><b>{periodo or 'Todos'}</b></div><div class='ico'>📅</div></div><div class='card mini'><div><span>Filtro</span><br><b>{tipo}</b></div><div class='ico'>🔎</div></div>
+    <div class='card span-12'><form method='get' class='period-row'><div class='field'><label>Elegir periodo</label><select name='periodo'>{opts}</select></div><button class='btn-blue'>Aplicar filtro</button><a class='btn' href='{url_for('panel_tipo', tipo=tipo)}'>Limpiar</a></form></div>
+    <div class='card span-12'><h2>Detalle de {label}</h2>{detalle}</div>{upload_extra}<div class='card span-12'><h2>Listado</h2>{tabla_docs(docs)}</div></section>"""
+    return render_page(content, active=tipo)
+
+@app.route('/subir_personal', methods=['POST'])
+@worker_required
+def subir_personal():
+    try:
+        guardar_documento(request.files.get('archivo'), session['dni'], clean(request.form.get('tipo')) or 'Otros', request.form.get('periodo'), request.form.get('detalle'), request.form.get('observacion'), session.get('dni'))
+        flash('Documento personal subido correctamente.', 'ok')
+    except Exception as e:
+        flash(f'No se pudo subir: {e}', 'error')
+    return redirect(url_for('panel_tipo', tipo='Otros'))
+
+
+def detalle_tipo(tipo, docs):
+    ult = docs[0] if docs else None
+    label, icon, cat = ALL_TIPOS.get(tipo, (tipo,'📄',''))
+    texto = {
+        'Utilidad':'Boletas de participación de utilidades por periodo anual.',
+        'Vacaciones':'Documentos relacionados a pago o liquidación de vacaciones.',
+        'Normal':'Boletas de pago normal mensual, quincenal o semanal.',
+        'Constancia Gratificación':'Constancias asociadas a gratificación.',
+        'CTS':'Boletas o constancias de Compensación por Tiempo de Servicios.',
+        'Liquidación':'Documentos de liquidación de beneficios sociales.',
+        'Gratificación':'Boletas de gratificación ordinaria o extraordinaria.',
+        'Otros':'Espacio para documentos personales adjuntos por el usuario o administrador.',
+    }.get(tipo, 'Documento disponible para consulta y descarga.')
+    return f"""
+    <div class='grid'><div class='detail-box span-4'><small>Tipo</small><b>{icon} {label}</b></div><div class='detail-box span-4'><small>Último periodo</small><b>{ult['periodo'] if ult else 'Sin periodo'}</b></div><div class='detail-box span-4'><small>Última carga</small><b>{ult['fecha_subida'] if ult else 'Sin carga'}</b></div><div class='detail-box span-12'><small>Descripción</small>{texto}</div></div>"""
+
+
+def tabla_docs(rows):
+    if not rows:
+        return "<div class='table-wrap'><table><tr><th>Tipo</th><th>Periodo</th><th>Detalle</th><th>Observación</th><th>Fecha</th><th>Archivo</th></tr><tr><td colspan='6'>No hay documentos en esta pestaña.</td></tr></table></div>"
+    body = ''.join([f"<tr><td>{r['tipo']}</td><td>{r['periodo'] or ''}</td><td>{r['detalle'] or '-'}</td><td>{r['observacion'] or '-'}</td><td>{r['fecha_subida']}</td><td><a class='btn-blue' target='_blank' href='{url_for('ver_doc', doc_id=r['id'])}'>Ver/Descargar</a></td></tr>" for r in rows])
+    return f"<div class='table-wrap'><table><thead><tr><th>Tipo</th><th>Periodo</th><th>Detalle</th><th>Observación</th><th>Fecha</th><th>Archivo</th></tr></thead><tbody>{body}</tbody></table></div>"
+
+@app.route('/ver/<int:doc_id>')
+def ver_doc(doc_id):
+    with db() as con:
+        r = con.execute("SELECT * FROM documentos WHERE id=?", (doc_id,)).fetchone()
+    if not r: abort(404)
+    if not session.get('admin_id'):
+        dni = session.get('dni')
+        if not dni or (r['categoria'] != 'empresa' and r['dni'] != dni): abort(403)
+    path = Path(r['ruta_archivo'])
+    if not path.exists(): abort(404)
+    return send_file(path, as_attachment=False, download_name=r['archivo_nombre'])
+
+# =============================
+# ADMIN
+# =============================
+@app.route('/admin/login', methods=['GET','POST'])
+def admin_login():
+    if request.method == 'POST':
+        u, c = clean(request.form.get('usuario')), clean(request.form.get('clave'))
+        with db() as con:
+            user = con.execute("SELECT * FROM usuarios_admin WHERE usuario=? AND activo=1", (u,)).fetchone()
+        if not user or not check_password_hash(user['clave_hash'], c):
+            return login_template(True, 'Usuario o clave incorrecta.')
+        session.clear(); session['admin_id']=user['id']; session['admin_user']=user['usuario']; session['admin_nombre']=user['nombre']
+        return redirect(url_for('admin'))
+    return login_template(True)
+
+@app.route('/admin')
+@admin_required
+def admin():
+    with db() as con:
+        trabajadores = con.execute("SELECT COUNT(*) FROM trabajadores").fetchone()[0]
+        docs = con.execute("SELECT COUNT(*) FROM documentos").fetchone()[0]
+        emp = con.execute("SELECT COUNT(*) FROM documentos WHERE categoria='empresa'").fetchone()[0]
+        ult = con.execute("SELECT * FROM documentos ORDER BY id DESC LIMIT 12").fetchall()
+    content = f"""
+    <div class='topbar'><div><h1>Panel Administrador</h1><div class='subtitle'>Gestión total de trabajadores, boletas y documentos.</div></div><a class='btn-green' href='/admin/documentos'>Subir documentos</a></div>
+    <section class='grid'><div class='card mini'><div><span>Trabajadores</span><br><b>{trabajadores}</b></div><div class='ico'>👥</div></div><div class='card mini'><div><span>Documentos</span><br><b>{docs}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Empresa</span><br><b>{emp}</b></div><div class='ico'>🏢</div></div>
+    <div class='card span-12'><h2>Últimas cargas</h2>{tabla_docs(ult)}</div></section>"""
+    return render_page(content, active='Admin')
+
+@app.route('/admin/trabajadores', methods=['GET','POST'])
+@admin_required
+def admin_trabajadores():
+    if request.method == 'POST':
+        if 'excel' in request.files and request.files['excel'].filename:
+            f = request.files['excel']; path = UPLOAD_DIR / f"base_{now_file()}_{secure_filename(f.filename)}"; f.save(path)
+            wb = load_workbook(path, data_only=True); ws = wb.active
+            headers = [clean(c.value).upper() for c in ws[1]]
+            def idx(name):
+                return headers.index(name) if name in headers else -1
+            n=0
+            with db() as con:
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    dni = normalizar_dni(row[idx('DNI')] if idx('DNI')>=0 else '')
+                    if not dni: continue
+                    nombre = clean(row[idx('NOMBRE')] if idx('NOMBRE')>=0 else '')
+                    correo = clean(row[idx('CORREO')] if idx('CORREO')>=0 else '').lower()
+                    cargo = clean(row[idx('CARGO')] if idx('CARGO')>=0 else '')
+                    area = clean(row[idx('AREA')] if idx('AREA')>=0 else '')
+                    empresa = clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'PRIZE SUPERFRUITS')
+                    con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,activo,fecha_registro) VALUES(?,?,?,?,?,?,1,?)", (dni,nombre,correo,cargo,area,empresa,now_txt()))
+                    n+=1
+                con.commit()
+            flash(f'Base cargada correctamente: {n} trabajadores.', 'ok')
         else:
-            session.clear(); session["worker_dni"] = dni
-            return redirect(url_for("panel"))
-    content = f'''
-    <main class="login-page">
-      <form class="login-card" method="post">
-        <div class="logo-login"><img src="{url_for('logo_prize_dynamic')}" alt="PRIZE"></div>
-        <h2 class="login-title">Portal Documentario PRIZE</h2>
-        <p class="login-sub">Acceso al sistema</p>
-        <div class="field"><label>DNI</label><input name="dni" inputmode="numeric" maxlength="8" placeholder="Ingrese su DNI" required></div>
-        <div class="field"><label>Correo</label><input name="correo" type="email" placeholder="Ingrese su correo" required></div>
-        <button class="btn-green">Ingresar</button>
-        <div class="login-actions"><a class="btn" href="/admin/login">Soy administrador</a></div>
-      </form>
-    </main>'''
-    return render_page(content, "Login PRIZE")
+            dni=normalizar_dni(request.form.get('dni'))
+            with db() as con:
+                con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,activo,fecha_registro) VALUES(?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),clean(request.form.get('empresa')) or 'PRIZE SUPERFRUITS',now_txt()))
+                con.commit()
+            flash('Trabajador guardado.', 'ok')
+        return redirect(url_for('admin_trabajadores'))
+    with db() as con:
+        rows = con.execute("SELECT * FROM trabajadores ORDER BY nombre LIMIT 300").fetchall()
+    table = ''.join([f"<tr><td>{r['dni']}</td><td>{r['nombre']}</td><td>{r['correo']}</td><td>{r['cargo'] or ''}</td><td>{r['empresa'] or ''}</td></tr>" for r in rows])
+    content = f"""
+    <div class='topbar'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div></div></div><section class='grid'>
+    <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Nombre</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><input name='empresa' value='PRIZE SUPERFRUITS'></div><button class='btn-green'>Guardar</button></form></div>
+    <div class='card span-12'><h2>Carga Excel</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel con DNI, NOMBRE, CORREO, CARGO, AREA, EMPRESA</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button></form></div>
+    <div class='card span-12'><h2>Listado</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Empresa</th></tr>{table}</table></div></div></section>"""
+    return render_page(content, active='Trabajadores')
 
+@app.route('/admin/documentos', methods=['GET','POST'])
+@admin_required
+def admin_documentos():
+    if request.method == 'POST':
+        tipo = clean(request.form.get('tipo'))
+        dni = normalizar_dni(request.form.get('dni'))
+        periodo = request.form.get('periodo')
+        detalle = request.form.get('detalle')
+        obs = request.form.get('observacion')
+        files = request.files.getlist('archivos')
+        ok=0
+        try:
+            for f in files:
+                if f and f.filename:
+                    guardar_documento(f, dni, tipo, periodo, detalle, obs, session.get('admin_user','admin')); ok += 1
+            flash(f'Carga completada: {ok} archivo(s).', 'ok')
+        except Exception as e:
+            flash(f'Error en carga: {e}', 'error')
+        return redirect(url_for('admin_documentos', tipo=tipo))
+    tipo = clean(request.args.get('tipo')) or 'Utilidad'
+    buscar = clean(request.args.get('buscar'))
+    periodo = clean(request.args.get('periodo'))
+    tipo_options = ''.join([f"<option value='{k}' {'selected' if k==tipo else ''}>{l}</option>" for k,l,i in TIPOS_PAGO+TIPOS_EMPRESA+TIPOS_PERSONALES])
+    pers = periodos_disponibles(tipo=tipo)
+    periodo_options = "<option value=''>Todos</option>" + ''.join([f"<option {'selected' if p==periodo else ''}>{p}</option>" for p in pers])
+    rows = listar_documentos(tipo=tipo if tipo else None, periodo=periodo or None, buscar=buscar, limit=500)
+    content = f"""
+    <div class='topbar'><div><h1>Subir y gestionar documentos</h1><div class='subtitle'>Administrador: pago, empresa y documentos personales.</div></div></div><section class='grid'>
+    <div class='card span-12'><h2>Carga de documentos</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>DNI trabajador</label><input name='dni' placeholder='Vacío si es documento de empresa'></div><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}' list='periodos'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Boleta semanal / Política actualizada'></div><div class='field'><label>Archivos</label><input type='file' name='archivos' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' multiple required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2'></textarea></div><button class='btn-green'>Subir</button></form></div>
+    <div class='card span-12'><h2>Filtros</h2><form method='get' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>Periodo</label><select name='periodo'>{periodo_options}</select></div><div class='field'><label>Buscar</label><input name='buscar' value='{buscar}' placeholder='DNI, detalle, observación'></div><button class='btn-blue'>Filtrar</button><a class='btn' href='/admin/documentos'>Limpiar</a></form></div>
+    <div class='card span-12'><h2>Listado</h2>{tabla_docs(rows)}</div></section>"""
+    return render_page(content, active=tipo)
 
-def admin_login_pro():
-    if session.get("admin_user"):
-        return redirect(url_for("admin_dashboard"))
-    if request.method == "POST":
-        username = clean_text(request.form.get("username"))
-        password = clean_text(request.form.get("password"))
-        u = q_one("SELECT * FROM usuarios WHERE username=? AND active=1", (username,))
-        if u and check_password_hash(u["password_hash"], password):
-            session.clear(); session["admin_user"] = username
-            return redirect(url_for("admin_dashboard"))
-        flash("Usuario o clave incorrectos.", "error")
-    content = f'''
-    <main class="login-page"><form class="login-card" method="post">
-      <div class="logo-login"><img src="{url_for('logo_prize_dynamic')}" alt="PRIZE"></div>
-      <h2 class="login-title">Administrador PRIZE</h2><p class="login-sub">Gestión de documentos y trabajadores</p>
-      <div class="field"><label>Usuario</label><input name="username" placeholder="Ingrese su usuario" required></div>
-      <div class="field"><label>Clave</label><input name="password" type="password" placeholder="Ingrese su clave" required></div>
-      <button class="btn-green">Ingresar</button><div class="login-actions"><a class="btn" href="/">Portal trabajador</a></div>
-    </form></main>'''
-    return render_page(content, "Login admin")
+# API compatibles
+@app.route('/api/health')
+def api_health(): return jsonify({'ok': True, 'mensaje': 'Portal PRIZE activo'})
+@app.route('/api/boleta/<dni>')
+def api_boleta(dni):
+    docs = listar_documentos(dni=dni, categoria='pago', limit=20)
+    t = get_trabajador(dni)
+    return jsonify({'ok': bool(t), 'trabajador': dict(t) if t else None, 'documentos': [dict(x) for x in docs]})
 
-
-def panel_pro():
-    r = preparar_resultado(session["worker_dni"])
-    if not r:
-        session.clear(); return redirect(url_for("login"))
-    tipo_filter = clean_text(request.args.get("tipo"))
-    if tipo_filter:
-        boletas = q_all("SELECT * FROM boletas WHERE dni=? AND tipo=? ORDER BY fecha_subida DESC,id DESC", (r["dni"], tipo_filter))
-    else:
-        boletas = q_all("SELECT * FROM boletas WHERE dni=? ORDER BY fecha_subida DESC,id DESC", (r["dni"],))
-    rows = "".join([f"<tr><td>{b['tipo']}</td><td>{b.get('periodo') or ''}</td><td>{b['fecha_subida']}</td><td><a class='btn-blue' href='/ver_pdf/{b['id']}' target='_blank'>Ver PDF</a></td></tr>" for b in boletas]) or "<tr><td colspan='4'>No hay documentos en esta pestaña.</td></tr>"
-    cards = "".join([f"<div class='tile'><h4>{ico} {label}</h4><p>Consulta documentos de tipo {tipo}.</p><a class='btn' href='{url_for('panel', tipo=tipo)}'>Abrir</a></div>" for tipo,label,ico in TODOS_TIPOS])
-    titulo = tipo_filter or "Todos mis documentos"
-    content = f'''
-    <div class="topbar"><div><h1>{titulo}</h1><p>{r['nombre']} · DNI {r['dni']} · {r['empresa']}</p></div><div class="actions"><a class="btn" href="/panel">Ver todo</a><a class="btn-red" href="/logout">Salir</a></div></div>
-    <div class="grid">
-      <section class="card span-4"><div class="metric"><div><h3>Documentos</h3><strong>{len(boletas)}</strong></div><div class="ico">🗂️</div></div></section>
-      <section class="card span-4"><div class="metric"><div><h3>Último tipo</h3><strong style="font-size:20px">{r['tipo']}</strong></div><div class="ico">📄</div></div></section>
-      <section class="card span-4"><div class="metric"><div><h3>Estado</h3><strong style="font-size:20px">Activo</strong></div><div class="ico">✅</div></div></section>
-      <section class="card span-12"><h3 class="section-title">Accesos por pestaña</h3><div class="tiles">{cards}</div></section>
-      <section class="card span-12"><h3 class="section-title">Listado</h3><div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Periodo</th><th>Fecha</th><th>PDF</th></tr></thead><tbody>{rows}</tbody></table></div></section>
-    </div>'''
-    return layout(content, "panel", "Panel", active_tipo=tipo_filter)
-
-
-def admin_dashboard_pro():
-    total_t = q_one("SELECT COUNT(*) c FROM trabajadores")["c"]
-    total_b = q_one("SELECT COUNT(*) c FROM boletas")["c"]
-    total_pdf = q_one("SELECT COUNT(*) c FROM boletas WHERE ruta_pdf IS NOT NULL")["c"]
-    rows_data = q_all("""
-        SELECT b.*,t.nombre FROM boletas b LEFT JOIN trabajadores t ON t.dni=b.dni
-        ORDER BY b.fecha_subida DESC,b.id DESC LIMIT 12
-    """)
-    rows = "".join([f"<tr><td>{r['dni']}</td><td>{r.get('nombre') or ''}</td><td>{r['tipo']}</td><td>{r.get('periodo') or ''}</td><td>{r['fecha_subida']}</td><td><a class='btn-blue' href='/ver_pdf/{r['id']}' target='_blank'>Ver</a></td></tr>" for r in rows_data]) or "<tr><td colspan='6'>Sin documentos.</td></tr>"
-    acceso = "".join([f"<div class='tile'><h4>{ico} {label}</h4><p>Cargar y revisar documentos {tipo}.</p><a class='btn-blue' href='{url_for('boletas_admin', tipo=tipo)}'>Abrir</a></div>" for tipo,label,ico in TODOS_TIPOS])
-    content = f'''
-    <div class="topbar"><div><h1>Dashboard Documentario PRIZE</h1><p>Panel web/app con documentos de pago, empresa y personales.</p></div><div class="actions"><a class="btn" href="/admin">Actualizar</a><a class="btn-red" href="/logout">Salir</a></div></div>
-    <div class="grid">
-      <section class="card span-3"><div class="metric"><div><h3>Trabajadores</h3><strong>{total_t}</strong></div><div class="ico">👥</div></div></section>
-      <section class="card span-3"><div class="metric"><div><h3>Documentos</h3><strong>{total_b}</strong></div><div class="ico">📄</div></div></section>
-      <section class="card span-3"><div class="metric"><div><h3>PDFs</h3><strong>{total_pdf}</strong></div><div class="ico">🗂️</div></div></section>
-      <section class="card span-3"><div class="metric"><div><h3>Modo</h3><strong style="font-size:20px">{'PG' if USE_POSTGRES else 'SQL'}</strong></div><div class="ico">☁️</div></div></section>
-      <section class="card span-12"><h3 class="section-title">Pestañas recuperadas</h3><div class="tiles">{acceso}</div></section>
-      <section class="card span-12"><h3 class="section-title">Últimos documentos cargados</h3><div class="table-wrap"><table><thead><tr><th>DNI</th><th>Trabajador</th><th>Tipo</th><th>Periodo</th><th>Fecha</th><th>PDF</th></tr></thead><tbody>{rows}</tbody></table></div></section>
-    </div>'''
-    return layout(content, "dashboard", "Admin")
-
-
-def _options_tipo(selected):
-    return "".join([f'<option value="{tipo}" {"selected" if tipo==selected else ""}>{label}</option>' for tipo,label,ico in TODOS_TIPOS])
-
-
-def boletas_admin_pro():
-    tipo_arg = clean_text(request.args.get("tipo"))
-    if request.method == "POST":
-        tipo = clean_text(request.form.get("tipo")) or "Utilidad"
-        periodo = clean_text(request.form.get("periodo")) or today_iso()
-        files = request.files.getlist("pdfs")
-        ok = errores = 0; msgs = []
-        for f in files:
-            if not f or not f.filename: continue
-            try:
-                guardar_pdf(f, tipo, periodo); ok += 1
-            except Exception as e:
-                errores += 1; msgs.append(str(e))
-        if ok: flash(f"PDFs cargados correctamente: {ok} en {tipo}.", "ok")
-        if errores: flash("Errores: " + " | ".join(msgs[:5]), "error")
-        return redirect(url_for("boletas_admin", tipo=tipo))
-    buscar = clean_text(request.args.get("buscar"))
-    params = []
-    where = "WHERE 1=1"
-    if tipo_arg:
-        where += " AND b.tipo=?"; params.append(tipo_arg)
-    if buscar:
-        where += " AND (b.dni LIKE ? OR t.nombre LIKE ? OR b.tipo LIKE ? OR b.periodo LIKE ?)"; b=f"%{buscar}%"; params += [b,b,b,b]
-    rows_data = q_all(f"""
-        SELECT b.*,t.nombre,t.correo,t.empresa FROM boletas b LEFT JOIN trabajadores t ON t.dni=b.dni
-        {where} ORDER BY b.fecha_subida DESC,b.id DESC LIMIT 300
-    """, tuple(params))
-    rows = "".join([f"<tr><td>{r['dni']}</td><td>{r.get('nombre') or ''}</td><td>{r['tipo']}</td><td>{r.get('periodo') or ''}</td><td>{r['fecha_subida']}</td><td><a class='btn-blue' href='/ver_pdf/{r['id']}' target='_blank'>Ver</a></td></tr>" for r in rows_data]) or "<tr><td colspan='6'>Sin PDFs cargados en esta pestaña.</td></tr>"
-    title_tipo = tipo_arg or "Carga general"
-    content = f'''
-    <div class="topbar"><div><h1>{title_tipo}</h1><p>Carga PDFs nombrados con DNI: 74324033.pdf. La pestaña seleccionada clasifica el documento.</p></div><div class="actions"><a class="btn" href="/admin/boletas">Ver todo</a></div></div>
-    <div class="grid">
-      <section class="card span-12"><form method="post" enctype="multipart/form-data" class="form-grid">
-        <div class="field"><label>Tipo de documento</label><select name="tipo">{_options_tipo(tipo_arg or 'Utilidad')}</select></div>
-        <div class="field"><label>Periodo</label><input name="periodo" value="{today_iso()}" placeholder="01_2026 / 2026 / Semana 01"></div>
-        <div class="field"><label>PDFs</label><input type="file" name="pdfs" accept=".pdf" multiple required></div>
-        <button class="btn-blue">Subir PDFs</button>
-      </form></section>
-      <section class="card span-12"><form method="get" class="form-grid"><input type="hidden" name="tipo" value="{tipo_arg}"><div class="field"><label>Buscar</label><input name="buscar" value="{buscar}" placeholder="DNI, trabajador, tipo, periodo"></div><button class="btn-blue">Filtrar</button><a class="btn" href="{url_for('boletas_admin', tipo=tipo_arg) if tipo_arg else url_for('boletas_admin')}">Actualizar</a></form></section>
-      <section class="card span-12"><div class="table-wrap"><table><thead><tr><th>DNI</th><th>Trabajador</th><th>Tipo</th><th>Periodo</th><th>Subida</th><th>PDF</th></tr></thead><tbody>{rows}</tbody></table></div></section>
-    </div>'''
-    return layout(content, "boletas", "Documentos", active_tipo=tipo_arg)
-
-# Reemplazo de vistas existentes sin cambiar URLs ni compatibilidad Render
-app.view_functions['login'] = login_pro
-app.view_functions['admin_login'] = admin_login_pro
-app.view_functions['panel'] = panel_pro
-app.view_functions['admin_dashboard'] = admin_dashboard_pro
-app.view_functions['boletas_admin'] = boletas_admin_pro
-
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8000"))
-    app.run(host="0.0.0.0", port=port, debug=False)
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', '5000'))
+    app.run(host='0.0.0.0', port=port, debug=False)
