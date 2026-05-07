@@ -1,12 +1,5 @@
 # Portal de Documentos PRIZE
 
-## Archivos para subir a GitHub / Render
-- app.py
-- requirements.txt
-- Procfile
-- runtime.txt
-- logo_prize.png
-
 ## Render
 Build Command:
 ```bash
@@ -17,20 +10,30 @@ Start Command:
 gunicorn app:app
 ```
 
-## Variables opcionales
-- SECRET_KEY: clave secreta del sistema
-- PERSIST_DIR: /data si usas disco persistente en Render
-- APP_TIMEZONE: America/Lima
+## Variables recomendadas
+- `SECRET_KEY`: clave segura de sesión.
+- `PERSIST_DIR=/data`: usar si tienes Render Disk.
+- `DOCUMENTOS_BASE_DIR=/data/documentos_auto`: carpeta para importar documentos automáticamente.
+- `APP_TIMEZONE=America/Lima`
 
-## Accesos demo
-Administrador: admin / admin123
-Trabajador: DNI 74324033 / correo omar@demo.com
+## Login demo
+Trabajador:
+- DNI: `74324033`
+- Correo: `omar@demo.com`
 
-## Mejoras incluidas
-- Panel izquierdo contraíble/expandible.
-- Grupos de menú de pago, empresa y personales que muestran/ocultan submenús.
-- Se conserva pestaña activa y scroll del panel al navegar.
-- Login oscuro con colores PRIZE.
-- Logo automático desde la carpeta del proyecto.
-- Filtro por tipo y periodo.
-- Carga de documentos personales y documentos de empresa.
+Admin:
+- Usuario: `admin`
+- Clave: `admin123`
+
+## Importación automática por carpeta
+Coloca PDFs, imágenes o archivos Office dentro de `documentos_auto` o define `DOCUMENTOS_BASE_DIR`.
+El sistema detecta DNI de 8 dígitos en el nombre o ruta del archivo.
+
+Ejemplos:
+```text
+documentos_auto/Utilidades/2026/74324033_boleta_utilidades_2026.pdf
+documentos_auto/CTS/05_2026/74324033_cts.pdf
+documentos_auto/Reglamento_SST/reglamento_sst.pdf
+```
+
+También puedes entrar como admin y usar **Sincronizar carpeta**.

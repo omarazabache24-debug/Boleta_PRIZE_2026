@@ -71,6 +71,8 @@ ALL_TIPOS = {k: (label, icon, "pago") for k, label, icon in TIPOS_PAGO}
 ALL_TIPOS.update({k: (label, icon, "empresa") for k, label, icon in TIPOS_EMPRESA})
 ALL_TIPOS.update({k: (label, icon, "personal") for k, label, icon in TIPOS_PERSONALES})
 EXT_ALLOWED = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx", ".xls", ".xlsx"}
+DOCUMENTOS_BASE_DIR = Path(os.getenv("DOCUMENTOS_BASE_DIR", str(PERSIST_DIR / "documentos_auto")))
+DOCUMENTOS_BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def now_txt():
@@ -259,51 +261,108 @@ def guardar_documento(file_storage, dni, tipo, periodo, detalle="", observacion=
         con.commit()
     return str(path)
 
+
+def inferir_tipo_desde_ruta(path: Path):
+    texto = str(path).lower()
+    reglas = [("util", "Utilidad"), ("vacacion", "Vacaciones"), ("normal", "Normal"), ("cts", "CTS"), ("liquid", "Liquidación"), ("grat", "Gratificación"), ("constancia", "Constancia Gratificación"), ("contrato", "Contrato de Trabajo"), ("sst", "Reglamento de SST"), ("interno", "Reglamento Interno"), ("conducta", "Código de Conducta"), ("politica", "Políticas"), ("políticas", "Políticas"), ("comunicado", "Comunicados")]
+    for clave, tipo in reglas:
+        if clave in texto:
+            return tipo
+    return "Otros"
+
+
+def inferir_periodo_desde_ruta(path: Path):
+    texto = str(path)
+    m = re.search(r"(20\d{2})[-_ ]?(0[1-9]|1[0-2])", texto)
+    if m: return f"{m.group(1)}-{m.group(2)}"
+    m = re.search(r"(0[1-9]|1[0-2])[-_ ]?(20\d{2})", texto)
+    if m: return f"{m.group(2)}-{m.group(1)}"
+    m = re.search(r"(20\d{2})", texto)
+    if m: return m.group(1)
+    return datetime.now(APP_TZ).strftime("%Y-%m")
+
+
+def documento_ya_indexado(path: Path):
+    with db() as con:
+        return con.execute("SELECT 1 FROM documentos WHERE ruta_archivo=?", (str(path),)).fetchone() is not None
+
+
+def registrar_archivo_existente(path: Path, dni: str, tipo: str, uploaded_by="auto"):
+    if documento_ya_indexado(path): return False
+    ext = path.suffix.lower()
+    if ext not in EXT_ALLOWED: return False
+    label, icon, categoria = ALL_TIPOS.get(tipo, (tipo, "📄", "personal"))
+    dni = normalizar_dni(dni) if categoria != "empresa" else ""
+    periodo = inferir_periodo_desde_ruta(path)
+    with db() as con:
+        con.execute("""
+        INSERT INTO documentos(dni,categoria,tipo,periodo,detalle,observacion,archivo_nombre,ruta_archivo,extension,fecha_subida,uploaded_by)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?)
+        """, (dni, categoria, tipo, periodo, "Importado automáticamente desde carpeta", "Detectado por DNI/carpeta", path.name, str(path), ext, now_txt(), uploaded_by))
+        con.commit()
+    return True
+
+
+def sincronizar_documentos_carpeta(dni=None):
+    base_dirs = []
+    for b in [DOCUMENTOS_BASE_DIR, BASE_DIR / "documentos_auto"]:
+        if b.exists() and b.is_dir() and b not in base_dirs:
+            base_dirs.append(b)
+    total = 0
+    dni_obj = normalizar_dni(dni) if dni else ""
+    for base in base_dirs:
+        for path in base.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in EXT_ALLOWED:
+                continue
+            texto = str(path)
+            dni_detectado = dni_obj if dni_obj and dni_obj in texto else ""
+            if not dni_detectado:
+                m = re.search(r"(?<!\d)(\d{8})(?!\d)", texto)
+                if m: dni_detectado = m.group(1)
+            tipo = inferir_tipo_desde_ruta(path)
+            categoria = ALL_TIPOS.get(tipo, ("", "", "personal"))[2]
+            if categoria != "empresa" and not dni_detectado:
+                continue
+            if dni_obj and categoria != "empresa" and dni_detectado != dni_obj:
+                continue
+            try:
+                if registrar_archivo_existente(path, dni_detectado, tipo): total += 1
+            except Exception:
+                pass
+    return total
+
 # =============================
 # ESTILOS Y LAYOUT
 # =============================
 BASE = r'''
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ title }}</title>
 <style>
-:root{
- --ink:#071426;--nav:#0b1423;--nav2:#12233a;--nav3:#294663;--nav4:#365675;
- --line:#d8e8f3;--txt:#06162c;--mut:#60748b;--green:#18a64a;--green2:#29cc66;
- --blue:#247cad;--sky:#8fd2ed;--aqua:#bdeee7;--mint:#dff8e9;--orange:#f28b1a;
- --card:#ffffff;--soft:#f7fbfd;--shadow:0 22px 55px rgba(15,23,42,.13)
-}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--txt);background:radial-gradient(circle at -8% 82%,rgba(46,135,192,.26),transparent 30%),radial-gradient(circle at 108% 76%,rgba(28,179,86,.25),transparent 34%),linear-gradient(135deg,#fbfdff 0%,#eef9f5 100%);font-weight:650}a{text-decoration:none;color:inherit}.hidden{display:none!important}
-.btn,.btn-blue,.btn-green,.btn-red{border:1px solid var(--line);border-radius:16px;padding:12px 18px;background:#fff;color:#071426;font-weight:950;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 18px rgba(15,23,42,.05);transition:.16s}.btn:hover,.btn-blue:hover,.btn-green:hover{transform:translateY(-1px);box-shadow:0 14px 28px rgba(15,23,42,.10)}.btn-blue{background:linear-gradient(135deg,#eff9ff,#fff);border-color:#b9dff1}.btn-green{background:linear-gradient(135deg,var(--green),var(--green2));border:0;color:white}.btn-red{background:#fff1f2;border-color:#fecdd3;color:#be123c}.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:8px 12px;background:#f1f8fb;border:1px solid #dbeaf3;font-size:13px;color:#39506b}.flash{padding:13px 16px;border-radius:16px;margin:10px 0;background:#ecfdf5;border:1px solid #bbf7d0;color:#166534}.flash.err{background:#fff1f2;border-color:#fecdd3;color:#be123c}
-/* LOGIN - colores PRIZE oscuros con verde/azul */
-.login-body{min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at 8% 85%,rgba(43,132,190,.34),transparent 23%),radial-gradient(circle at 90% 82%,rgba(42,204,102,.30),transparent 24%),linear-gradient(125deg,#f9fbfd 0%,#f4fbf6 100%)}.login-card{width:min(92vw,540px);background:linear-gradient(180deg,#101a2a,#0a1321 78%);border:1px solid rgba(255,255,255,.10);border-radius:30px;padding:34px 38px 0;box-shadow:0 42px 95px rgba(15,23,42,.33);overflow:hidden;position:relative}.login-card:before{content:"";position:absolute;left:-58px;bottom:-86px;width:340px;height:180px;background:linear-gradient(135deg,#166da7,#1f8ec6);border-radius:50% 50% 0 0;transform:rotate(4deg)}.login-card:after{content:"";position:absolute;right:-55px;bottom:-78px;width:330px;height:180px;background:linear-gradient(135deg,#169545,#23c85e);border-radius:50% 50% 0 0;transform:rotate(-5deg)}.login-inner{position:relative;z-index:2}.login-logo{text-align:center}.login-logo img{max-width:245px;max-height:115px;object-fit:contain;background:#fff;border-radius:4px;padding:4px;filter:drop-shadow(0 10px 18px rgba(0,0,0,.28))}.login-title{text-align:center;color:#b7c9dc;margin:18px 0 28px}.login-title h1{margin:0 0 7px;color:#dff1ff;font-size:25px;letter-spacing:.2px}.field{display:grid;gap:7px}.field label{font-size:13px;color:#29425f;font-weight:950}.login-card .field label{color:#83b6dc}.input,select,textarea{width:100%;border:1px solid #d7e4ef;border-radius:14px;padding:13px 14px;background:#fff;color:#071426;font:inherit;outline:none}.input:focus,select:focus,textarea:focus{border-color:#7fc9e7;box-shadow:0 0 0 4px rgba(127,201,231,.18)}.login-input{display:flex;align-items:center;gap:10px;background:#fff;border-radius:15px;padding:0 13px;margin-bottom:18px;border:1px solid #e6eef6}.login-input input{border:0;padding:16px 8px;width:100%;font:inherit;outline:none}.login-card .btn-green{width:100%;justify-content:center;font-size:18px;margin:6px 0 68px}.login-links{text-align:center;margin-top:-48px;padding-bottom:22px;position:relative;z-index:3}.login-links a{color:#bfdbfe;font-size:13px}
-/* APP */
-.app{display:grid;grid-template-columns:320px 1fr;min-height:100vh}.side{background:linear-gradient(180deg,#091422,#14243a 68%,#102033);color:#e6eef7;position:sticky;top:0;height:100vh;overflow:auto;transition:.25s;width:320px;z-index:5;box-shadow:12px 0 35px rgba(15,23,42,.12)}.side.collapsed{width:84px}.side::-webkit-scrollbar{width:9px}.side::-webkit-scrollbar-thumb{background:#8aa0b5;border-radius:20px}.side-top{height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:#07111f;border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:3}.toggle{cursor:pointer;background:transparent;border:0;color:white;font-size:20px}.brand{padding:24px 16px;text-align:center}.brand img{max-width:158px;max-height:84px;background:#fff;border-radius:4px;object-fit:contain;padding:2px;box-shadow:0 10px 22px rgba(0,0,0,.25)}.brand p{color:#b8c8d8;font-size:14px;margin-top:18px}.side.collapsed .brand p,.side.collapsed .label,.side.collapsed .chev,.side.collapsed .subtxt{display:none}.side.collapsed .brand{padding:18px 8px}.side.collapsed .brand img{max-width:54px;max-height:54px;border-radius:12px}.menu-group{margin:10px 8px;border-radius:0;overflow:hidden}.menu-title{width:100%;border:0;display:flex;align-items:center;gap:12px;background:linear-gradient(90deg,#314c69,#345a78);color:#fff;padding:15px 13px;font-size:16px;font-weight:1000;cursor:pointer;text-align:left}.menu-title:hover{background:linear-gradient(90deg,#3b5d7d,#397099)}.menu-title .chev{margin-left:auto;transition:.18s}.menu-group.closed .chev{transform:rotate(-90deg)}.submenu{background:#14243b;padding:10px 0;max-height:650px;transition:max-height .28s ease,padding .18s ease}.menu-group.closed .submenu{max-height:0;padding:0;overflow:hidden}.menu-item{display:flex;align-items:center;gap:13px;padding:12px 20px 12px 46px;color:#e4edf8;font-weight:950;font-size:14px;border-left:4px solid transparent;transition:.13s}.menu-item:hover{background:#20334b;border-left-color:#91dcff}.menu-item.active{background:linear-gradient(90deg,#28415e,#26394f);border-left-color:#64d9ff;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.03)}.side.collapsed .menu-title{justify-content:center}.side.collapsed .menu-item{padding:14px;justify-content:center}.side.collapsed .submenu{display:none}.main{min-width:0;padding:28px 34px 50px;overflow:auto}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.topbar h1{margin:0;font-size:34px;letter-spacing:-1px}.subtitle{color:#516982;font-size:18px;margin-top:5px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}.card{background:rgba(255,255,255,.95);border:1px solid #d6e8f2;border-radius:28px;box-shadow:var(--shadow);padding:22px}.mini{grid-column:span 4;display:flex;align-items:center;justify-content:space-between}.mini b{font-size:28px}.ico{width:58px;height:58px;border-radius:18px;display:grid;place-items:center;background:linear-gradient(135deg,#eef9ff,#f0fff5);font-size:25px}.span-12{grid-column:span 12}.span-8{grid-column:span 8}.span-4{grid-column:span 4}.doc-grid{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px}.doc-card{background:linear-gradient(135deg,#f9fdff,#ffffff);border:1px solid #d9eaf3;border-radius:20px;padding:18px;min-height:144px;transition:.16s;position:relative;overflow:hidden}.doc-card:before{content:"";position:absolute;right:-35px;top:-35px;width:85px;height:85px;background:rgba(143,210,237,.22);border-radius:50%}.doc-card:hover{transform:translateY(-3px);box-shadow:0 16px 30px rgba(15,23,42,.10);border-color:#9ed9ef}.doc-card h3{margin:0 0 10px;font-size:18px}.doc-card p{margin:0 0 12px;color:#526b84;font-weight:500;line-height:1.45}.table-wrap{overflow:auto;border:1px solid #dbe8f3;border-radius:16px}table{width:100%;border-collapse:collapse;background:#fff}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid #edf2f6;vertical-align:top}th{background:#f6f9fc;color:#314963;font-size:13px;text-transform:uppercase}tr:hover td{background:#fbfdff}.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:end}.detail-box{background:linear-gradient(135deg,#f8fcff,#ffffff);border:1px solid #dceaf5;border-radius:18px;padding:15px}.detail-box small{display:block;color:#60748b;margin-bottom:4px}.period-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.mobile-head{display:none}
-
-.hero-prize{margin:-28px -34px 24px;padding:24px 34px 26px;background:linear-gradient(115deg,#07395c 0%,#075f7e 38%,#0d8b55 100%);color:#fff;box-shadow:0 18px 40px rgba(7,57,92,.22);position:relative;overflow:hidden}.hero-prize:after{content:"";position:absolute;right:-80px;top:-70px;width:260px;height:260px;background:rgba(255,255,255,.10);border-radius:50%}.hero-prize h1{margin:0;font-size:42px;letter-spacing:-1px;color:#fff;text-shadow:0 4px 18px rgba(0,0,0,.22)}.hero-prize .subtitle{color:#d7f4ff;font-weight:900}.hero-actions{display:flex;gap:12px;align-items:center}.status-chip{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);padding:10px 14px;border-radius:999px;color:#fff;font-weight:950}.panel-title{font-size:26px;font-weight:1000;margin:0 0 8px}.card h2{font-size:24px;margin-top:0}.topbar h1{color:#001b3a;text-shadow:0 2px 0 rgba(255,255,255,.65)}
-.side{background:linear-gradient(180deg,#052439 0%,#092439 45%,#0a332d 100%)}.side-top{background:#071725}.menu-title{border-radius:12px;background:linear-gradient(90deg,#0d6d95,#12825c);box-shadow:0 8px 18px rgba(0,0,0,.16);margin-bottom:4px}.menu-title:hover{background:linear-gradient(90deg,#1187b8,#19a56c)}.submenu{border-radius:0 0 16px 16px;background:rgba(7,23,37,.58)}.menu-item{border-radius:12px;margin:4px 8px;padding-left:36px}.menu-item.active{background:linear-gradient(90deg,#1685b2,#15965c);border-left-color:#f7c948;color:#fff;box-shadow:0 10px 24px rgba(9,132,116,.22)}.menu-item span:first-child{filter:drop-shadow(0 1px 2px rgba(0,0,0,.15))}.brand{border-bottom:1px solid rgba(255,255,255,.10);margin:0 12px 14px}.brand img{background:rgba(255,255,255,.94);border-radius:18px;padding:8px;max-width:178px;max-height:95px}.doc-card h3{color:#001b3a;font-size:20px;line-height:1.15}.doc-card:nth-child(4n+1){border-top:5px solid #148cc0}.doc-card:nth-child(4n+2){border-top:5px solid #17a85e}.doc-card:nth-child(4n+3){border-top:5px solid #f28b1a}.doc-card:nth-child(4n+4){border-top:5px solid #7c3aed}.mini:nth-child(1) .ico{background:linear-gradient(135deg,#e0f7ff,#d9fff0)}.mini:nth-child(2) .ico{background:linear-gradient(135deg,#fff5db,#e8f8ff)}.mini:nth-child(3) .ico{background:linear-gradient(135deg,#e4ffe9,#d9f8ff)}
-
-@media(max-width:1000px){body{background:linear-gradient(135deg,#f8fcff,#eefbf3)}.app{grid-template-columns:1fr}.side{position:fixed;left:-335px;width:315px;max-width:88vw;z-index:50;box-shadow:24px 0 60px rgba(0,0,0,.35)}.side.open{left:0}.side.collapsed{left:-335px}.mobile-head{display:flex;position:sticky;top:0;z-index:45;background:linear-gradient(90deg,#06233a,#0d8356);color:white;padding:13px 14px;align-items:center;justify-content:space-between;box-shadow:0 12px 25px rgba(0,0,0,.16)}.main{padding:16px}.hero-prize{margin:-16px -16px 18px;padding:20px 18px}.hero-prize h1{font-size:28px}.topbar{align-items:flex-start}.topbar h1{font-size:25px}.subtitle{font-size:14px}.doc-grid{grid-template-columns:1fr}.mini,.span-8,.span-4{grid-column:span 12}.form-grid{grid-template-columns:1fr}.card{border-radius:22px;padding:17px}.menu-title{padding:18px 14px;font-size:16px}.menu-item{min-height:52px;font-size:15px}.login-card{border-radius:24px;padding:26px 22px 0}.login-logo img{max-width:170px}.login-title h1{font-size:22px}.login-input input{padding:15px 8px}.login-card .btn-green{margin-bottom:70px}.table-wrap{font-size:13px}}
-@media(max-width:1350px){.doc-grid{grid-template-columns:repeat(2,1fr)}}
+:root{--txt:#eef6ff;--mut:#93a8bd;--blue:#3b82f6;--green:#22c55e;--orange:#f59e0b;--line:#27384d;--shadow:0 24px 60px rgba(0,0,0,.35)}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--txt);background:#07111f;font-weight:650}a{text-decoration:none;color:inherit}.hidden{display:none!important}.btn,.btn-blue,.btn-green,.btn-red{border:1px solid #28405c;border-radius:14px;padding:12px 18px;background:#132238;color:#eaf3ff;font-weight:950;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 10px 22px rgba(0,0,0,.18);transition:.16s}.btn:hover,.btn-blue:hover,.btn-green:hover{transform:translateY(-1px);box-shadow:0 16px 34px rgba(0,0,0,.28)}.btn-blue{background:linear-gradient(135deg,#1a3760,#15263c);border-color:#2456a6;color:#58a0ff}.btn-green{background:linear-gradient(135deg,#14934a,#22c55e);border:0;color:white}.btn-red{background:#361a24;border-color:#7f1d1d;color:#fecaca}.flash{padding:13px 16px;border-radius:16px;margin:10px 0;background:#123524;border:1px solid #1f8a4c;color:#bbf7d0}.flash.err{background:#3a1720;border-color:#7f1d1d;color:#fecaca}.input,select,textarea{width:100%;border:1px solid #2a415c;border-radius:14px;padding:13px 14px;background:#0e1a2a;color:#eef6ff;font:inherit;outline:none}option{background:#0e1a2a;color:#eef6ff}
+.login-body{min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(rgba(7,17,31,.78),rgba(7,17,31,.86)),radial-gradient(circle at 16% 18%,rgba(59,130,246,.20),transparent 28%),radial-gradient(circle at 84% 82%,rgba(34,197,94,.18),transparent 30%),linear-gradient(135deg,#111827,#0f172a)}.login-card{width:min(92vw,485px);background:linear-gradient(180deg,rgba(17,28,43,.96),rgba(17,28,43,.92));border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:38px 42px 0;box-shadow:0 45px 90px rgba(0,0,0,.45);overflow:hidden;position:relative}.login-card:before{content:"";position:absolute;left:-70px;bottom:-54px;width:360px;height:155px;background:linear-gradient(135deg,#243c5a,#3b82f6);border-radius:50% 50% 0 0;transform:rotate(-7deg);opacity:.92}.login-card:after{content:"";position:absolute;right:-78px;bottom:-52px;width:345px;height:150px;background:linear-gradient(135deg,#223447,#1d4ed8);border-radius:50% 50% 0 0;transform:rotate(9deg);opacity:.92}.login-inner{position:relative;z-index:2}.login-logo{text-align:center}.login-logo img{max-width:158px;max-height:105px;object-fit:contain;background:transparent;border-radius:12px;padding:0;filter:drop-shadow(0 12px 25px rgba(0,0,0,.35))}.login-title{text-align:center;margin:20px 0 30px;color:#94a3b8}.login-title h1{margin:0 0 7px;color:#fff;font-size:24px;letter-spacing:.3px;text-transform:uppercase}.login-card .field label{display:none}.login-input{display:flex;align-items:center;gap:12px;background:transparent;border-bottom:1px solid rgba(226,232,240,.45);padding:0 6px;margin-bottom:22px}.login-input input{border:0;padding:15px 8px;width:100%;font:inherit;outline:none;background:transparent;color:#fff}.login-input input::placeholder{color:#cbd5e1}.login-card .btn-green{width:auto;justify-content:center;font-size:15px;margin:8px 0 74px;padding:14px 31px;border-radius:28px;background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#fff}.login-links{text-align:center;margin-top:-48px;padding-bottom:24px;position:relative;z-index:3}.login-links a{color:#dbeafe;font-size:13px;font-weight:900}
+.app{display:grid;grid-template-columns:320px 1fr;min-height:100vh;background:linear-gradient(135deg,#07111f,#0b1828);transition:grid-template-columns .22s ease}.app.side-collapsed{grid-template-columns:86px 1fr}.side{background:linear-gradient(180deg,#07111f,#0b1a2c 70%,#0c221d);color:#e6eef7;position:sticky;top:0;height:100vh;overflow:auto;transition:.25s;width:320px;z-index:5;box-shadow:12px 0 35px rgba(0,0,0,.25);border-right:1px solid #1f2f42}.side.collapsed{width:86px}.side-top{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#08111f;border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:3}.toggle{cursor:pointer;background:transparent;border:0;color:white;font-size:21px}.brand{padding:28px 16px 22px;text-align:center}.brand img{max-width:150px;max-height:95px;background:rgba(255,255,255,.04);border-radius:18px;object-fit:contain;padding:10px;box-shadow:0 14px 30px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08)}.brand p{color:#cbd5e1;font-size:14px;margin-top:18px}.side.collapsed .brand p,.side.collapsed .label,.side.collapsed .chev,.side.collapsed .subtxt,.side.collapsed .side-user{display:none}.side.collapsed .brand{padding:20px 8px}.side.collapsed .brand img{max-width:55px;max-height:55px;border-radius:14px;padding:4px}.menu-group{margin:10px 12px;border-radius:12px;overflow:hidden}.menu-title{width:100%;border:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#111d2b,#142235);color:#eaf3ff;padding:15px 14px;font-size:15px;font-weight:1000;cursor:pointer;text-align:left;border-radius:12px}.menu-group.force-open .menu-title{background:linear-gradient(135deg,#1d4ed8,#2563eb);box-shadow:0 12px 25px rgba(37,99,235,.25)}.menu-title .chev{margin-left:auto;transition:.18s}.menu-group.closed .chev{transform:rotate(-90deg)}.submenu{background:transparent;padding:9px 0;max-height:720px;transition:max-height .28s ease,padding .18s ease}.menu-group.closed .submenu{max-height:0;padding:0;overflow:hidden}.menu-item{display:flex;align-items:center;gap:13px;padding:13px 18px 13px 40px;color:#d9e6f7;font-weight:900;font-size:14px;border-left:4px solid transparent;transition:.13s;border-radius:10px;margin:2px 0}.menu-item:hover{background:#14263b;border-left-color:#60a5fa}.menu-item.active{background:linear-gradient(135deg,#172d49,#18395e);border-left-color:#60a5fa;color:#fff}.side.collapsed .menu-title{justify-content:center;padding:18px 10px}.side.collapsed .menu-item{padding:16px 10px;justify-content:center}.side.collapsed .submenu{display:none}.main{min-width:0;padding:0 34px 50px;overflow:auto}.hero{margin:0 -34px 24px;padding:26px 34px 28px;background:radial-gradient(circle at 75% 0%,rgba(37,99,235,.30),transparent 32%),linear-gradient(120deg,#0b1626 0%,#0a1522 52%,#0f5132 100%);border-bottom:1px solid #1f2f42}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.topbar h1{margin:0;font-size:34px;letter-spacing:-1px;color:#fff}.topbar h1 .accent{color:#3b82f6}.subtitle{color:#91a8c2;font-size:16px;margin-top:7px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}.card{background:linear-gradient(135deg,rgba(18,31,47,.96),rgba(15,27,42,.96));border:1px solid #26394f;border-radius:18px;box-shadow:var(--shadow);padding:22px}.mini{grid-column:span 4;display:flex;align-items:center;justify-content:space-between}.mini b{font-size:28px;color:#3b82f6}.ico{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,#173565,#1e40af);font-size:24px;color:#fff}.span-12{grid-column:span 12}.span-8{grid-column:span 8}.span-4{grid-column:span 4}.doc-grid{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px}.doc-card{background:linear-gradient(145deg,#122032,#0f1c2b);border:1px solid #293d55;border-radius:16px;padding:18px;min-height:158px;transition:.16s;position:relative;overflow:hidden}.doc-card:before{content:"";position:absolute;right:-34px;top:-34px;width:86px;height:86px;background:rgba(59,130,246,.17);border-radius:50%}.doc-card h3{margin:0 0 12px;font-size:17px;color:#fff}.doc-card p{margin:0 0 14px;color:#b5c6d8;font-weight:500;line-height:1.45}.table-wrap{overflow:auto;border:1px solid #26394f;border-radius:14px}table{width:100%;border-collapse:collapse;background:#101d2d;color:#eaf3ff}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid #24364c;vertical-align:top}th{background:#0b1626;color:#9db3ca;font-size:13px;text-transform:uppercase}tr:hover td{background:#14243a}.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:end}.detail-box{background:linear-gradient(135deg,#101d2d,#0e1a29);border:1px solid #26394f;border-radius:16px;padding:15px}.detail-box small{display:block;color:#9db3ca;margin-bottom:4px}.period-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.mobile-head{display:none}.side-user{margin:26px 14px 14px;padding-top:20px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px;color:#dbeafe}.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#1d4ed8;color:#fff;font-weight:1000}
+@media(max-width:1000px){.app,.app.side-collapsed{grid-template-columns:1fr}.side{position:fixed;left:-335px;width:315px}.side.open{left:0}.side.collapsed{left:-335px}.mobile-head{display:flex;position:sticky;top:0;z-index:20;background:#08111f;color:white;padding:12px 14px;align-items:center;justify-content:space-between;border-bottom:1px solid #1f2f42}.main{padding:0 14px 30px}.hero{margin:0 -14px 18px;padding:20px 16px}.doc-grid{grid-template-columns:1fr}.mini,.span-8,.span-4{grid-column:span 12}.form-grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.topbar h1{font-size:24px}.subtitle{font-size:13px}.card{border-radius:16px;padding:17px}.login-card{padding:32px 28px 0}.login-card .btn-green{width:100%}}@media(min-width:1001px) and (max-width:1350px){.doc-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 <script>
 function side(){return document.querySelector('.side')}
+function appShell(){return document.querySelector('.app')}
 function saveSideScroll(){const s=side(); if(s){localStorage.setItem('sideScroll',s.scrollTop||0)}}
-function closeMobileAndSave(){saveSideScroll(); const s=side(); if(s && window.innerWidth<1000){s.classList.remove('open')}}
 function restoreSideScroll(){const s=side(); if(s){s.scrollTop=parseInt(localStorage.getItem('sideScroll')||'0')}}
-function toggleSide(){const s=side(); if(!s)return; if(window.innerWidth<1000){s.classList.toggle('open')}else{s.classList.toggle('collapsed'); localStorage.setItem('sideCollapsed',s.classList.contains('collapsed')?'1':'0')}}
+function toggleSide(){const s=side(), a=appShell(); if(!s)return; if(window.innerWidth<1000){s.classList.toggle('open')}else{const c=!s.classList.contains('collapsed'); s.classList.toggle('collapsed',c); if(a)a.classList.toggle('side-collapsed',c); localStorage.setItem('sideCollapsed',c?'1':'0')}}
 function toggleGroup(id){const g=document.getElementById(id); if(!g)return; g.classList.toggle('closed'); localStorage.setItem('group_'+id,g.classList.contains('closed')?'1':'0')}
-function initSide(){const s=side(); if(!s)return; if(localStorage.getItem('sideCollapsed')==='1' && window.innerWidth>=1000){s.classList.add('collapsed')} document.querySelectorAll('.menu-group[data-group]').forEach(g=>{const id=g.id; const saved=localStorage.getItem('group_'+id); if(saved==='1' && !g.classList.contains('force-open')) g.classList.add('closed')}); setTimeout(restoreSideScroll,60); document.querySelectorAll('.menu-item').forEach(a=>a.addEventListener('click',closeMobileAndSave));}
+function initSide(){const s=side(), a=appShell(); if(!s)return; const c=localStorage.getItem('sideCollapsed')==='1' && window.innerWidth>=1000; s.classList.toggle('collapsed',c); if(a)a.classList.toggle('side-collapsed',c); document.querySelectorAll('.menu-group[data-group]').forEach(g=>{const id=g.id; const saved=localStorage.getItem('group_'+id); if(saved==='1' && !g.classList.contains('force-open')) g.classList.add('closed')}); setTimeout(restoreSideScroll,60); document.querySelectorAll('.menu-item').forEach(a=>a.addEventListener('click',()=>{saveSideScroll(); if(window.innerWidth<1000){const s=side(); if(s)s.classList.remove('open')}}));}
 function filterCards(){const q=(document.getElementById('cardSearch')?.value||'').toLowerCase();document.querySelectorAll('.doc-card').forEach(c=>{c.style.display=c.innerText.toLowerCase().includes(q)?'block':'none'})}
-window.addEventListener('DOMContentLoaded',initSide)
-window.addEventListener('beforeunload',saveSideScroll)
+window.addEventListener('DOMContentLoaded',initSide);window.addEventListener('beforeunload',saveSideScroll)
 </script></head><body>{{ body|safe }}</body></html>
 '''
 
 
 def render_page(content, title="Portal de Documentos PRIZE", active="Inicio"):
+    user_label = session.get('admin_nombre') or session.get('nombre') or 'Usuario PRIZE'
+    primer_nombre = user_label.split()[0] if user_label else 'Usuario'
     body = f'''
     <div class="mobile-head"><button class="toggle" onclick="toggleSide()">☰</button><b>PRIZE Documentos</b><a href="/logout">Salir</a></div>
     <div class="app"><aside class="side"><div class="side-top"><button class="toggle" onclick="toggleSide()">←</button><b class="label">Nisira DMHT</b><button class="toggle" onclick="toggleSide()">☷</button></div>
-      <div class="brand"><img src="{logo_url()}" alt="PRIZE"><p>Portal de documentos</p></div>{sidebar(active)}</aside><main class="main">{flashes()}{content}</main></div>'''
+      <div class="brand"><img src="{logo_url()}" alt="PRIZE"><p>Portal de documentos</p></div>{sidebar(active)}<div class="side-user"><div class="avatar">👤</div><div><b>{primer_nombre}</b><br><small>{'Administrador' if session.get('admin_id') else 'Trabajador'}</small></div></div></aside><main class="main">{flashes()}{content}</main></div>'''
     return render_template_string(BASE, body=body, title=title)
 
 
@@ -319,7 +378,7 @@ def flashes():
 
 def item(tipo, label, icon, active):
     cls = "menu-item active" if active == tipo else "menu-item"
-    return f"<a class='{cls}' onclick='closeMobileAndSave()' href='{url_for('panel_tipo', tipo=tipo)}'><span>{icon}</span><span class='label'>{label}</span></a>"
+    return f"<a class='{cls}' href='{url_for('panel_tipo', tipo=tipo)}'><span>{icon}</span><span class='label'>{label}</span></a>"
 
 
 def sidebar(active):
@@ -418,12 +477,12 @@ def logout():
 @app.route('/panel')
 @worker_required
 def panel():
-    dni = session['dni']; t = get_trabajador(dni)
+    dni = session['dni']; sincronizar_documentos_carpeta(dni); t = get_trabajador(dni)
     docs = listar_documentos(dni=dni, limit=999)
     ultimo = docs[0]['tipo'] if docs else 'Sin documento'
     cards = ''.join(doc_card(k,l,i) for k,l,i in (TIPOS_PAGO+TIPOS_EMPRESA+TIPOS_PERSONALES))
     content = f"""
-    <div class='hero-prize'><div class='topbar' style='margin:0'><div><h1>Portal de Documentos PRIZE</h1><div class='subtitle'>{t['nombre']} · DNI {t['dni']} · {t['empresa']}</div></div><div class='hero-actions'><span class='status-chip'>✅ Activo</span><a class='btn' href='/panel'>Ver todo</a></div></div></div>
+    <div class='hero'><div class='topbar'><div><h1>Portal de Documentos <span class='accent'>PRIZE</span></h1><div class='subtitle'>{t['nombre']} · DNI {t['dni']} · {t['empresa']}</div></div><div style='display:flex;gap:10px;align-items:center'><span class='btn'>● Activo</span><a class='btn-blue' href='/panel'>Ver todo</a></div></div></div>
     <section class='grid'><div class='card mini'><div><span>Documentos</span><br><b>{len(docs)}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Último tipo</span><br><b>{ultimo}</b></div><div class='ico'>📄</div></div><div class='card mini'><div><span>Estado</span><br><b>Activo</b></div><div class='ico'>✅</div></div>
     <div class='card span-12'><div style='display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap'><h2>Accesos por pestaña</h2><input id='cardSearch' onkeyup='filterCards()' class='input' style='max-width:310px' placeholder='Buscar pestaña...'></div><div class='doc-grid'>{cards}</div></div>
     <div class='card span-12'><h2>Últimos documentos</h2>{tabla_docs(docs)}</div></section>"""
@@ -437,7 +496,7 @@ def doc_card(k,l,i):
 @worker_required
 def panel_tipo(tipo):
     if tipo not in ALL_TIPOS: abort(404)
-    dni = session['dni']; label, icon, categoria = ALL_TIPOS[tipo]
+    dni = session['dni']; sincronizar_documentos_carpeta(dni); label, icon, categoria = ALL_TIPOS[tipo]
     periodo = clean(request.args.get('periodo'))
     pers = periodos_disponibles(dni=dni, tipo=tipo)
     docs = listar_documentos(dni=dni, tipo=tipo, periodo=periodo or None, limit=999)
@@ -449,7 +508,7 @@ def panel_tipo(tipo):
         <div class='card span-12'><h2>Adjuntar nuevo documento personal</h2><form method='post' action='/subir_personal' enctype='multipart/form-data' class='form-grid'>
         <input type='hidden' name='tipo' value='Otros'><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Certificado, solicitud, evidencia'></div><div class='field'><label>Archivo</label><input type='file' name='archivo' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2' placeholder='Comentario u observación'></textarea></div><button class='btn-green'>Subir documento</button></form></div>"""
     content = f"""
-    <div class='hero-prize'><div class='topbar' style='margin:0'><div><h1>{icon} {label}</h1><div class='subtitle'>Consulta filtrada por pestaña y periodo seleccionado.</div></div><a class='btn' href='/panel'>Volver</a></div></div>
+    <div class='hero'><div class='topbar'><div><h1>{icon} {label}</h1><div class='subtitle'>Consulta filtrada por pestaña y periodo seleccionado.</div></div><a class='btn-blue' href='/panel'>Volver</a></div></div>
     <section class='grid'><div class='card mini'><div><span>Total</span><br><b>{len(docs)}</b></div><div class='ico'>{icon}</div></div><div class='card mini'><div><span>Periodo</span><br><b>{periodo or 'Todos'}</b></div><div class='ico'>📅</div></div><div class='card mini'><div><span>Filtro</span><br><b>{tipo}</b></div><div class='ico'>🔎</div></div>
     <div class='card span-12'><form method='get' class='period-row'><div class='field'><label>Elegir periodo</label><select name='periodo'>{opts}</select></div><button class='btn-blue'>Aplicar filtro</button><a class='btn' href='{url_for('panel_tipo', tipo=tipo)}'>Limpiar</a></form></div>
     <div class='card span-12'><h2>Detalle de {label}</h2>{detalle}</div>{upload_extra}<div class='card span-12'><h2>Listado</h2>{tabla_docs(docs)}</div></section>"""
@@ -525,7 +584,7 @@ def admin():
         emp = con.execute("SELECT COUNT(*) FROM documentos WHERE categoria='empresa'").fetchone()[0]
         ult = con.execute("SELECT * FROM documentos ORDER BY id DESC LIMIT 12").fetchall()
     content = f"""
-    <div class='hero-prize'><div class='topbar' style='margin:0'><div><h1>Panel Administrador PRIZE</h1><div class='subtitle'>Gestión total de trabajadores, boletas y documentos.</div></div><a class='btn-green' href='/admin/documentos'>Subir documentos</a></div></div>
+    <div class='hero'><div class='topbar'><div><h1>Panel Administrador <span class='accent'>PRIZE</span></h1><div class='subtitle'>Gestión total de trabajadores, boletas y documentos.</div></div><a class='btn-green' href='/admin/documentos'>Subir documentos</a></div></div>
     <section class='grid'><div class='card mini'><div><span>Trabajadores</span><br><b>{trabajadores}</b></div><div class='ico'>👥</div></div><div class='card mini'><div><span>Documentos</span><br><b>{docs}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Empresa</span><br><b>{emp}</b></div><div class='ico'>🏢</div></div>
     <div class='card span-12'><h2>Últimas cargas</h2>{tabla_docs(ult)}</div></section>"""
     return render_page(content, active='Admin')
@@ -565,7 +624,7 @@ def admin_trabajadores():
         rows = con.execute("SELECT * FROM trabajadores ORDER BY nombre LIMIT 300").fetchall()
     table = ''.join([f"<tr><td>{r['dni']}</td><td>{r['nombre']}</td><td>{r['correo']}</td><td>{r['cargo'] or ''}</td><td>{r['empresa'] or ''}</td></tr>" for r in rows])
     content = f"""
-    <div class='hero-prize'><div class='topbar' style='margin:0'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div></div></div></div><section class='grid'>
+    <div class='topbar'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div></div></div><section class='grid'>
     <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Nombre</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><input name='empresa' value='PRIZE SUPERFRUITS'></div><button class='btn-green'>Guardar</button></form></div>
     <div class='card span-12'><h2>Carga Excel</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel con DNI, NOMBRE, CORREO, CARGO, AREA, EMPRESA</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button></form></div>
     <div class='card span-12'><h2>Listado</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Empresa</th></tr>{table}</table></div></div></section>"""
@@ -598,11 +657,19 @@ def admin_documentos():
     periodo_options = "<option value=''>Todos</option>" + ''.join([f"<option {'selected' if p==periodo else ''}>{p}</option>" for p in pers])
     rows = listar_documentos(tipo=tipo if tipo else None, periodo=periodo or None, buscar=buscar, limit=500)
     content = f"""
-    <div class='hero-prize'><div class='topbar' style='margin:0'><div><h1>Subir y gestionar documentos</h1><div class='subtitle'>Administrador: pago, empresa y documentos personales.</div></div></div></div><section class='grid'>
+    <div class='hero'><div class='topbar'><div><h1>Subir y gestionar documentos</h1><div class='subtitle'>Administrador: pago, empresa y documentos personales.</div></div><a class='btn-green' href='/admin/sincronizar'>Sincronizar carpeta</a></div></div><section class='grid'>
     <div class='card span-12'><h2>Carga de documentos</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>DNI trabajador</label><input name='dni' placeholder='Vacío si es documento de empresa'></div><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}' list='periodos'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Boleta semanal / Política actualizada'></div><div class='field'><label>Archivos</label><input type='file' name='archivos' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' multiple required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2'></textarea></div><button class='btn-green'>Subir</button></form></div>
     <div class='card span-12'><h2>Filtros</h2><form method='get' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>Periodo</label><select name='periodo'>{periodo_options}</select></div><div class='field'><label>Buscar</label><input name='buscar' value='{buscar}' placeholder='DNI, detalle, observación'></div><button class='btn-blue'>Filtrar</button><a class='btn' href='/admin/documentos'>Limpiar</a></form></div>
     <div class='card span-12'><h2>Listado</h2>{tabla_docs(rows)}</div></section>"""
     return render_page(content, active=tipo)
+
+
+@app.route('/admin/sincronizar')
+@admin_required
+def admin_sincronizar():
+    total = sincronizar_documentos_carpeta()
+    flash(f'Sincronización completada. Documentos nuevos detectados: {total}. Carpeta: {DOCUMENTOS_BASE_DIR}', 'ok')
+    return redirect(url_for('admin_documentos'))
 
 # API compatibles
 @app.route('/api/health')
