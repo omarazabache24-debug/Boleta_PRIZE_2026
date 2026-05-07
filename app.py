@@ -26,6 +26,10 @@ from flask import Flask, request, redirect, url_for, session, send_file, render_
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from openpyxl import load_workbook, Workbook
+try:
+    from pypdf import PdfReader
+except Exception:
+    PdfReader = None
 
 BASE_DIR = Path(__file__).resolve().parent
 PERSIST_DIR = Path(os.getenv("PERSIST_DIR", "/data" if Path("/data").is_dir() else str(BASE_DIR)))
@@ -477,7 +481,57 @@ def documento_ya_indexado(path: Path):
         return con.execute("SELECT 1 FROM documentos WHERE ruta_archivo=?", (str(path),)).fetchone() is not None
 
 
-def registrar_archivo_existente(path: Path, dni: str, tipo: str, uploaded_by="auto"):
+def extraer_texto_pdf(path: Path, max_paginas=2):
+    """Extrae texto de las primeras páginas para detectar DNI dentro de la boleta."""
+    if path.suffix.lower() != '.pdf' or PdfReader is None:
+        return ''
+    try:
+        reader = PdfReader(str(path))
+        partes = []
+        for page in reader.pages[:max_paginas]:
+            try:
+                partes.append(page.extract_text() or '')
+            except Exception:
+                pass
+        return '\n'.join(partes)[:8000]
+    except Exception:
+        return ''
+
+
+def detectar_dni_en_archivo(path: Path, dni_obj=''):
+    """Busca DNI primero en ruta/nombre y, si es PDF, también dentro del contenido."""
+    dni_obj = normalizar_dni(dni_obj) if dni_obj else ''
+    texto_ruta = str(path)
+    if dni_obj and dni_obj in texto_ruta:
+        return dni_obj, 'ruta/nombre'
+    m = re.search(r"(?<!\d)(\d{8})(?!\d)", texto_ruta)
+    if m:
+        return m.group(1), 'ruta/nombre'
+    texto_pdf = extraer_texto_pdf(path)
+    if texto_pdf:
+        if dni_obj and dni_obj in re.sub(r'\D', '', texto_pdf):
+            return dni_obj, 'contenido PDF'
+        patrones = [
+            r"(?:DNI|D\.?N\.?I\.?|DOC(?:UMENTO)?|COD(?:IGO)?|IDENTIDAD)\s*[:º°#-]?\s*(\d{8})",
+            r"(?<!\d)(\d{8})(?!\d)",
+        ]
+        for pat in patrones:
+            mm = re.search(pat, texto_pdf, flags=re.I)
+            if mm:
+                return normalizar_dni(mm.group(1)), 'contenido PDF'
+    return '', ''
+
+
+def detalle_auto_desde_ruta(path: Path):
+    txt = str(path).lower()
+    if 'semanal' in txt or 'semana' in txt:
+        return 'Boleta semanal - Importado automáticamente desde carpeta'
+    if 'mensual' in txt or 'mes' in txt:
+        return 'Boleta mensual - Importado automáticamente desde carpeta'
+    return 'Importado automáticamente desde carpeta'
+
+
+def registrar_archivo_existente(path: Path, dni: str, tipo: str, uploaded_by="auto", fuente_dni='ruta/nombre'):
     uploaded_by = marca_carga(uploaded_by)
     if documento_ya_indexado(path): return False
     ext = path.suffix.lower()
@@ -485,49 +539,54 @@ def registrar_archivo_existente(path: Path, dni: str, tipo: str, uploaded_by="au
     label, icon, categoria = ALL_TIPOS.get(tipo, (tipo, "📄", "personal"))
     dni = normalizar_dni(dni) if categoria != "empresa" else ""
     periodo = inferir_periodo_desde_ruta(path)
+    detalle = detalle_auto_desde_ruta(path)
+    obs = f"Detectado automáticamente por {fuente_dni}. Ruta: {path.parent}"
     with db() as con:
         con.execute("""
         INSERT INTO documentos(dni,categoria,tipo,periodo,detalle,observacion,archivo_nombre,ruta_archivo,extension,fecha_subida,uploaded_by)
         VALUES(?,?,?,?,?,?,?,?,?,?,?)
-        """, (dni, categoria, tipo, periodo, "Importado automáticamente desde carpeta", "Detectado por DNI/carpeta", path.name, str(path), ext, now_txt(), uploaded_by))
+        """, (dni, categoria, tipo, periodo, detalle, obs, path.name, str(path), ext, now_txt(), uploaded_by))
         con.commit()
     return True
 
 
-def sincronizar_documentos_carpeta(dni=None):
-    # Detecta documentos desde la carpeta LOCAL principal creada junto a app.py.
-    # También mantiene compatibilidad con versiones anteriores: documentos_auto.
+def sincronizar_documentos_carpeta(dni=None, devolver_resumen=False):
+    # Detecta documentos desde DOCUMENTOS_PRIZE_AUTO, incluyendo:
+    # DOCUMENTOS DE PAGO / BOLETAS NORMAL / SEMANAL.
+    # Si el DNI no está en el nombre, lee el PDF e intenta encontrarlo dentro del texto.
+    asegurar_carpetas_documentales()
     base_dirs = []
     for b in [DOCUMENTOS_BASE_DIR, BASE_DIR / "documentos_auto"]:
         if b.exists() and b.is_dir() and b not in base_dirs:
             base_dirs.append(b)
     total = 0
+    revisados = omitidos = duplicados = sin_dni = sin_trabajador = 0
     dni_obj = normalizar_dni(dni) if dni else ""
     for base in base_dirs:
         for path in base.rglob("*"):
             if not path.is_file() or path.suffix.lower() not in EXT_ALLOWED:
                 continue
-            texto = str(path)
-            dni_detectado = dni_obj if dni_obj and dni_obj in texto else ""
-            if not dni_detectado:
-                m = re.search(r"(?<!\d)(\d{8})(?!\d)", texto)
-                if m: dni_detectado = m.group(1)
+            revisados += 1
+            if documento_ya_indexado(path):
+                duplicados += 1; continue
             tipo = inferir_tipo_desde_ruta(path)
             categoria = ALL_TIPOS.get(tipo, ("", "", "personal"))[2]
+            dni_detectado, fuente = detectar_dni_en_archivo(path, dni_obj)
             if categoria != "empresa" and not dni_detectado:
-                continue
+                sin_dni += 1; omitidos += 1; continue
             if dni_obj and categoria != "empresa" and dni_detectado != dni_obj:
-                continue
-            # Solo indexa documentos de trabajadores activos.
+                omitidos += 1; continue
             if categoria != "empresa":
                 trab = get_trabajador(dni_detectado)
                 if not trab or int(trab['activo'] or 0) != 1:
-                    continue
+                    sin_trabajador += 1; omitidos += 1; continue
             try:
-                if registrar_archivo_existente(path, dni_detectado, tipo, uploaded_by="auto carpeta local"): total += 1
+                if registrar_archivo_existente(path, dni_detectado, tipo, uploaded_by="auto carpeta local", fuente_dni=fuente or 'carpeta'):
+                    total += 1
             except Exception:
-                pass
-    return total
+                omitidos += 1
+    resumen = {'nuevos': total, 'revisados': revisados, 'duplicados': duplicados, 'omitidos': omitidos, 'sin_dni': sin_dni, 'sin_trabajador': sin_trabajador, 'base': str(DOCUMENTOS_BASE_DIR)}
+    return resumen if devolver_resumen else total
 
 # =============================
 # ESTILOS Y LAYOUT
@@ -1151,7 +1210,7 @@ def admin_documentos():
     rows = listar_documentos(tipo=tipo if tipo else None, periodo=periodo or None, buscar=buscar, limit=500)
     content = f"""
     <div class='hero'><div class='topbar'><div><h1>Subir y gestionar documentos</h1><div class='subtitle'>Administrador: pago, empresa y documentos personales.</div></div><a class='btn-warn' href='/admin/sincronizar'>Actualizar / detectar PDFs</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear carpetas + detectar</a></div></div><section class='grid'>
-    <div class='card span-12'><h2>📁 Carpeta local automática</h2><p class='muted'>Ruta actual: <b>{DOCUMENTOS_BASE_DIR}</b><br>Coloca PDFs en DOCUMENTOS DE PAGO / BOLETAS NORMAL / SEMANAL o MENSUAL y presiona <b>Actualizar / detectar PDFs</b>. Solo se cargarán trabajadores activos y PDFs con DNI detectado en nombre/ruta.</p><div class='actions'><a class='btn-warn' href='/admin/sincronizar'>Actualizar / detectar PDFs</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear estructura</a></div></div><div class='card span-12'><h2>Carga de documentos</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>DNI trabajador</label><input name='dni' placeholder='Vacío si es documento de empresa'></div><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}' list='periodos'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Boleta semanal / Política actualizada'></div><div class='field'><label>Boleta Normal</label><select name='periodicidad_normal'><option value=''>No aplica</option><option>Mensual</option><option>Semanal</option></select></div><div class='field'><label>Archivos</label><input type='file' name='archivos' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' multiple required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2'></textarea></div><button class='btn-green'>Subir</button></form></div>
+    <div class='card span-12'><h2>📁 Carpeta local automática</h2><p class='muted'>Ruta actual: <b>{DOCUMENTOS_BASE_DIR}</b><br>Coloca PDFs en DOCUMENTOS DE PAGO / BOLETAS NORMAL / SEMANAL o MENSUAL y presiona <b>Actualizar / detectar PDFs</b>. Solo se cargarán trabajadores activos. El DNI se detecta por nombre/ruta y también leyendo el contenido del PDF.</p><div class='actions'><a class='btn-warn' href='/admin/sincronizar'>Actualizar / detectar PDFs</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear estructura</a></div></div><div class='card span-12'><h2>Carga de documentos</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>DNI trabajador</label><input name='dni' placeholder='Vacío si es documento de empresa'></div><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}' list='periodos'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Boleta semanal / Política actualizada'></div><div class='field'><label>Boleta Normal</label><select name='periodicidad_normal'><option value=''>No aplica</option><option>Mensual</option><option>Semanal</option></select></div><div class='field'><label>Archivos</label><input type='file' name='archivos' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' multiple required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2'></textarea></div><button class='btn-green'>Subir</button></form></div>
     <div class='card span-12'><h2>Filtros</h2><form method='get' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>Periodo</label><select name='periodo'>{periodo_options}</select></div><div class='field'><label>Buscar</label><input name='buscar' value='{buscar}' placeholder='DNI, detalle, observación'></div><button class='btn-blue'>Filtrar</button><a class='btn' href='/admin/documentos'>Limpiar</a></form></div>
     <div class='card span-12'><h2>Listado</h2>{tabla_docs(rows)}</div></section>"""
     return render_page(content, active='Subir documentos')
@@ -1169,8 +1228,8 @@ def admin_crear_carpetas():
 @app.route('/admin/sincronizar')
 @admin_required
 def admin_sincronizar():
-    total = sincronizar_documentos_carpeta()
-    flash(f'Sincronización completada. Documentos nuevos detectados: {total}. Carpeta local usada: {DOCUMENTOS_BASE_DIR}', 'ok')
+    resumen = sincronizar_documentos_carpeta(devolver_resumen=True)
+    flash(f"Sincronización completada. Nuevos: {resumen['nuevos']} | Revisados: {resumen['revisados']} | Duplicados: {resumen['duplicados']} | Sin DNI: {resumen['sin_dni']} | Sin trabajador activo: {resumen['sin_trabajador']} | Ruta: {DOCUMENTOS_BASE_DIR}", 'ok')
     return redirect(url_for('admin_documentos'))
 
 @app.route('/admin/modo_prueba/toggle')
