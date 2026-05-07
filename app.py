@@ -181,6 +181,9 @@ def init_db():
         for col, ddl in [
             ('planilla', 'ALTER TABLE trabajadores ADD COLUMN planilla TEXT'),
             ('foto_ruta', 'ALTER TABLE trabajadores ADD COLUMN foto_ruta TEXT'),
+            ('fecha_nacimiento', 'ALTER TABLE trabajadores ADD COLUMN fecha_nacimiento TEXT'),
+            ('usuario_portal', 'ALTER TABLE trabajadores ADD COLUMN usuario_portal TEXT'),
+            ('clave_portal', 'ALTER TABLE trabajadores ADD COLUMN clave_portal TEXT'),
         ]:
             try: con.execute(ddl)
             except Exception: pass
@@ -190,9 +193,20 @@ def init_db():
             ('fecha_aceptacion', 'ALTER TABLE documentos ADD COLUMN fecha_aceptacion TEXT'),
             ('fecha_firma', 'ALTER TABLE documentos ADD COLUMN fecha_firma TEXT'),
             ('fecha_aprobacion', 'ALTER TABLE documentos ADD COLUMN fecha_aprobacion TEXT'),
+            ('fecha_lectura', 'ALTER TABLE documentos ADD COLUMN fecha_lectura TEXT'),
+            ('leido_por', 'ALTER TABLE documentos ADD COLUMN leido_por TEXT'),
         ]:
             try: con.execute(ddl)
             except Exception: pass
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS eventos_documento(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            documento_id INTEGER,
+            dni TEXT,
+            evento TEXT,
+            fecha TEXT,
+            detalle TEXT
+        )''')
         asegurar_carpetas_documentales()
         # Datos demo seguros
         if not con.execute("SELECT 1 FROM usuarios_admin WHERE usuario='admin'").fetchone():
@@ -242,6 +256,27 @@ def get_trabajador(dni):
     dni = normalizar_dni(dni)
     with db() as con:
         return con.execute("SELECT * FROM trabajadores WHERE dni=?", (dni,)).fetchone()
+
+
+def generar_clave_trabajador(dni, fecha_nac=''):
+    """Clave masiva: DNI + fecha nacimiento si existe; si no, últimos 4 DNI + PRIZE."""
+    dni = normalizar_dni(dni)
+    nums = re.sub(r"\D", "", str(fecha_nac or ""))
+    if len(nums) >= 8:
+        clave = dni[-4:] + nums[:8]
+    elif len(nums) >= 6:
+        clave = dni[-4:] + nums[:6]
+    else:
+        clave = dni[-4:] + "PRIZE"
+    return clave.upper()
+
+
+def registrar_evento_documento(doc_id, dni, evento, detalle=''):
+    with db() as con:
+        con.execute("INSERT INTO eventos_documento(documento_id,dni,evento,fecha,detalle) VALUES(?,?,?,?,?)", (doc_id, normalizar_dni(dni), evento, now_txt(), clean(detalle)))
+        if evento in ['Abierto','Leído','Recibido']:
+            con.execute("UPDATE documentos SET fecha_lectura=?, leido_por=? WHERE id=? AND (fecha_lectura IS NULL OR fecha_lectura='')", (now_txt(), normalizar_dni(dni), doc_id))
+        con.commit()
 
 
 def listar_documentos(dni=None, tipo=None, categoria=None, periodo=None, buscar=None, limit=300):
@@ -404,7 +439,7 @@ BASE = r'''
 .form-grid{grid-template-columns:repeat(12,1fr);align-items:end}.form-grid .field{grid-column:span 3}.form-grid .field:nth-child(4n+1){grid-column:span 3}.form-grid button,.form-grid .btn,.form-grid .btn-blue,.form-grid .btn-green{grid-column:span 3;justify-content:center;height:54px}.field label{display:block;margin-bottom:8px;color:#eaf0f7;font-size:13px;letter-spacing:.3px}.field input,.field select,.field textarea,.input,select,textarea{background:#0f1319;border:1px solid #3b414b;color:#fff;border-radius:14px;min-height:48px;padding:12px 14px;font-weight:800}.field input:focus,.field select:focus,.field textarea:focus,.input:focus,select:focus,textarea:focus{border-color:var(--yellow);box-shadow:0 0 0 4px rgba(255,210,63,.12);outline:none}.card form{gap:18px}.alert-card{background:linear-gradient(145deg,#202329,#16191e 65%,rgba(255,210,63,.06));}.alert-item{display:grid;grid-template-columns:48px 1fr auto;gap:12px;align-items:center;padding:13px 0;border-top:1px solid #323740}.alert-item:first-of-type{border-top:0}.bell{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,var(--yellow),var(--yellow2));box-shadow:0 12px 22px rgba(255,210,63,.18)}.alert-item span,.muted,.empty-note{color:#b8c0cb}.mini-btn{padding:9px 13px;border-radius:12px}.admin-hero{border-radius:0 0 24px 24px;margin-bottom:20px}.side .brand img{background:linear-gradient(145deg,#f7f7f7,#d8d8d8);mix-blend-mode:normal}.side .brand{background:radial-gradient(circle at 50% 28%,rgba(255,210,63,.10),transparent 44%)}
 @media(max-width:1000px){.form-grid{grid-template-columns:1fr}.form-grid .field,.form-grid button,.form-grid .btn,.form-grid .btn-blue,.form-grid .btn-green{grid-column:span 1;width:100%}.alert-item{grid-template-columns:42px 1fr}.alert-item a{grid-column:1 / -1;justify-content:center}.side.open{box-shadow:0 0 0 999px rgba(0,0,0,.55),12px 0 35px rgba(0,0,0,.34)}}
 
-.status-pill{display:inline-flex;padding:7px 10px;border-radius:999px;background:#242a32;border:1px solid #3b414b;color:#ffd23f;font-weight:1000;white-space:nowrap}.actions{display:flex;gap:8px;flex-wrap:wrap}.modal{position:fixed;inset:0;background:rgba(0,0,0,.70);z-index:80;display:grid;place-items:center;padding:18px}.modal-card{width:min(520px,96vw);background:#1d2128;border:1px solid #3a414b;border-radius:18px;padding:22px;box-shadow:var(--shadow)}.profile-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.profile-img{width:92px;height:92px;border-radius:50%;object-fit:cover;background:#fff;padding:4px;border:3px solid var(--yellow)}.profile-form{flex:1;min-width:240px}.bars{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:190px 1fr 46px;gap:12px;align-items:center}.bar-row span{height:18px;background:#111418;border-radius:999px;overflow:hidden;border:1px solid #343a43}.bar-row i{display:block;height:100%;background:linear-gradient(90deg,var(--yellow2),var(--yellow));border-radius:999px}.bar-row em{font-style:normal;color:#ffd23f;font-weight:1000}input[type=file]{max-width:100%;white-space:normal;overflow:hidden}.field{min-width:0}.card{min-width:0}@media(max-width:1000px){body{overflow-x:hidden}.app{overflow-x:hidden}.main{width:100%;overflow-x:hidden}.card{padding:15px}.form-grid{display:grid!important;grid-template-columns:1fr!important}.form-grid .field,.form-grid button,.form-grid a{grid-column:1!important;width:100%;min-width:0}.field input,.field select,.field textarea,input[type=file]{width:100%;max-width:100%;font-size:14px}.table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}.table-wrap table{min-width:760px}.bar-row{grid-template-columns:1fr}.profile-row{align-items:flex-start}.mobile-head{height:54px}.hero{overflow:hidden}.detail-box{grid-column:span 12!important}}</style>
+.status-pill{display:inline-flex;padding:7px 10px;border-radius:999px;background:#242a32;border:1px solid #3b414b;color:#ffd23f;font-weight:1000;white-space:nowrap}.actions{display:flex;gap:8px;flex-wrap:wrap}.modal{position:fixed;inset:0;background:rgba(0,0,0,.70);z-index:80;display:grid;place-items:center;padding:18px}.modal-card{width:min(520px,96vw);background:#1d2128;border:1px solid #3a414b;border-radius:18px;padding:22px;box-shadow:var(--shadow)}.profile-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.profile-img{width:92px;height:92px;border-radius:50%;object-fit:cover;background:#fff;padding:4px;border:3px solid var(--yellow)}.profile-form{flex:1;min-width:240px}.sub-mini{padding-left:58px!important;font-size:13px!important;opacity:.92}.bars{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:190px 1fr 46px;gap:12px;align-items:center}.bar-row span{height:18px;background:#111418;border-radius:999px;overflow:hidden;border:1px solid #343a43}.bar-row i{display:block;height:100%;background:linear-gradient(90deg,var(--yellow2),var(--yellow));border-radius:999px}.bar-row em{font-style:normal;color:#ffd23f;font-weight:1000}input[type=file]{max-width:100%;white-space:normal;overflow:hidden}.field{min-width:0}.card{min-width:0}@media(max-width:1000px){body{overflow-x:hidden}.app{overflow-x:hidden}.main{width:100%;overflow-x:hidden}.card{padding:15px}.form-grid{display:grid!important;grid-template-columns:1fr!important}.form-grid .field,.form-grid button,.form-grid a{grid-column:1!important;width:100%;min-width:0}.field input,.field select,.field textarea,input[type=file]{width:100%;max-width:100%;font-size:14px}.table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}.table-wrap table{min-width:760px}.bar-row{grid-template-columns:1fr}.profile-row{align-items:flex-start}.mobile-head{height:54px}.hero{overflow:hidden}.detail-box{grid-column:span 12!important}}</style>
 <script>
 function side(){return document.querySelector('.side')}
 function appShell(){return document.querySelector('.app')}
@@ -445,17 +480,27 @@ def item(tipo, label, icon, active):
 
 
 def sidebar(active):
-    pago = ''.join(item(k,l,i,active) for k,l,i in TIPOS_PAGO)
+    pago_parts=[]
+    for k,l,i in TIPOS_PAGO:
+        if k=='Normal':
+            base_cls='menu-item active' if active == k else 'menu-item'
+            pago_parts.append(f"<a class='{base_cls}' href='{url_for('panel_tipo', tipo=k)}'><span>{i}</span><span class='label'>{l}</span></a>")
+            pago_parts.append(f"<a class='menu-item sub-mini' href='{url_for('panel_tipo', tipo=k, sub='Mensual')}'><span>📅</span><span class='label'>Normal mensual</span></a>")
+            pago_parts.append(f"<a class='menu-item sub-mini' href='{url_for('panel_tipo', tipo=k, sub='Semanal')}'><span>🗓️</span><span class='label'>Normal semanal</span></a>")
+        else:
+            pago_parts.append(item(k,l,i,active))
+    pago = ''.join(pago_parts)
     emp = ''.join(item(k,l,i,active) for k,l,i in TIPOS_EMPRESA)
     per = ''.join(item(k,l,i,active) for k,l,i in TIPOS_PERSONALES)
     def gclass(keys):
         return 'menu-group force-open' if active in keys else 'menu-group'
     admin = ""
     if session.get('admin_id'):
-        admin_cls = 'menu-group force-open' if active in ['Admin','Trabajadores','Subir documentos'] else 'menu-group'
+        admin_cls = 'menu-group force-open' if active in ['Admin','Trabajadores','Usuarios','Subir documentos'] else 'menu-group'
         cls_dash = 'menu-item active' if active == 'Admin' else 'menu-item'
         cls_trab = 'menu-item active' if active == 'Trabajadores' else 'menu-item'
         cls_docs = 'menu-item active' if active == 'Subir documentos' else 'menu-item'
+        cls_users = 'menu-item active' if active == 'Usuarios' else 'menu-item'
         admin = f"""
         <div id='grp_admin' data-group='admin' class='{admin_cls}'>
           <button type='button' class='menu-title' onclick="toggleGroup('grp_admin')"><span>⚙️</span><span class='label'>Administrador</span><span class='chev'>∨</span></button>
@@ -463,6 +508,7 @@ def sidebar(active):
             <a class='{cls_dash}' onclick='saveSideScroll()' href='/admin'><span>📊</span><span class='label'>Dashboard</span></a>
             <a class='{cls_trab}' onclick='saveSideScroll()' href='/admin/trabajadores'><span>👥</span><span class='label'>Trabajadores</span></a>
             <a class='{cls_docs}' onclick='saveSideScroll()' href='/admin/documentos'><span>⬆️</span><span class='label'>Subir documentos</span></a>
+            <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><span>🔐</span><span class='label'>Usuarios y claves</span></a>
           </div>
         </div>"""
     pago_cls = gclass([k for k,_,_ in TIPOS_PAGO])
@@ -498,7 +544,7 @@ def login_template(admin=False, error=""):
       <div class='field'><label>Clave</label><div class='login-input'>🔒<input name='clave' type='password' placeholder='Ingrese su clave' required></div></div>
     """ if admin else """
       <div class='field'><label>DNI</label><div class='login-input'>🪪<input name='dni' maxlength='8' placeholder='Ingrese su DNI' required></div></div>
-      <div class='field'><label>Correo</label><div class='login-input'>✉️<input name='correo' type='email' placeholder='Ingrese su correo' required></div></div>
+      <div class='field'><label>Correo o clave</label><div class='login-input'>🔑<input name='correo' placeholder='Correo o clave generada' required></div></div>
     """
     body = f"""
     <div class='login-body'><form class='login-card' method='post' action='{action}'><div class='login-inner'>
@@ -519,7 +565,7 @@ def logo_file(filename):
 
 @app.route('/logo_svg')
 def logo_svg():
-    svg = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 140'><rect width='360' height='140' fill='white'/><text x='45' y='75' font-family='Segoe UI,Arial' font-size='70' font-style='italic' fill='#2b668d'>Prize</text><circle cx='250' cy='63' r='26' fill='#ef8b16'/><circle cx='259' cy='62' r='17' fill='#f8c02a'/><text x='250' y='73' font-family='Arial' font-size='35' font-weight='900' fill='#244d77'>e</text><path d='M255 35c22-28 42-30 54-34-5 20-21 35-48 42z' fill='#35a34a'/><text x='112' y='117' font-family='Arial' font-size='28' font-weight='800' fill='#4cae55'>SUPERFRUITS</text></svg>"""
+    svg = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 140'><rect width='360' height='140' rx='26' fill='white'/><text x='45' y='78' font-family='Segoe UI,Arial' font-size='76' font-style='italic' font-weight='800' fill='#2b668d'>Priz</text><text x='222' y='78' font-family='Segoe UI,Arial' font-size='78' font-style='italic' font-weight='900' fill='#ef8b16'>e</text><path d='M252 30c20-25 39-28 52-32-5 20-22 35-47 42z' fill='#35a34a'/><text x='112' y='116' font-family='Arial' font-size='26' font-weight='900' fill='#4cae55'>SUPERFRUITS</text></svg>"""
     return app.response_class(svg, mimetype='image/svg+xml')
 
 # =============================
@@ -529,10 +575,12 @@ def logo_svg():
 def login():
     if request.method == 'POST':
         dni = normalizar_dni(request.form.get('dni'))
-        correo = clean(request.form.get('correo')).lower()
+        clave = clean(request.form.get('correo')).lower()
         t = get_trabajador(dni)
-        if not t or clean(t['correo']).lower() != correo:
-            return login_template(False, "DNI o correo no coincide. Verifique sus datos.")
+        ok_correo = t and clean(t['correo']).lower() == clave
+        ok_clave = t and clean(t['clave_portal'] if 'clave_portal' in t.keys() else '').lower() == clave
+        if not t or not (ok_correo or ok_clave):
+            return login_template(False, "DNI y correo/clave no coinciden. Verifique sus datos.")
         session.clear(); session['dni'] = dni; session['nombre'] = t['nombre']
         return redirect(url_for('panel'))
     return login_template(False)
@@ -572,18 +620,21 @@ def panel_tipo(tipo):
         sincronizar_documentos_carpeta(dni)
     label, icon, categoria = ALL_TIPOS[tipo]
     periodo = clean(request.args.get('periodo'))
+    sub = clean(request.args.get('sub'))
     pers = periodos_disponibles(dni=None if is_admin else dni, tipo=tipo)
     docs = listar_documentos(dni=None if is_admin else dni, tipo=tipo, periodo=periodo or None, limit=999)
+    if tipo == 'Normal' and sub:
+        docs = [d for d in docs if sub.lower() in clean(d['detalle']).lower()]
     opts = "<option value=''>Todos los periodos</option>" + ''.join([f"<option {'selected' if p==periodo else ''}>{p}</option>" for p in pers])
     detalle = detalle_tipo(tipo, docs)
     upload_extra = ""
-    if tipo == 'Otros' and not is_admin:
+    if tipo in ['Otros','Contrato Personal'] and not is_admin:
         upload_extra = f"""
         <div class='card span-12'><h2>Adjuntar nuevo documento personal</h2><form method='post' action='/subir_personal' enctype='multipart/form-data' class='form-grid'>
-        <input type='hidden' name='tipo' value='Otros'><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Certificado, solicitud, evidencia'></div><div class='field'><label>Archivo</label><input type='file' name='archivo' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2' placeholder='Comentario u observación'></textarea></div><button class='btn-green'>Subir documento</button></form></div>"""
+        <input type='hidden' name='tipo' value='{tipo}'><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Certificado, solicitud, evidencia'></div><div class='field'><label>Archivo</label><input type='file' name='archivo' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2' placeholder='Comentario u observación'></textarea></div><button class='btn-green'>Subir documento</button></form></div>"""
     content = f"""
     <div class='hero'><div class='topbar'><div><h1>{icon} {label}</h1><div class='subtitle'>Consulta filtrada por pestaña y periodo seleccionado.</div></div><a class='btn-blue' href='{url_for('admin') if is_admin else url_for('panel')}'>Volver</a></div></div>
-    <section class='grid'><div class='card mini'><div><span>Total</span><br><b>{len(docs)}</b></div><div class='ico'>{icon}</div></div><div class='card mini'><div><span>Periodo</span><br><b>{periodo or 'Todos'}</b></div><div class='ico'>📅</div></div><div class='card mini'><div><span>Filtro</span><br><b>{tipo}</b></div><div class='ico'>🔎</div></div>
+    <section class='grid'><div class='card mini'><div><span>Total</span><br><b>{len(docs)}</b></div><div class='ico'>{icon}</div></div><div class='card mini'><div><span>Periodo</span><br><b>{periodo or 'Todos'}</b></div><div class='ico'>📅</div></div><div class='card mini'><div><span>Filtro</span><br><b>{tipo}{' - '+sub if sub else ''}</b></div><div class='ico'>🔎</div></div>
     <div class='card span-12'><form method='get' class='period-row'><div class='field'><label>Elegir periodo</label><select name='periodo'>{opts}</select></div><button class='btn-blue'>Aplicar filtro</button><a class='btn' href='{url_for('panel_tipo', tipo=tipo)}'>Limpiar</a></form></div>
     <div class='card span-12'><h2>Detalle de {label}</h2>{detalle}</div>{upload_extra}<div class='card span-12'><h2>Listado</h2>{tabla_docs(docs)}</div></section>"""
     return render_page(content, active=tipo)
@@ -596,7 +647,7 @@ def subir_personal():
         flash('Documento personal subido correctamente.', 'ok')
     except Exception as e:
         flash(f'No se pudo subir: {e}', 'error')
-    return redirect(url_for('panel_tipo', tipo='Otros'))
+    return redirect(url_for('panel_tipo', tipo=clean(request.form.get('tipo')) or 'Otros'))
 
 
 def detalle_tipo(tipo, docs):
@@ -628,12 +679,12 @@ def tabla_docs(rows):
         ver = f"<a class='btn-blue' target='_blank' href='{url_for('ver_doc', doc_id=rid)}'>Ver/Descargar</a>"
         acciones = []
         # Flujo de boletas/documentos de pago por trabajador: ver -> aceptar/rechazar -> firmar -> aprobar
-        if r['categoria'] == 'pago' and dni_sess and r['dni'] == dni_sess:
+        if r['categoria'] in ['pago','empresa','personal'] and dni_sess and (r['dni'] == dni_sess or r['categoria']=='empresa'):
             acciones.append(f"<a class='btn-green mini-btn' href='{url_for('flujo_doc', doc_id=rid, accion='aceptar')}'>Aceptar</a>")
             acciones.append(f"<button class='btn-red mini-btn' onclick=\"showReject({rid})\">Rechazar</button>")
             if estado in ['Aceptado','Firmado','Aprobado']:
                 acciones.append(f"<a class='btn-blue mini-btn' href='{url_for('flujo_doc', doc_id=rid, accion='firmar')}'>Firmar</a>")
-        if is_admin and r['categoria'] == 'pago':
+        if is_admin and r['categoria'] in ['pago','personal','empresa']:
             acciones.append(f"<a class='btn-green mini-btn' href='{url_for('flujo_doc', doc_id=rid, accion='aprobar')}'>Aprobar</a>")
         if is_admin or (dni_sess and r['dni'] == dni_sess and r['categoria'] == 'personal'):
             acciones.append(f"<a class='btn-red mini-btn' onclick=\"return confirm('¿Eliminar este documento?')\" href='{url_for('eliminar_doc', doc_id=rid)}'>Eliminar</a>")
@@ -666,7 +717,7 @@ def flujo_doc(doc_id, accion):
         r = con.execute("SELECT * FROM documentos WHERE id=?", (doc_id,)).fetchone()
         if not r: abort(404)
         dni_sess = session.get('dni')
-        if accion in ['aceptar','firmar'] and (not dni_sess or r['dni'] != dni_sess or r['categoria'] != 'pago'):
+        if accion in ['aceptar','firmar'] and (not dni_sess or (r['categoria']!='empresa' and r['dni'] != dni_sess)):
             abort(403)
         if accion == 'aprobar' and not session.get('admin_id'):
             abort(403)
@@ -689,7 +740,7 @@ def rechazar_doc(doc_id):
         r = con.execute("SELECT * FROM documentos WHERE id=?", (doc_id,)).fetchone()
         if not r: abort(404)
         dni_sess = session.get('dni')
-        if not dni_sess or r['dni'] != dni_sess or r['categoria'] != 'pago': abort(403)
+        if not dni_sess or (r['categoria']!='empresa' and r['dni'] != dni_sess): abort(403)
         con.execute("UPDATE documentos SET estado='Rechazado', comentario_rechazo=?, observacion=? WHERE id=?", (comentario, comentario, doc_id))
         con.commit()
     flash('Documento rechazado con comentario.', 'ok')
@@ -705,6 +756,9 @@ def ver_doc(doc_id):
         if not dni or (r['categoria'] != 'empresa' and r['dni'] != dni): abort(403)
     path = Path(r['ruta_archivo'])
     if not path.exists(): abort(404)
+    if session.get('dni'):
+        try: registrar_evento_documento(doc_id, session.get('dni'), 'Abierto', 'Trabajador abrió/descargó el documento')
+        except Exception: pass
     return send_file(path, as_attachment=False, download_name=r['archivo_nombre'])
 
 
@@ -742,6 +796,7 @@ def admin():
         trabajadores = con.execute("SELECT COUNT(*) FROM trabajadores").fetchone()[0]
         docs = con.execute("SELECT COUNT(*) FROM documentos").fetchone()[0]
         emp = con.execute("SELECT COUNT(*) FROM documentos WHERE categoria='empresa'").fetchone()[0]
+        leidos = con.execute("SELECT COUNT(*) FROM documentos WHERE fecha_lectura IS NOT NULL AND fecha_lectura<>''").fetchone()[0]
         ult = con.execute("SELECT * FROM documentos ORDER BY id DESC LIMIT 12").fetchall()
     alerts = alertas_admin(8)
     with db() as con:
@@ -751,7 +806,7 @@ def admin():
     alert_items = ''.join([f"<div class='alert-item'><div class='bell'>🔔</div><div><b>{(a['trabajador'] or a['dni'] or 'Documento empresa')}</b><br><span>{a['tipo']} · {a['periodo'] or 'Sin periodo'} · {a['fecha_subida']}</span></div><a class='btn-blue mini-btn' target='_blank' href='{url_for('ver_doc', doc_id=a['id'])}'>Ver</a></div>" for a in alerts]) or "<div class='empty-note'>Aún no hay documentos cargados.</div>"
     content = f"""
     <div class='hero admin-hero'><div class='topbar'><div><h1>Centro de Control <span class='accent'>Documental</span></h1><div class='subtitle'>Alertas, trabajadores y documentos PRIZE en tiempo real.</div></div><a class='btn-green' href='/admin/documentos'>Subir documentos</a></div></div>
-    <section class='grid'><div class='card mini'><div><span>Trabajadores</span><br><b>{trabajadores}</b></div><div class='ico'>👥</div></div><div class='card mini'><div><span>Documentos</span><br><b>{docs}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Empresa</span><br><b>{emp}</b></div><div class='ico'>🏢</div></div>
+    <section class='grid'><div class='card mini'><div><span>Trabajadores</span><br><b>{trabajadores}</b></div><div class='ico'>👥</div></div><div class='card mini'><div><span>Documentos</span><br><b>{docs}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Empresa</span><br><b>{emp}</b></div><div class='ico'>🏢</div></div><div class='card mini'><div><span>Recibidos/abiertos</span><br><b>{leidos}</b></div><div class='ico'>👁️</div></div>
     <div class='card span-12'><h2>📊 Indicadores por tipo de documento</h2><div class='bars'>{chart_html}</div></div><div class='card span-12 alert-card'><h2>🔔 Campanita de cargas recientes</h2><p class='muted'>Aquí ves de primera mano quién cargó o recibió documentos nuevos.</p>{alert_items}</div>
     <div class='card span-12'><h2>Últimas cargas</h2>{tabla_docs(ult)}</div></section>"""
     return render_page(content, active='Admin')
@@ -763,7 +818,7 @@ def admin_trabajadores():
         if 'excel' in request.files and request.files['excel'].filename:
             f = request.files['excel']; path = UPLOAD_DIR / f"base_{now_file()}_{secure_filename(f.filename)}"; f.save(path)
             wb = load_workbook(path, data_only=True); ws = wb.active
-            headers = [clean(c.value).upper().replace('TRABAJADOR','NOMBRE') for c in ws[1]]
+            headers = [clean(c.value).upper().replace('TRABAJADOR','NOMBRE').replace('FECHA NACIMIENTO','FECHA_NACIMIENTO') for c in ws[1]]
             def idx(name):
                 return headers.index(name) if name in headers else -1
             n=0
@@ -776,15 +831,17 @@ def admin_trabajadores():
                     cargo = clean(row[idx('CARGO')] if idx('CARGO')>=0 else '')
                     area = clean(row[idx('AREA')] if idx('AREA')>=0 else '')
                     empresa = clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'PRIZE SUPERFRUITS')
+                    fecha_nac = clean(row[idx('FECHA_NACIMIENTO')] if idx('FECHA_NACIMIENTO')>=0 else '')
                     planilla = clean(row[idx('PLANILLA')] if idx('PLANILLA')>=0 else '')
-                    con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,1,?)", (dni,nombre,correo,cargo,area,empresa,planilla,now_txt()))
+                    clave = generar_clave_trabajador(dni, fecha_nac)
+                    con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,1,?)", (dni,nombre,correo,cargo,area,empresa,planilla,fecha_nac,dni,clave,now_txt()))
                     n+=1
                 con.commit()
             flash(f'Base cargada correctamente: {n} trabajadores.', 'ok')
         else:
             dni=normalizar_dni(request.form.get('dni'))
             with db() as con:
-                con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),clean(request.form.get('empresa')) or 'PRIZE SUPERFRUITS',clean(request.form.get('planilla')),now_txt()))
+                fecha_nac=clean(request.form.get('fecha_nacimiento')); clave=generar_clave_trabajador(dni, fecha_nac); con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),clean(request.form.get('empresa')) or 'PRIZE SUPERFRUITS',clean(request.form.get('planilla')),fecha_nac,dni,clave,now_txt()))
                 con.commit()
             flash('Trabajador guardado.', 'ok')
         return redirect(url_for('admin_trabajadores'))
@@ -793,8 +850,8 @@ def admin_trabajadores():
     table = ''.join([f"<tr><td>{r['dni']}</td><td>{r['nombre']}</td><td>{r['correo']}</td><td>{r['cargo'] or ''}</td><td>{r['empresa'] or ''}</td><td>{r['planilla'] if 'planilla' in r.keys() and r['planilla'] else ''}</td></tr>" for r in rows])
     content = f"""
     <div class='topbar'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div></div></div><section class='grid'>
-    <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><input name='empresa' value='PRIZE SUPERFRUITS'></div><div class='field'><label>Planilla</label><input name='planilla'></div><button class='btn-green'>Guardar</button></form></div>
-    <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial: EMPRESA / DNI / TRABAJADOR / CARGO / AREA / PLANILLA / CORREO.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Descargar plantilla</a></form></div>
+    <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><input name='empresa' value='PRIZE SUPERFRUITS'></div><div class='field'><label>Planilla</label><input name='planilla'></div><div class='field'><label>Fecha nacimiento</label><input name='fecha_nacimiento' placeholder='dd/mm/aaaa'></div><button class='btn-green'>Guardar + crear usuario</button></form></div>
+    <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial: EMPRESA / DNI / TRABAJADOR / CARGO / AREA / PLANILLA / CORREO / FECHA NACIMIENTO. Crea usuario masivo con DNI y clave automática.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Descargar plantilla</a></form></div>
     <div class='card span-12'><h2>Listado</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Empresa</th><th>Planilla</th></tr>{table}</table></div></div></section>"""
     return render_page(content, active='Trabajadores')
 
@@ -803,9 +860,9 @@ def admin_trabajadores():
 def plantilla_trabajadores():
     path = PERSIST_DIR / 'PLANTILLA_CARGA_MASIVA_TRABAJADORES.xlsx'
     wb = Workbook(); ws = wb.active; ws.title = 'TRABAJADORES'
-    headers = ['EMPRESA','DNI','TRABAJADOR','CARGO','AREA','PLANILLA','CORREO']
+    headers = ['EMPRESA','DNI','TRABAJADOR','CARGO','AREA','PLANILLA','CORREO','FECHA NACIMIENTO']
     ws.append(headers)
-    ws.append(['PRIZE SUPERFRUITS','74324033','APELLIDOS Y NOMBRES','Analista','RR.HH.','PLANILLA 01','correo@empresa.com'])
+    ws.append(['PRIZE SUPERFRUITS','74324033','APELLIDOS Y NOMBRES','Analista','RR.HH.','PLANILLA 01','correo@empresa.com','01/01/1990'])
     for i, h in enumerate(headers, 1):
         font = copy(ws.cell(1, i).font); font.bold = True; ws.cell(1, i).font = font
         ws.column_dimensions[chr(64+i)].width = 24
@@ -836,6 +893,42 @@ def mi_foto():
     flash('Foto actualizada correctamente.', 'ok')
     return redirect(url_for('panel'))
 
+
+@app.route('/admin/usuarios')
+@admin_required
+def admin_usuarios():
+    with db() as con:
+        rows = con.execute("SELECT dni,nombre,correo,empresa,cargo,fecha_nacimiento,usuario_portal,clave_portal,activo FROM trabajadores ORDER BY nombre LIMIT 10000").fetchall()
+    trs=[]
+    for r in rows:
+        dni = r['dni']
+        clave = r['clave_portal'] or generar_clave_trabajador(r['dni'], r['fecha_nacimiento'])
+        trs.append(f"<tr><td>{dni}</td><td>{r['nombre']}</td><td>{r['usuario_portal'] or dni}</td><td><b>{clave}</b></td><td>{r['correo'] or ''}</td><td>{r['empresa'] or ''}</td><td><a class='btn-blue mini-btn' href='/admin/usuario/{dni}/reset'>Regenerar</a> <a class='btn-red mini-btn' onclick='return confirm(\"¿Eliminar trabajador/usuario?\")' href='/admin/usuario/{dni}/eliminar'>Eliminar</a></td></tr>")
+    table=''.join(trs)
+    content=f"""
+    <div class='hero'><div class='topbar'><div><h1>Usuarios y contraseñas</h1><div class='subtitle'>Control para más de 10 mil trabajadores. Usuario = DNI; clave = combinación DNI + fecha nacimiento.</div></div><a class='btn-green' href='/admin/plantilla_trabajadores'>Plantilla masiva</a></div></div>
+    <section class='grid'><div class='card span-12'><h2>Listado de accesos</h2><p class='muted'>El trabajador puede ingresar con DNI + correo o DNI + clave generada.</p><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Usuario</th><th>Clave</th><th>Correo</th><th>Empresa</th><th>Opciones</th></tr>{table}</table></div></div></section>"""
+    return render_page(content, active='Usuarios')
+
+@app.route('/admin/usuario/<dni>/reset')
+@admin_required
+def admin_usuario_reset(dni):
+    t=get_trabajador(dni)
+    if not t: abort(404)
+    clave=generar_clave_trabajador(dni, t['fecha_nacimiento'] if 'fecha_nacimiento' in t.keys() else '')
+    with db() as con:
+        con.execute("UPDATE trabajadores SET usuario_portal=?, clave_portal=? WHERE dni=?", (normalizar_dni(dni), clave, normalizar_dni(dni))); con.commit()
+    flash('Usuario regenerado correctamente.', 'ok')
+    return redirect(url_for('admin_usuarios'))
+
+@app.route('/admin/usuario/<dni>/eliminar')
+@admin_required
+def admin_usuario_eliminar(dni):
+    with db() as con:
+        con.execute("DELETE FROM trabajadores WHERE dni=?", (normalizar_dni(dni),)); con.commit()
+    flash('Trabajador/usuario eliminado.', 'ok')
+    return redirect(url_for('admin_usuarios'))
+
 @app.route('/admin/documentos', methods=['GET','POST'])
 @admin_required
 def admin_documentos():
@@ -861,6 +954,7 @@ def admin_documentos():
     tipo = clean(request.args.get('tipo')) or 'Utilidad'
     buscar = clean(request.args.get('buscar'))
     periodo = clean(request.args.get('periodo'))
+    sub = clean(request.args.get('sub'))
     tipo_options = ''.join([f"<option value='{k}' {'selected' if k==tipo else ''}>{l}</option>" for k,l,i in TIPOS_PAGO+TIPOS_EMPRESA+TIPOS_PERSONALES])
     pers = periodos_disponibles(tipo=tipo)
     periodo_options = "<option value=''>Todos</option>" + ''.join([f"<option {'selected' if p==periodo else ''}>{p}</option>" for p in pers])
