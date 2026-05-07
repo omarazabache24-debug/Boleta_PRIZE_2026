@@ -50,7 +50,6 @@ TIPOS_PAGO = [
     ("Utilidad", "Boletas utilidades", "📄"),
     ("Vacaciones", "Boletas vacaciones", "📄"),
     ("Normal", "Boletas normal", "📄"),
-    ("Constancia Gratificación", "Constancia gratificación", "📄"),
     ("CTS", "Boletas CTS", "📄"),
     ("Liquidación", "Boletas liquidación", "📄"),
     ("Gratificación", "Boletas gratificación", "📄"),
@@ -182,6 +181,7 @@ def init_db():
             ('planilla', 'ALTER TABLE trabajadores ADD COLUMN planilla TEXT'),
             ('foto_ruta', 'ALTER TABLE trabajadores ADD COLUMN foto_ruta TEXT'),
             ('fecha_nacimiento', 'ALTER TABLE trabajadores ADD COLUMN fecha_nacimiento TEXT'),
+            ('fecha_ingreso', 'ALTER TABLE trabajadores ADD COLUMN fecha_ingreso TEXT'),
             ('usuario_portal', 'ALTER TABLE trabajadores ADD COLUMN usuario_portal TEXT'),
             ('clave_portal', 'ALTER TABLE trabajadores ADD COLUMN clave_portal TEXT'),
         ]:
@@ -319,6 +319,40 @@ def periodos_disponibles(dni=None, tipo=None, categoria=None):
         return [r[0] for r in con.execute(sql, params).fetchall() if r[0]]
 
 
+def parse_fecha_any(v):
+    txt = clean(v)
+    if not txt:
+        return None
+    if isinstance(v, datetime):
+        return v.date()
+    for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"]:
+        try:
+            return datetime.strptime(txt.split()[0], fmt).date()
+        except Exception:
+            pass
+    return None
+
+def periodos_desde_ingreso(dni=None, tipo=None, max_meses=72):
+    """Devuelve periodos desde la fecha de ingreso del trabajador hasta hoy."""
+    inicio = None
+    if dni:
+        t = get_trabajador(dni)
+        if t and 'fecha_ingreso' in t.keys():
+            inicio = parse_fecha_any(t['fecha_ingreso'])
+    hoy = datetime.now(APP_TZ).date()
+    if not inicio:
+        inicio = hoy.replace(day=1)
+    inicio = inicio.replace(day=1)
+    out=[]; y=inicio.year; m=inicio.month
+    while (y < hoy.year or (y == hoy.year and m <= hoy.month)) and len(out) < max_meses:
+        out.append(f"{y:04d}-{m:02d}")
+        m += 1
+        if m == 13:
+            y += 1; m = 1
+    docs = periodos_disponibles(dni=dni, tipo=tipo)
+    return sorted(set(out + docs), reverse=True)
+
+
 def guardar_documento(file_storage, dni, tipo, periodo, detalle="", observacion="", uploaded_by="sistema"):
     if not file_storage or not file_storage.filename:
         return None
@@ -339,6 +373,23 @@ def guardar_documento(file_storage, dni, tipo, periodo, detalle="", observacion=
     final = f"{prefijo_dni}{tipo_file}_{periodo}_{now_file()}_{original}"
     path = folder / final
     file_storage.save(path)
+    # Copia automática a carpeta documental organizada para respaldo físico.
+    try:
+        label_auto, icon_auto, cat_auto = ALL_TIPOS.get(tipo, (tipo, '📄', categoria))
+        root_name = {'pago':'DOCUMENTOS DE PAGO','empresa':'DOCUMENTOS DE LA EMPRESA','personal':'DOCUMENTOS PERSONALES'}.get(cat_auto,'DOCUMENTOS')
+        auto_base = DOCUMENTOS_BASE_DIR / root_name / slug_folder(label_auto)
+        if tipo == 'Normal' and 'seman' in clean(detalle).lower():
+            auto_base = auto_base / 'SEMANAL'
+        elif tipo == 'Normal':
+            auto_base = auto_base / 'MENSUAL'
+        auto_base = auto_base / periodo
+        if dni: auto_base = auto_base / dni
+        auto_base.mkdir(parents=True, exist_ok=True)
+        auto_path = auto_base / final
+        if str(auto_path) != str(path):
+            auto_path.write_bytes(path.read_bytes())
+    except Exception:
+        pass
     with db() as con:
         con.execute("""
         INSERT INTO documentos(dni,categoria,tipo,periodo,detalle,observacion,archivo_nombre,ruta_archivo,extension,fecha_subida,uploaded_by)
@@ -439,7 +490,7 @@ BASE = r'''
 .form-grid{grid-template-columns:repeat(12,1fr);align-items:end}.form-grid .field{grid-column:span 3}.form-grid .field:nth-child(4n+1){grid-column:span 3}.form-grid button,.form-grid .btn,.form-grid .btn-blue,.form-grid .btn-green{grid-column:span 3;justify-content:center;height:54px}.field label{display:block;margin-bottom:8px;color:#eaf0f7;font-size:13px;letter-spacing:.3px}.field input,.field select,.field textarea,.input,select,textarea{background:#0f1319;border:1px solid #3b414b;color:#fff;border-radius:14px;min-height:48px;padding:12px 14px;font-weight:800}.field input:focus,.field select:focus,.field textarea:focus,.input:focus,select:focus,textarea:focus{border-color:var(--yellow);box-shadow:0 0 0 4px rgba(255,210,63,.12);outline:none}.card form{gap:18px}.alert-card{background:linear-gradient(145deg,#202329,#16191e 65%,rgba(255,210,63,.06));}.alert-item{display:grid;grid-template-columns:48px 1fr auto;gap:12px;align-items:center;padding:13px 0;border-top:1px solid #323740}.alert-item:first-of-type{border-top:0}.bell{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,var(--yellow),var(--yellow2));box-shadow:0 12px 22px rgba(255,210,63,.18)}.alert-item span,.muted,.empty-note{color:#b8c0cb}.mini-btn{padding:9px 13px;border-radius:12px}.admin-hero{border-radius:0 0 24px 24px;margin-bottom:20px}.side .brand img{background:linear-gradient(145deg,#f7f7f7,#d8d8d8);mix-blend-mode:normal}.side .brand{background:radial-gradient(circle at 50% 28%,rgba(255,210,63,.10),transparent 44%)}
 @media(max-width:1000px){.form-grid{grid-template-columns:1fr}.form-grid .field,.form-grid button,.form-grid .btn,.form-grid .btn-blue,.form-grid .btn-green{grid-column:span 1;width:100%}.alert-item{grid-template-columns:42px 1fr}.alert-item a{grid-column:1 / -1;justify-content:center}.side.open{box-shadow:0 0 0 999px rgba(0,0,0,.55),12px 0 35px rgba(0,0,0,.34)}}
 
-.status-pill{display:inline-flex;padding:7px 10px;border-radius:999px;background:#242a32;border:1px solid #3b414b;color:#ffd23f;font-weight:1000;white-space:nowrap}.actions{display:flex;gap:8px;flex-wrap:wrap}.modal{position:fixed;inset:0;background:rgba(0,0,0,.70);z-index:80;display:grid;place-items:center;padding:18px}.modal-card{width:min(520px,96vw);background:#1d2128;border:1px solid #3a414b;border-radius:18px;padding:22px;box-shadow:var(--shadow)}.profile-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.profile-img{width:92px;height:92px;border-radius:50%;object-fit:cover;background:#fff;padding:4px;border:3px solid var(--yellow)}.profile-form{flex:1;min-width:240px}.sub-mini{padding-left:58px!important;font-size:13px!important;opacity:.92}.bars{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:190px 1fr 46px;gap:12px;align-items:center}.bar-row span{height:18px;background:#111418;border-radius:999px;overflow:hidden;border:1px solid #343a43}.bar-row i{display:block;height:100%;background:linear-gradient(90deg,var(--yellow2),var(--yellow));border-radius:999px}.bar-row em{font-style:normal;color:#ffd23f;font-weight:1000}input[type=file]{max-width:100%;white-space:normal;overflow:hidden}.field{min-width:0}.card{min-width:0}@media(max-width:1000px){body{overflow-x:hidden}.app{overflow-x:hidden}.main{width:100%;overflow-x:hidden}.card{padding:15px}.form-grid{display:grid!important;grid-template-columns:1fr!important}.form-grid .field,.form-grid button,.form-grid a{grid-column:1!important;width:100%;min-width:0}.field input,.field select,.field textarea,input[type=file]{width:100%;max-width:100%;font-size:14px}.table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}.table-wrap table{min-width:760px}.bar-row{grid-template-columns:1fr}.profile-row{align-items:flex-start}.mobile-head{height:54px}.hero{overflow:hidden}.detail-box{grid-column:span 12!important}}</style>
+.status-pill{display:inline-flex;padding:7px 10px;border-radius:999px;background:#242a32;border:1px solid #3b414b;color:#ffd23f;font-weight:1000;white-space:nowrap}.actions{display:flex;gap:8px;flex-wrap:wrap}.modal{position:fixed;inset:0;background:rgba(0,0,0,.70);z-index:80;display:grid;place-items:center;padding:18px}.modal-card{width:min(520px,96vw);background:#1d2128;border:1px solid #3a414b;border-radius:18px;padding:22px;box-shadow:var(--shadow)}.profile-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.profile-img{width:92px;height:92px;border-radius:50%;object-fit:cover;background:#fff;padding:4px;border:3px solid var(--yellow)}.profile-form{flex:1;min-width:240px}.sub-mini{padding-left:58px!important;font-size:13px!important;opacity:.92}.bars{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:190px 1fr 46px;gap:12px;align-items:center}.bar-row span{height:18px;background:#111418;border-radius:999px;overflow:hidden;border:1px solid #343a43}.bar-row i{display:block;height:100%;background:linear-gradient(90deg,var(--yellow2),var(--yellow));border-radius:999px}.bar-row em{font-style:normal;color:#ffd23f;font-weight:1000}input[type=file]{max-width:100%;white-space:normal;overflow:hidden}.field{min-width:0}.card{min-width:0}@media(max-width:1000px){body{overflow-x:hidden}.app{overflow-x:hidden}.main{width:100%;overflow-x:hidden}.card{padding:15px}.form-grid{display:grid!important;grid-template-columns:1fr!important}.form-grid .field,.form-grid button,.form-grid a{grid-column:1!important;width:100%;min-width:0}.field input,.field select,.field textarea,input[type=file]{width:100%;max-width:100%;font-size:14px}.table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}.table-wrap table{min-width:760px}.bar-row{grid-template-columns:1fr}.profile-row{align-items:flex-start}.mobile-head{height:54px}.hero{overflow:hidden}.detail-box{grid-column:span 12!important}}.btn-warn{background:linear-gradient(135deg,#ffce4a,#ff9f1c);border:0;color:#171a20;border-radius:14px;padding:10px 14px;font-weight:1000;cursor:pointer;box-shadow:0 10px 22px rgba(255,178,26,.18)}.btn-danger{background:linear-gradient(135deg,#48131f,#7f1d1d);border:1px solid #ef4444;color:#fee2e2;border-radius:14px;padding:10px 14px;font-weight:1000}.st-aprobado{background:#113327!important;border-color:#2dd4bf!important;color:#9fffe8!important}.st-rechazado{background:#3f1520!important;border-color:#ef4444!important;color:#fecaca!important}.st-firmado{background:#182844!important;border-color:#60a5fa!important;color:#bfdbfe!important}.st-aceptado{background:#302a12!important;border-color:#facc15!important;color:#fde68a!important}.row-approved{background:linear-gradient(90deg,rgba(45,212,191,.08),transparent)}.row-rejected{background:linear-gradient(90deg,rgba(239,68,68,.10),transparent)}.nested{margin:0}.nested>.menu-item{width:100%;border:0}.nested.closed .submenu{display:none}.menu-group.closed .submenu{display:none}.menu-group .chev{margin-left:auto}.menu-group.closed .chev{transform:rotate(-90deg)}</style>
 <script>
 function side(){return document.querySelector('.side')}
 function appShell(){return document.querySelector('.app')}
@@ -483,10 +534,11 @@ def sidebar(active):
     pago_parts=[]
     for k,l,i in TIPOS_PAGO:
         if k=='Normal':
+            sub_open = ' force-open' if active == k else ''
             base_cls='menu-item active' if active == k else 'menu-item'
-            pago_parts.append(f"<a class='{base_cls}' href='{url_for('panel_tipo', tipo=k)}'><span>{i}</span><span class='label'>{l}</span></a>")
+            pago_parts.append(f"<div id='grp_normal' data-group='normal' class='menu-group nested{sub_open}'><button type='button' class='{base_cls}' onclick=\"toggleGroup('grp_normal')\"><span>{i}</span><span class='label'>{l}</span><span class='chev'>∨</span></button><div class='submenu'>")
             pago_parts.append(f"<a class='menu-item sub-mini' href='{url_for('panel_tipo', tipo=k, sub='Mensual')}'><span>📅</span><span class='label'>Normal mensual</span></a>")
-            pago_parts.append(f"<a class='menu-item sub-mini' href='{url_for('panel_tipo', tipo=k, sub='Semanal')}'><span>🗓️</span><span class='label'>Normal semanal</span></a>")
+            pago_parts.append(f"<a class='menu-item sub-mini' href='{url_for('panel_tipo', tipo=k, sub='Semanal')}'><span>🗓️</span><span class='label'>Normal semanal</span></a></div></div>")
         else:
             pago_parts.append(item(k,l,i,active))
     pago = ''.join(pago_parts)
@@ -600,9 +652,16 @@ def panel():
     <div class='hero'><div class='topbar'><div><h1>Portal Documental <span class='accent'>PRIZE</span></h1><div class='subtitle'>{t['nombre']} · DNI {t['dni']} · {t['empresa']}</div></div><div style='display:flex;gap:10px;align-items:center'><span class='btn'>● Activo</span><a class='btn-blue' href='/panel'>Ver todo</a></div></div></div>
     <section class='grid'><div class='card mini'><div><span>Documentos</span><br><b>{len(docs)}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Último tipo</span><br><b>{ultimo}</b></div><div class='ico'>📄</div></div><div class='card mini'><div><span>Estado</span><br><b>Activo</b></div><div class='ico'>✅</div></div><div class='card span-12 profile-card'><div><h2>Mi perfil y foto</h2><p class='muted'>Actualiza tu foto para que el portal quede como panel profesional.</p></div><div class='profile-row'><img class='profile-img' src='{url_for('foto_trabajador', dni=dni) if t['foto_ruta'] else logo_url()}'><form method='post' action='/mi_foto' enctype='multipart/form-data' class='form-grid profile-form'><div class='field'><label>Foto personal</label><input type='file' name='foto' accept='.png,.jpg,.jpeg,.webp' required></div><button class='btn-green'>Cargar foto</button></form></div></div>
     <div class='card span-12'><div style='display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap'><h2>Accesos por pestaña</h2><input id='cardSearch' onkeyup='filterCards()' class='input' style='max-width:310px' placeholder='Buscar pestaña...'></div><div class='doc-grid'>{cards}</div></div>
-    <div class='card span-12'><h2>Últimos documentos</h2>{tabla_docs(docs)}</div></section>"""
+    <div class='card span-12'><h2>🔔 Notificaciones</h2>{notificaciones_trabajador(dni)}</div><div class='card span-12'><h2>Últimos documentos</h2>{tabla_docs(docs)}</div></section>"""
     return render_page(content, active='Inicio')
 
+
+def notificaciones_trabajador(dni):
+    with db() as con:
+        rows = con.execute("SELECT evento,fecha,detalle FROM eventos_documento WHERE dni=? ORDER BY id DESC LIMIT 10", (normalizar_dni(dni),)).fetchall()
+    if not rows:
+        return "<p class='muted'>Sin notificaciones por ahora.</p>"
+    return "".join([f"<div class='alert-item'><div class='bell'>🔔</div><div><b>{r['evento']}</b><br><span>{r['fecha']} · {r['detalle'] or ''}</span></div></div>" for r in rows])
 
 def doc_card(k,l,i):
     return f"<div class='doc-card'><h3>{i} {l}</h3><p>Consulta, filtra por periodo y revisa el detalle del documento.</p><a class='btn-blue' href='{url_for('panel_tipo', tipo=k)}'>Abrir</a></div>"
@@ -621,7 +680,7 @@ def panel_tipo(tipo):
     label, icon, categoria = ALL_TIPOS[tipo]
     periodo = clean(request.args.get('periodo'))
     sub = clean(request.args.get('sub'))
-    pers = periodos_disponibles(dni=None if is_admin else dni, tipo=tipo)
+    pers = periodos_disponibles(dni=None if is_admin else dni, tipo=tipo) if is_admin else periodos_desde_ingreso(dni, tipo)
     docs = listar_documentos(dni=None if is_admin else dni, tipo=tipo, periodo=periodo or None, limit=999)
     if tipo == 'Normal' and sub:
         docs = [d for d in docs if sub.lower() in clean(d['detalle']).lower()]
@@ -729,6 +788,7 @@ def flujo_doc(doc_id, accion):
             flash('Documento firmado correctamente.', 'ok')
         elif accion == 'aprobar':
             con.execute("UPDATE documentos SET estado='Aprobado', fecha_aprobacion=? WHERE id=?", (now_txt(), doc_id))
+            con.execute("INSERT INTO eventos_documento(documento_id,dni,evento,fecha,detalle) VALUES(?,?,?,?,?)", (doc_id, r['dni'] or '', 'Aprobado', now_txt(), 'Aprobado por administrador'))
             flash('Documento aprobado por administrador.', 'ok')
         con.commit()
     return redirect(request.referrer or url_for('panel'))
@@ -740,10 +800,12 @@ def rechazar_doc(doc_id):
         r = con.execute("SELECT * FROM documentos WHERE id=?", (doc_id,)).fetchone()
         if not r: abort(404)
         dni_sess = session.get('dni')
-        if not dni_sess or (r['categoria']!='empresa' and r['dni'] != dni_sess): abort(403)
+        is_admin = bool(session.get('admin_id'))
+        if not is_admin and (not dni_sess or (r['categoria']!='empresa' and r['dni'] != dni_sess)): abort(403)
         con.execute("UPDATE documentos SET estado='Rechazado', comentario_rechazo=?, observacion=? WHERE id=?", (comentario, comentario, doc_id))
+        con.execute("INSERT INTO eventos_documento(documento_id,dni,evento,fecha,detalle) VALUES(?,?,?,?,?)", (doc_id, r['dni'] or dni_sess or '', 'Rechazado', now_txt(), comentario))
         con.commit()
-    flash('Documento rechazado con comentario.', 'ok')
+    flash('Documento rechazado. Se registró notificación para el trabajador.', 'ok')
     return redirect(request.referrer or url_for('panel'))
 
 @app.route('/ver/<int:doc_id>')
@@ -797,17 +859,30 @@ def admin():
         docs = con.execute("SELECT COUNT(*) FROM documentos").fetchone()[0]
         emp = con.execute("SELECT COUNT(*) FROM documentos WHERE categoria='empresa'").fetchone()[0]
         leidos = con.execute("SELECT COUNT(*) FROM documentos WHERE fecha_lectura IS NOT NULL AND fecha_lectura<>''").fetchone()[0]
+        aprobados = con.execute("SELECT COUNT(*) FROM documentos WHERE estado='Aprobado'").fetchone()[0]
+        rechazados = con.execute("SELECT COUNT(*) FROM documentos WHERE estado='Rechazado'").fetchone()[0]
         ult = con.execute("SELECT * FROM documentos ORDER BY id DESC LIMIT 12").fetchall()
     alerts = alertas_admin(8)
     with db() as con:
         chart_rows = con.execute("SELECT tipo, COUNT(*) c FROM documentos GROUP BY tipo ORDER BY c DESC LIMIT 8").fetchall()
+        fechas_docs = con.execute("SELECT fecha_subida FROM documentos").fetchall()
+    hoy_dt = datetime.now(APP_TZ).date()
+    doc_dia = doc_semana = doc_mes = 0
+    for rr in fechas_docs:
+        try:
+            dd = datetime.strptime((rr['fecha_subida'] or '')[:10], '%d/%m/%Y').date()
+            if dd == hoy_dt: doc_dia += 1
+            if (hoy_dt - dd).days <= 7: doc_semana += 1
+            if dd.year == hoy_dt.year and dd.month == hoy_dt.month: doc_mes += 1
+        except Exception:
+            pass
     maxc = max([x['c'] for x in chart_rows] or [1])
     chart_html = ''.join([f"<div class='bar-row'><b>{x['tipo']}</b><span><i style='width:{max(6, int(x['c']*100/maxc))}%'></i></span><em>{x['c']}</em></div>" for x in chart_rows]) or "<p class='muted'>Sin información para graficar.</p>"
     alert_items = ''.join([f"<div class='alert-item'><div class='bell'>🔔</div><div><b>{(a['trabajador'] or a['dni'] or 'Documento empresa')}</b><br><span>{a['tipo']} · {a['periodo'] or 'Sin periodo'} · {a['fecha_subida']}</span></div><a class='btn-blue mini-btn' target='_blank' href='{url_for('ver_doc', doc_id=a['id'])}'>Ver</a></div>" for a in alerts]) or "<div class='empty-note'>Aún no hay documentos cargados.</div>"
     content = f"""
-    <div class='hero admin-hero'><div class='topbar'><div><h1>Centro de Control <span class='accent'>Documental</span></h1><div class='subtitle'>Alertas, trabajadores y documentos PRIZE en tiempo real.</div></div><a class='btn-green' href='/admin/documentos'>Subir documentos</a></div></div>
-    <section class='grid'><div class='card mini'><div><span>Trabajadores</span><br><b>{trabajadores}</b></div><div class='ico'>👥</div></div><div class='card mini'><div><span>Documentos</span><br><b>{docs}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Empresa</span><br><b>{emp}</b></div><div class='ico'>🏢</div></div><div class='card mini'><div><span>Recibidos/abiertos</span><br><b>{leidos}</b></div><div class='ico'>👁️</div></div>
-    <div class='card span-12'><h2>📊 Indicadores por tipo de documento</h2><div class='bars'>{chart_html}</div></div><div class='card span-12 alert-card'><h2>🔔 Campanita de cargas recientes</h2><p class='muted'>Aquí ves de primera mano quién cargó o recibió documentos nuevos.</p>{alert_items}</div>
+    <div class='hero admin-hero'><div class='topbar'><div><h1>Centro de Control <span class='accent'>Documental</span></h1><div class='subtitle'>Alertas, trabajadores y documentos PRIZE en tiempo real.</div></div><a class='btn-green' href='/admin/documentos'>Subir documentos</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear carpetas</a></div></div>
+    <section class='grid'><div class='card mini'><div><span>Trabajadores</span><br><b>{trabajadores}</b></div><div class='ico'>👥</div></div><div class='card mini'><div><span>Documentos</span><br><b>{docs}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Empresa</span><br><b>{emp}</b></div><div class='ico'>🏢</div></div><div class='card mini'><div><span>Recibidos/abiertos</span><br><b>{leidos}</b></div><div class='ico'>👁️</div></div><div class='card mini'><div><span>Aprobados</span><br><b>{aprobados}</b></div><div class='ico'>✅</div></div><div class='card mini'><div><span>Rechazados</span><br><b>{rechazados}</b></div><div class='ico'>⛔</div></div>
+    <div class='card span-12'><h2>📈 Rango de cargas</h2><div class='grid'><div class='detail-box span-4'><small>Hoy</small><b>{doc_dia}</b></div><div class='detail-box span-4'><small>Últimos 7 días</small><b>{doc_semana}</b></div><div class='detail-box span-4'><small>Mes actual</small><b>{doc_mes}</b></div></div></div><div class='card span-12'><h2>📊 Indicadores por tipo de documento</h2><div class='bars'>{chart_html}</div></div><div class='card span-12 alert-card'><h2>🔔 Campanita de cargas recientes</h2><p class='muted'>Aquí ves de primera mano quién cargó o recibió documentos nuevos.</p>{alert_items}</div>
     <div class='card span-12'><h2>Últimas cargas</h2>{tabla_docs(ult)}</div></section>"""
     return render_page(content, active='Admin')
 
@@ -818,7 +893,7 @@ def admin_trabajadores():
         if 'excel' in request.files and request.files['excel'].filename:
             f = request.files['excel']; path = UPLOAD_DIR / f"base_{now_file()}_{secure_filename(f.filename)}"; f.save(path)
             wb = load_workbook(path, data_only=True); ws = wb.active
-            headers = [clean(c.value).upper().replace('TRABAJADOR','NOMBRE').replace('FECHA NACIMIENTO','FECHA_NACIMIENTO') for c in ws[1]]
+            headers = [clean(c.value).upper().replace('TRABAJADOR','NOMBRE').replace('FECHA NACIMIENTO','FECHA_NACIMIENTO').replace('FECHA INGRESO','FECHA_INGRESO') for c in ws[1]]
             def idx(name):
                 return headers.index(name) if name in headers else -1
             n=0
@@ -833,15 +908,16 @@ def admin_trabajadores():
                     empresa = clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'PRIZE SUPERFRUITS')
                     fecha_nac = clean(row[idx('FECHA_NACIMIENTO')] if idx('FECHA_NACIMIENTO')>=0 else '')
                     planilla = clean(row[idx('PLANILLA')] if idx('PLANILLA')>=0 else '')
+                    fecha_ing = clean(row[idx('FECHA_INGRESO')] if idx('FECHA_INGRESO')>=0 else '')
                     clave = generar_clave_trabajador(dni, fecha_nac)
-                    con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,1,?)", (dni,nombre,correo,cargo,area,empresa,planilla,fecha_nac,dni,clave,now_txt()))
+                    con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,nombre,correo,cargo,area,empresa,planilla,fecha_nac,fecha_ing,dni,clave,now_txt()))
                     n+=1
                 con.commit()
             flash(f'Base cargada correctamente: {n} trabajadores.', 'ok')
         else:
             dni=normalizar_dni(request.form.get('dni'))
             with db() as con:
-                fecha_nac=clean(request.form.get('fecha_nacimiento')); clave=generar_clave_trabajador(dni, fecha_nac); con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),clean(request.form.get('empresa')) or 'PRIZE SUPERFRUITS',clean(request.form.get('planilla')),fecha_nac,dni,clave,now_txt()))
+                fecha_nac=clean(request.form.get('fecha_nacimiento')); clave=generar_clave_trabajador(dni, fecha_nac); con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),clean(request.form.get('empresa')) or 'PRIZE SUPERFRUITS',clean(request.form.get('planilla')),fecha_nac,clean(request.form.get('fecha_ingreso')),dni,clave,now_txt()))
                 con.commit()
             flash('Trabajador guardado.', 'ok')
         return redirect(url_for('admin_trabajadores'))
@@ -850,7 +926,7 @@ def admin_trabajadores():
     table = ''.join([f"<tr><td>{r['dni']}</td><td>{r['nombre']}</td><td>{r['correo']}</td><td>{r['cargo'] or ''}</td><td>{r['empresa'] or ''}</td><td>{r['planilla'] if 'planilla' in r.keys() and r['planilla'] else ''}</td></tr>" for r in rows])
     content = f"""
     <div class='topbar'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div></div></div><section class='grid'>
-    <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><input name='empresa' value='PRIZE SUPERFRUITS'></div><div class='field'><label>Planilla</label><input name='planilla'></div><div class='field'><label>Fecha nacimiento</label><input name='fecha_nacimiento' placeholder='dd/mm/aaaa'></div><button class='btn-green'>Guardar + crear usuario</button></form></div>
+    <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><input name='empresa' value='PRIZE SUPERFRUITS'></div><div class='field'><label>Planilla</label><input name='planilla'></div><div class='field'><label>Fecha nacimiento</label><input name='fecha_nacimiento' placeholder='dd/mm/aaaa'></div><div class='field'><label>Fecha de ingreso</label><input name='fecha_ingreso' placeholder='dd/mm/aaaa'></div><button class='btn-green'>Guardar + crear usuario</button></form></div>
     <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial: EMPRESA / DNI / TRABAJADOR / CARGO / AREA / PLANILLA / CORREO / FECHA NACIMIENTO. Crea usuario masivo con DNI y clave automática.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Descargar plantilla</a></form></div>
     <div class='card span-12'><h2>Listado</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Empresa</th><th>Planilla</th></tr>{table}</table></div></div></section>"""
     return render_page(content, active='Trabajadores')
@@ -860,9 +936,9 @@ def admin_trabajadores():
 def plantilla_trabajadores():
     path = PERSIST_DIR / 'PLANTILLA_CARGA_MASIVA_TRABAJADORES.xlsx'
     wb = Workbook(); ws = wb.active; ws.title = 'TRABAJADORES'
-    headers = ['EMPRESA','DNI','TRABAJADOR','CARGO','AREA','PLANILLA','CORREO','FECHA NACIMIENTO']
+    headers = ['EMPRESA','DNI','TRABAJADOR','CARGO','AREA','PLANILLA','CORREO','FECHA NACIMIENTO','FECHA INGRESO']
     ws.append(headers)
-    ws.append(['PRIZE SUPERFRUITS','74324033','APELLIDOS Y NOMBRES','Analista','RR.HH.','PLANILLA 01','correo@empresa.com','01/01/1990'])
+    ws.append(['PRIZE SUPERFRUITS','74324033','APELLIDOS Y NOMBRES','Analista','RR.HH.','PLANILLA 01','correo@empresa.com','01/01/1990','01/05/2024'])
     for i, h in enumerate(headers, 1):
         font = copy(ws.cell(1, i).font); font.bold = True; ws.cell(1, i).font = font
         ws.column_dimensions[chr(64+i)].width = 24
@@ -960,12 +1036,20 @@ def admin_documentos():
     periodo_options = "<option value=''>Todos</option>" + ''.join([f"<option {'selected' if p==periodo else ''}>{p}</option>" for p in pers])
     rows = listar_documentos(tipo=tipo if tipo else None, periodo=periodo or None, buscar=buscar, limit=500)
     content = f"""
-    <div class='hero'><div class='topbar'><div><h1>Subir y gestionar documentos</h1><div class='subtitle'>Administrador: pago, empresa y documentos personales.</div></div><a class='btn-green' href='/admin/sincronizar'>Sincronizar carpeta</a></div></div><section class='grid'>
+    <div class='hero'><div class='topbar'><div><h1>Subir y gestionar documentos</h1><div class='subtitle'>Administrador: pago, empresa y documentos personales.</div></div><a class='btn-green' href='/admin/sincronizar'>Sincronizar carpeta</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear carpetas base</a></div></div><section class='grid'>
     <div class='card span-12'><h2>Carga de documentos</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>DNI trabajador</label><input name='dni' placeholder='Vacío si es documento de empresa'></div><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}' list='periodos'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Boleta semanal / Política actualizada'></div><div class='field'><label>Boleta Normal</label><select name='periodicidad_normal'><option value=''>No aplica</option><option>Mensual</option><option>Semanal</option></select></div><div class='field'><label>Archivos</label><input type='file' name='archivos' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' multiple required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2'></textarea></div><button class='btn-green'>Subir</button></form></div>
     <div class='card span-12'><h2>Filtros</h2><form method='get' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>Periodo</label><select name='periodo'>{periodo_options}</select></div><div class='field'><label>Buscar</label><input name='buscar' value='{buscar}' placeholder='DNI, detalle, observación'></div><button class='btn-blue'>Filtrar</button><a class='btn' href='/admin/documentos'>Limpiar</a></form></div>
     <div class='card span-12'><h2>Listado</h2>{tabla_docs(rows)}</div></section>"""
     return render_page(content, active='Subir documentos')
 
+
+
+@app.route('/admin/crear_carpetas')
+@admin_required
+def admin_crear_carpetas():
+    asegurar_carpetas_documentales()
+    flash(f'Estructura creada/actualizada correctamente en: {DOCUMENTOS_BASE_DIR}', 'ok')
+    return redirect(request.referrer or url_for('admin'))
 
 @app.route('/admin/sincronizar')
 @admin_required
