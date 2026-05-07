@@ -71,7 +71,11 @@ ALL_TIPOS = {k: (label, icon, "pago") for k, label, icon in TIPOS_PAGO}
 ALL_TIPOS.update({k: (label, icon, "empresa") for k, label, icon in TIPOS_EMPRESA})
 ALL_TIPOS.update({k: (label, icon, "personal") for k, label, icon in TIPOS_PERSONALES})
 EXT_ALLOWED = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx", ".xls", ".xlsx"}
-DOCUMENTOS_BASE_DIR = Path(os.getenv("DOCUMENTOS_BASE_DIR", str(PERSIST_DIR / "documentos_auto")))
+# Carpeta documental LOCAL y dinámica:
+# Por defecto se crea al costado de app.py, en la misma carpeta donde tienes tus archivos.
+# Ejemplo Windows: si app.py está en D:\MiSistema\, se crea D:\MiSistema\DOCUMENTOS_PRIZE_AUTO\
+# En Render también se crea dentro del proyecto, pero para carga real masiva se recomienda uso local.
+DOCUMENTOS_BASE_DIR = Path(os.getenv("DOCUMENTOS_BASE_DIR", str(BASE_DIR / "DOCUMENTOS_PRIZE_AUTO")))
 DOCUMENTOS_BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 def slug_folder(v):
@@ -441,6 +445,8 @@ def registrar_archivo_existente(path: Path, dni: str, tipo: str, uploaded_by="au
 
 
 def sincronizar_documentos_carpeta(dni=None):
+    # Detecta documentos desde la carpeta LOCAL principal creada junto a app.py.
+    # También mantiene compatibilidad con versiones anteriores: documentos_auto.
     base_dirs = []
     for b in [DOCUMENTOS_BASE_DIR, BASE_DIR / "documentos_auto"]:
         if b.exists() and b.is_dir() and b not in base_dirs:
@@ -1093,14 +1099,14 @@ def admin_documentos():
 def admin_crear_carpetas():
     asegurar_carpetas_documentales()
     total = sincronizar_documentos_carpeta()
-    flash(f'Estructura creada/actualizada correctamente en: {DOCUMENTOS_BASE_DIR}. Documentos detectados automáticamente: {total}.', 'ok')
+    flash(f'Carpeta local creada/actualizada: {DOCUMENTOS_BASE_DIR}. Coloca allí los PDFs y presiona Sincronizar. Documentos detectados automáticamente: {total}.', 'ok')
     return redirect(request.referrer or url_for('admin'))
 
 @app.route('/admin/sincronizar')
 @admin_required
 def admin_sincronizar():
     total = sincronizar_documentos_carpeta()
-    flash(f'Sincronización completada. Documentos nuevos detectados: {total}. Carpeta: {DOCUMENTOS_BASE_DIR}', 'ok')
+    flash(f'Sincronización completada. Documentos nuevos detectados: {total}. Carpeta local usada: {DOCUMENTOS_BASE_DIR}', 'ok')
     return redirect(url_for('admin_documentos'))
 
 # API compatibles
