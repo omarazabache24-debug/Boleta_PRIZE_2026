@@ -211,6 +211,18 @@ def init_db():
             fecha TEXT,
             detalle TEXT
         )''')
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS app_config(
+            clave TEXT PRIMARY KEY,
+            valor TEXT
+        )''')
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS login_intentos(
+            dni TEXT PRIMARY KEY,
+            intentos INTEGER DEFAULT 0,
+            bloqueado INTEGER DEFAULT 0,
+            ultima_fecha TEXT
+        )''')
         asegurar_carpetas_documentales()
         # Datos demo seguros
         if not con.execute("SELECT 1 FROM usuarios_admin WHERE usuario='admin'").fetchone():
@@ -223,6 +235,43 @@ def init_db():
 
 
 init_db()
+
+def get_config(clave, default=''):
+    with db() as con:
+        r = con.execute('SELECT valor FROM app_config WHERE clave=?', (clave,)).fetchone()
+    return r['valor'] if r else default
+
+def set_config(clave, valor):
+    with db() as con:
+        con.execute('INSERT INTO app_config(clave,valor) VALUES(?,?) ON CONFLICT(clave) DO UPDATE SET valor=excluded.valor', (clave, str(valor)))
+        con.commit()
+
+def modo_prueba_activo():
+    return get_config('modo_prueba', '0') == '1'
+
+def marca_carga(usuario='sistema'):
+    usuario = clean(usuario or 'sistema')
+    return usuario + (' [MODO PRUEBA]' if modo_prueba_activo() else '')
+
+def reset_intentos_login(dni):
+    with db() as con:
+        con.execute('DELETE FROM login_intentos WHERE dni=?', (normalizar_dni(dni),))
+        con.commit()
+
+def registrar_intento_fallido(dni):
+    dni = normalizar_dni(dni)
+    with db() as con:
+        r = con.execute('SELECT intentos FROM login_intentos WHERE dni=?', (dni,)).fetchone()
+        n = (int(r['intentos']) if r else 0) + 1
+        bloqueado = 1 if n >= 3 else 0
+        con.execute('INSERT INTO login_intentos(dni,intentos,bloqueado,ultima_fecha) VALUES(?,?,?,?) ON CONFLICT(dni) DO UPDATE SET intentos=?, bloqueado=?, ultima_fecha=?', (dni,n,bloqueado,now_txt(),n,bloqueado,now_txt()))
+        con.commit()
+    return n, bloqueado
+
+def esta_bloqueado(dni):
+    with db() as con:
+        r = con.execute('SELECT bloqueado,intentos FROM login_intentos WHERE dni=?', (normalizar_dni(dni),)).fetchone()
+    return bool(r and int(r['bloqueado'] or 0)==1), (int(r['intentos']) if r else 0)
 
 # =============================
 # SEGURIDAD / DECORADORES
@@ -429,6 +478,7 @@ def documento_ya_indexado(path: Path):
 
 
 def registrar_archivo_existente(path: Path, dni: str, tipo: str, uploaded_by="auto"):
+    uploaded_by = marca_carga(uploaded_by)
     if documento_ya_indexado(path): return False
     ext = path.suffix.lower()
     if ext not in EXT_ALLOWED: return False
@@ -474,7 +524,7 @@ def sincronizar_documentos_carpeta(dni=None):
                 if not trab or int(trab['activo'] or 0) != 1:
                     continue
             try:
-                if registrar_archivo_existente(path, dni_detectado, tipo): total += 1
+                if registrar_archivo_existente(path, dni_detectado, tipo, uploaded_by="auto carpeta local"): total += 1
             except Exception:
                 pass
     return total
@@ -490,8 +540,8 @@ BASE = r'''
 /* LOGIN - estilo imagen negra/amarilla */
 .login-body{min-height:100vh;display:grid;place-items:center;padding:20px;position:relative;overflow:hidden;background:linear-gradient(rgba(22,25,29,.86),rgba(22,25,29,.90)),radial-gradient(circle at 7% 4%,#ffd23f 0 23%,transparent 23.2%),radial-gradient(circle at 94% -2%,#ffd23f 0 11%,transparent 11.2%),radial-gradient(circle at 72% 112%,#ffd23f 0 20%,transparent 20.2%),linear-gradient(135deg,#2a2e33,#111418)}.login-card{width:min(92vw,500px);background:linear-gradient(180deg,rgba(25,28,33,.98),rgba(29,33,38,.95));border:1px solid rgba(255,255,255,.10);border-radius:18px;padding:38px 42px 0;box-shadow:0 38px 90px rgba(0,0,0,.52);overflow:hidden;position:relative}.login-card:before{content:"";position:absolute;left:-72px;bottom:-58px;width:365px;height:150px;background:linear-gradient(135deg,#2e4f86,#5d83e6);border-radius:50% 50% 0 0;transform:rotate(-8deg);opacity:.95}.login-card:after{content:"";position:absolute;right:-78px;bottom:-52px;width:350px;height:145px;background:linear-gradient(135deg,#253849,#475b6f);border-radius:50% 50% 0 0;transform:rotate(8deg);opacity:.92}.login-inner{position:relative;z-index:2}.login-logo{text-align:center}.login-logo img{max-width:145px;max-height:105px;object-fit:contain;background:rgba(255,255,255,.92);border-radius:10px;padding:7px;filter:drop-shadow(0 14px 24px rgba(0,0,0,.45))}.login-title{text-align:center;margin:20px 0 30px;color:#aeb7c3}.login-title h1{margin:0 0 7px;color:#fff;font-size:24px;letter-spacing:.5px;text-transform:uppercase}.login-title b{color:#98a4b3}.login-card .field label{display:none}.login-input{display:flex;align-items:center;gap:13px;background:transparent;border-bottom:1px solid rgba(226,232,240,.40);padding:0 6px;margin-bottom:22px;transition:.18s}.login-input:focus-within{border-bottom-color:var(--yellow);box-shadow:0 10px 0 -9px rgba(255,210,63,.9)}.login-input input{border:0;padding:15px 8px;width:100%;font:inherit;outline:none;background:transparent;color:#fff;font-weight:900}.login-input input::placeholder{color:#cbd5e1}.login-card .btn-green{width:auto;justify-content:center;font-size:15px;margin:8px 0 74px;padding:14px 34px;border-radius:28px;background:linear-gradient(135deg,var(--yellow2),var(--yellow));color:#212529;border:0;box-shadow:0 14px 30px rgba(255,178,26,.35)}.login-links{text-align:center;margin-top:-48px;padding-bottom:24px;position:relative;z-index:3}.login-links a{color:#dbeafe;font-size:13px;font-weight:900}
 /* APP - dashboard ejecutivo */
-.app{display:grid;grid-template-columns:320px 1fr;min-height:100vh;background:#15181d;transition:grid-template-columns .22s ease}.app.side-collapsed{grid-template-columns:86px 1fr}.side{background:linear-gradient(180deg,#1e2024,#171a1f 72%,#111318);color:#f2f4f8;position:sticky;top:0;height:100vh;overflow:auto;transition:.25s;width:320px;z-index:5;box-shadow:12px 0 35px rgba(0,0,0,.34);border-right:1px solid #33373d}.side.collapsed{width:86px}.side-top{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#17191e;border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:3}.toggle{cursor:pointer;background:transparent;border:0;color:white;font-size:21px}.brand{padding:28px 16px 22px;text-align:center}.brand img{max-width:150px;max-height:95px;background:rgba(255,255,255,.90);border-radius:16px;object-fit:contain;padding:8px;box-shadow:0 14px 30px rgba(0,0,0,.35);border:1px solid rgba(255,210,63,.28)}.brand p{color:#c8cdd6;font-size:14px;margin-top:18px}.side.collapsed .brand p,.side.collapsed .label,.side.collapsed .chev,.side.collapsed .subtxt,.side.collapsed .side-user{display:none}.side.collapsed .brand{padding:20px 8px}.side.collapsed .brand img{max-width:55px;max-height:55px;border-radius:14px;padding:4px}.menu-group{margin:10px 12px;border-radius:12px;overflow:hidden}.menu-title{width:100%;border:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#22252b,#1b1e24);color:#eef2f7;padding:15px 14px;font-size:15px;font-weight:1000;cursor:pointer;text-align:left;border-radius:12px}.menu-title:hover{background:linear-gradient(135deg,#2b2f36,#23272f)}.menu-group.force-open .menu-title{background:linear-gradient(135deg,var(--yellow2),var(--yellow));color:#181a1f;box-shadow:0 14px 30px rgba(255,210,63,.20)}.menu-title .chev{margin-left:auto;transition:.18s}.menu-group.closed .chev{transform:rotate(-90deg)}.submenu{background:transparent;padding:9px 0;max-height:720px;transition:max-height .28s ease,padding .18s ease}.menu-group.closed .submenu{max-height:0;padding:0;overflow:hidden}.menu-item{display:flex;align-items:center;gap:13px;padding:13px 18px 13px 40px;color:#dce3ed;font-weight:900;font-size:14px;border-left:4px solid transparent;transition:.13s;border-radius:10px;margin:2px 0}.menu-item:hover{background:#242830;border-left-color:var(--yellow)}.menu-item.active{background:linear-gradient(135deg,#34302a,#2a2926);border-left-color:var(--yellow);color:#fff}.side.collapsed .menu-title{justify-content:center;padding:18px 10px}.side.collapsed .menu-item{padding:16px 10px;justify-content:center}.side.collapsed .submenu{display:none}.main{min-width:0;padding:0 34px 50px;overflow:auto;background:radial-gradient(circle at 92% -8%,rgba(255,210,63,.22),transparent 22%),radial-gradient(circle at 100% 96%,rgba(255,210,63,.12),transparent 28%),#15181d}.hero{margin:0 -34px 24px;padding:26px 34px 28px;background:radial-gradient(circle at 72% 0%,rgba(255,210,63,.20),transparent 32%),linear-gradient(120deg,#15181d 0%,#111418 62%,#24282d 100%);border-bottom:1px solid #31363d}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.topbar h1{margin:0;font-size:34px;letter-spacing:-1px;color:#fff}.topbar h1 .accent{color:var(--yellow)}.subtitle{color:#aeb7c3;font-size:16px;margin-top:7px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}.card{background:linear-gradient(145deg,#202329,#181b20);border:1px solid #303640;border-radius:18px;box-shadow:0 22px 55px rgba(0,0,0,.25);padding:22px;color:#eef2f7}.mini{grid-column:span 4;display:flex;align-items:center;justify-content:space-between}.mini b{font-size:28px;color:var(--yellow)}.ico{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,var(--yellow),var(--yellow2));font-size:24px;color:#17191e;box-shadow:0 12px 26px rgba(255,210,63,.18)}.span-12{grid-column:span 12}.span-8{grid-column:span 8}.span-4{grid-column:span 4}.doc-grid{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px}.doc-card{background:linear-gradient(145deg,#24272d,#1b1f25);border:1px solid #343a43;border-radius:16px;padding:18px;min-height:158px;transition:.16s;position:relative;overflow:hidden}.doc-card:before{content:"";position:absolute;right:-34px;top:-34px;width:86px;height:86px;background:rgba(255,210,63,.17);border-radius:50%}.doc-card h3{margin:0 0 12px;font-size:17px;color:#fff}.doc-card p{margin:0 0 14px;color:#c0c8d2;font-weight:500;line-height:1.45}.doc-card:hover{transform:translateY(-2px);border-color:var(--yellow);box-shadow:0 16px 30px rgba(0,0,0,.25)}.table-wrap{overflow:auto;border:1px solid #343a43;border-radius:14px}table{width:100%;border-collapse:collapse;background:#171a20;color:#eaf3ff}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid #2c323a;vertical-align:top}th{background:#111418;color:var(--yellow);font-size:13px;text-transform:uppercase}tr:hover td{background:#20242b}.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:end}.detail-box{background:linear-gradient(135deg,#202329,#171a20);border:1px solid #343a43;border-radius:16px;padding:15px}.detail-box small{display:block;color:#aeb7c3;margin-bottom:4px}.period-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.mobile-head{display:none}.side-user{margin:26px 14px 14px;padding-top:20px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px;color:#e5e7eb}.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--yellow);color:#15181d;font-weight:1000}
-@media(max-width:1000px){.app,.app.side-collapsed{grid-template-columns:1fr}.side{position:fixed;left:-335px;width:315px}.side.open{left:0}.side.collapsed{left:-335px}.mobile-head{display:flex;position:sticky;top:0;z-index:20;background:#17191e;color:white;padding:12px 14px;align-items:center;justify-content:space-between;border-bottom:1px solid #343a43}.main{padding:0 14px 30px}.hero{margin:0 -14px 18px;padding:20px 16px}.doc-grid{grid-template-columns:1fr}.mini,.span-8,.span-4{grid-column:span 12}.form-grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.topbar h1{font-size:24px}.subtitle{font-size:13px}.card{border-radius:16px;padding:17px}.login-card{padding:32px 28px 0}.login-card .btn-green{width:100%}}@media(min-width:1001px) and (max-width:1350px){.doc-grid{grid-template-columns:repeat(2,1fr)}}
+.app{display:grid;grid-template-columns:320px 1fr;min-height:100vh;background:#15181d;transition:grid-template-columns .22s ease}.app.side-collapsed{grid-template-columns:86px 1fr}.side{background:linear-gradient(180deg,#1e2024,#171a1f 72%,#111318);color:#f2f4f8;position:sticky;top:0;height:100vh;overflow:auto;transition:.25s;width:320px;z-index:5;box-shadow:12px 0 35px rgba(0,0,0,.34);border-right:1px solid #33373d}.side.collapsed{width:86px}.side-top{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#17191e;border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:3}.toggle{cursor:pointer;background:transparent;border:0;color:white;font-size:21px}.brand{padding:28px 16px 22px;text-align:center}.brand img{max-width:150px;max-height:95px;background:rgba(255,255,255,.90);border-radius:16px;object-fit:contain;padding:8px;box-shadow:0 14px 30px rgba(0,0,0,.35);border:1px solid rgba(255,210,63,.28)}.brand p{color:#c8cdd6;font-size:14px;margin-top:18px}.side.collapsed .brand p,.side.collapsed .label,.side.collapsed .chev,.side.collapsed .subtxt,.side.collapsed .side-user{display:none}.side.collapsed .brand{padding:20px 8px}.side.collapsed .brand img{max-width:55px;max-height:55px;border-radius:14px;padding:4px}.menu-group{margin:10px 12px;border-radius:12px;overflow:hidden}.menu-title{width:100%;border:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#22252b,#1b1e24);color:#eef2f7;padding:15px 14px;font-size:15px;font-weight:1000;cursor:pointer;text-align:left;border-radius:12px}.menu-title:hover{background:linear-gradient(135deg,#2b2f36,#23272f)}.menu-group.force-open .menu-title{background:linear-gradient(135deg,var(--yellow2),var(--yellow));color:#181a1f;box-shadow:0 14px 30px rgba(255,210,63,.20)}.menu-title .chev{margin-left:auto;transition:.18s}.menu-group.closed .chev{transform:rotate(-90deg)}.submenu{background:transparent;padding:9px 0;max-height:720px;transition:max-height .28s ease,padding .18s ease}.menu-group.closed .submenu{max-height:0;padding:0;overflow:hidden}.menu-item{display:flex;align-items:center;gap:13px;padding:13px 18px 13px 40px;color:#dce3ed;font-weight:900;font-size:14px;border-left:4px solid transparent;transition:.13s;border-radius:10px;margin:2px 0}.menu-item:hover{background:#242830;border-left-color:var(--yellow)}.menu-item.active{background:linear-gradient(135deg,#34302a,#2a2926);border-left-color:var(--yellow);color:#fff}.side.collapsed .menu-title{justify-content:center;padding:18px 10px}.side.collapsed .menu-item{padding:16px 10px;justify-content:center}.side.collapsed .submenu{display:none}.main{min-width:0;padding:0 34px 50px;overflow:auto;background:radial-gradient(circle at 92% -8%,rgba(255,210,63,.22),transparent 22%),radial-gradient(circle at 100% 96%,rgba(255,210,63,.12),transparent 28%),#15181d}.hero{margin:0 -34px 24px;padding:26px 34px 28px;background:radial-gradient(circle at 72% 0%,rgba(255,210,63,.20),transparent 32%),linear-gradient(120deg,#15181d 0%,#111418 62%,#24282d 100%);border-bottom:1px solid #31363d}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.topbar h1{margin:0;font-size:34px;letter-spacing:-1px;color:#fff}.topbar h1 .accent{color:var(--yellow)}.subtitle{color:#aeb7c3;font-size:16px;margin-top:7px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}.card{background:linear-gradient(145deg,#202329,#181b20);border:1px solid #303640;border-radius:18px;box-shadow:0 22px 55px rgba(0,0,0,.25);padding:22px;color:#eef2f7}.mini{grid-column:span 4;display:flex;align-items:center;justify-content:space-between}.mini b{font-size:28px;color:var(--yellow)}.ico{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,var(--yellow),var(--yellow2));font-size:24px;color:#17191e;box-shadow:0 12px 26px rgba(255,210,63,.18)}.span-12{grid-column:span 12}.span-8{grid-column:span 8}.span-4{grid-column:span 4}.span-3{grid-column:span 3}.doc-grid{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px}.doc-card{background:linear-gradient(145deg,#24272d,#1b1f25);border:1px solid #343a43;border-radius:16px;padding:18px;min-height:158px;transition:.16s;position:relative;overflow:hidden}.doc-card:before{content:"";position:absolute;right:-34px;top:-34px;width:86px;height:86px;background:rgba(255,210,63,.17);border-radius:50%}.doc-card h3{margin:0 0 12px;font-size:17px;color:#fff}.doc-card p{margin:0 0 14px;color:#c0c8d2;font-weight:500;line-height:1.45}.doc-card:hover{transform:translateY(-2px);border-color:var(--yellow);box-shadow:0 16px 30px rgba(0,0,0,.25)}.table-wrap{overflow:auto;border:1px solid #343a43;border-radius:14px}table{width:100%;border-collapse:collapse;background:#171a20;color:#eaf3ff}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid #2c323a;vertical-align:top}th{background:#111418;color:var(--yellow);font-size:13px;text-transform:uppercase}tr:hover td{background:#20242b}.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:end}.detail-box{background:linear-gradient(135deg,#202329,#171a20);border:1px solid #343a43;border-radius:16px;padding:15px}.detail-box small{display:block;color:#aeb7c3;margin-bottom:4px}.period-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.mobile-head{display:none}.side-user{margin:26px 14px 14px;padding-top:20px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px;color:#e5e7eb}.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--yellow);color:#15181d;font-weight:1000}
+@media(max-width:1000px){.app,.app.side-collapsed{grid-template-columns:1fr}.side{position:fixed;left:-335px;width:315px}.side.open{left:0}.side.collapsed{left:-335px}.mobile-head{display:flex;position:sticky;top:0;z-index:20;background:#17191e;color:white;padding:12px 14px;align-items:center;justify-content:space-between;border-bottom:1px solid #343a43}.main{padding:0 14px 30px}.hero{margin:0 -14px 18px;padding:20px 16px}.doc-grid{grid-template-columns:1fr}.mini,.span-8,.span-4,.span-3{grid-column:span 12}.form-grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.topbar h1{font-size:24px}.subtitle{font-size:13px}.card{border-radius:16px;padding:17px}.login-card{padding:32px 28px 0}.login-card .btn-green{width:100%}}@media(min-width:1001px) and (max-width:1350px){.doc-grid{grid-template-columns:repeat(2,1fr)}}
 
 /* === RETOQUE PRO ADMIN / FORMULARIOS === */
 .login-card{border-radius:26px;background:linear-gradient(180deg,rgba(24,27,32,.98),rgba(16,18,23,.96));backdrop-filter:blur(8px)}
@@ -653,11 +703,18 @@ def login():
     if request.method == 'POST':
         dni = normalizar_dni(request.form.get('dni'))
         clave = clean(request.form.get('correo')).lower()
+        bloqueado, intentos_previos = esta_bloqueado(dni)
+        if bloqueado:
+            return login_template(False, "Usuario bloqueado por 3 intentos fallidos. Solicite desbloqueo al administrador.")
         t = get_trabajador(dni)
         ok_correo = t and clean(t['correo']).lower() == clave
         ok_clave = t and clean(t['clave_portal'] if 'clave_portal' in t.keys() else '').lower() == clave
         if not t or not (ok_correo or ok_clave):
-            return login_template(False, "DNI y correo/clave no coinciden. Verifique sus datos.")
+            n, b = registrar_intento_fallido(dni)
+            if b:
+                return login_template(False, "Usuario bloqueado por 3 intentos fallidos. Solicite desbloqueo al administrador.")
+            return login_template(False, f"DNI y correo/clave no coinciden. Intento {n}/3.")
+        reset_intentos_login(dni)
         session.clear(); session['dni'] = dni; session['nombre'] = t['nombre']
         return redirect(url_for('panel'))
     return login_template(False)
@@ -892,6 +949,8 @@ def admin_login():
 @admin_required
 def admin():
     sincronizar_documentos_carpeta()
+    desde = clean(request.args.get('desde'))
+    hasta = clean(request.args.get('hasta'))
     with db() as con:
         trabajadores = con.execute("SELECT COUNT(*) FROM trabajadores").fetchone()[0]
         docs = con.execute("SELECT COUNT(*) FROM documentos").fetchone()[0]
@@ -905,13 +964,16 @@ def admin():
         chart_rows = con.execute("SELECT tipo, COUNT(*) c FROM documentos GROUP BY tipo ORDER BY c DESC LIMIT 8").fetchall()
         fechas_docs = con.execute("SELECT fecha_subida FROM documentos").fetchall()
     hoy_dt = datetime.now(APP_TZ).date()
-    doc_dia = doc_semana = doc_mes = 0
+    doc_dia = doc_semana = doc_mes = doc_rango = 0
+    desde_dt = parse_fecha_any(desde) if desde else None
+    hasta_dt = parse_fecha_any(hasta) if hasta else None
     for rr in fechas_docs:
         try:
             dd = datetime.strptime((rr['fecha_subida'] or '')[:10], '%d/%m/%Y').date()
             if dd == hoy_dt: doc_dia += 1
             if (hoy_dt - dd).days <= 7: doc_semana += 1
             if dd.year == hoy_dt.year and dd.month == hoy_dt.month: doc_mes += 1
+            if (not desde_dt or dd >= desde_dt) and (not hasta_dt or dd <= hasta_dt): doc_rango += 1
         except Exception:
             pass
     maxc = max([x['c'] for x in chart_rows] or [1])
@@ -929,10 +991,12 @@ def admin():
             ORDER BY tipo
         """).fetchall()
     ind_html = ''.join([f"<tr><td>{r['tipo']}</td><td>{r['total']}</td><td><span class='status-pill st-aprobado'>{r['aprobados']}</span></td><td><span class='status-pill st-rechazado'>{r['rechazados']}</span></td><td><span class='status-pill'>{r['leidos']}</span></td></tr>" for r in ind_rows]) or "<tr><td colspan='5'>Sin documentos.</td></tr>"
+    modo_txt = 'ACTIVO' if modo_prueba_activo() else 'INACTIVO'
     content = f"""
-    <div class='hero admin-hero'><div class='topbar'><div><h1>Centro de Control <span class='accent'>Documental</span></h1><div class='subtitle'>Alertas, trabajadores y documentos PRIZE en tiempo real.</div></div><a class='btn-green' href='/admin/documentos'>Subir documentos</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear carpetas + detectar</a></div></div>
+    <div class='hero admin-hero'><div class='topbar'><div><h1>Centro de Control <span class='accent'>Documental</span></h1><div class='subtitle'>Alertas, trabajadores y documentos PRIZE en tiempo real. Modo prueba: <b>{modo_txt}</b></div></div><a class='btn-green' href='/admin/documentos'>Subir documentos</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear carpetas + detectar</a><a class='btn-warn' href='/admin/sincronizar'>Actualizar / detectar PDFs</a></div></div>
     <section class='grid'><div class='card mini'><div><span>Trabajadores</span><br><b>{trabajadores}</b></div><div class='ico'>👥</div></div><div class='card mini'><div><span>Documentos</span><br><b>{docs}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Empresa</span><br><b>{emp}</b></div><div class='ico'>🏢</div></div><div class='card mini'><div><span>Recibidos/abiertos</span><br><b>{leidos}</b></div><div class='ico'>👁️</div></div><div class='card mini'><div><span>Aprobados</span><br><b>{aprobados}</b></div><div class='ico'>✅</div></div><div class='card mini'><div><span>Rechazados</span><br><b>{rechazados}</b></div><div class='ico'>⛔</div></div>
-    <div class='card span-12'><h2>📈 Rango de cargas</h2><div class='grid'><div class='detail-box span-4'><small>Hoy</small><b>{doc_dia}</b></div><div class='detail-box span-4'><small>Últimos 7 días</small><b>{doc_semana}</b></div><div class='detail-box span-4'><small>Mes actual</small><b>{doc_mes}</b></div></div></div><div class='card span-12'><h2>📊 Indicadores por tipo de documento</h2><div class='bars'>{chart_html}</div></div><div class='card span-12'><h2>✅ Control por boleta/documento</h2><div class='table-wrap'><table><tr><th>Tipo</th><th>Cargados</th><th>Aprobados</th><th>Rechazados</th><th>Leídos/abiertos</th></tr>{ind_html}</table></div></div><div class='card span-12 alert-card'><h2>🔔 Campanita de cargas recientes</h2><p class='muted'>Aquí ves de primera mano quién cargó o recibió documentos nuevos.</p>{alert_items}</div>
+    <div class='card span-12'><h2>🧪 Modo prueba y limpieza</h2><p class='muted'>Actívalo para probar con admin/usuario. Todo lo cargado quedará marcado como [MODO PRUEBA]. Luego puedes limpiarlo sin tocar la información real.</p><div style='display:flex;gap:10px;flex-wrap:wrap'><a class='btn-green' href='/admin/modo_prueba/toggle'>Modo prueba: {modo_txt}</a><a class='btn-danger' onclick='return confirm("¿Borrar documentos y eventos de MODO PRUEBA?")' href='/admin/modo_prueba/limpiar'>Limpiar pruebas</a><a class='btn-blue' href='/admin/desbloquear_usuarios'>Desbloquear usuarios</a></div></div>
+    <div class='card span-12'><h2>📈 Rango de cargas</h2><form method='get' class='form-grid'><div class='field'><label>Desde</label><input type='date' name='desde' value='{desde}'></div><div class='field'><label>Hasta</label><input type='date' name='hasta' value='{hasta}'></div><button class='btn-blue'>Visualizar rango</button><a class='btn' href='/admin'>Limpiar rango</a></form><div class='grid' style='margin-top:14px'><div class='detail-box span-3'><small>Rango seleccionado</small><b>{doc_rango}</b></div><div class='detail-box span-3'><small>Hoy</small><b>{doc_dia}</b></div><div class='detail-box span-3'><small>Últimos 7 días</small><b>{doc_semana}</b></div><div class='detail-box span-3'><small>Mes actual</small><b>{doc_mes}</b></div></div></div><div class='card span-12'><h2>📊 Indicadores por tipo de documento</h2><div class='bars'>{chart_html}</div></div><div class='card span-12'><h2>✅ Control por boleta/documento</h2><div class='table-wrap'><table><tr><th>Tipo</th><th>Cargados</th><th>Aprobados</th><th>Rechazados</th><th>Leídos/abiertos</th></tr>{ind_html}</table></div></div><div class='card span-12 alert-card'><h2>🔔 Campanita de cargas recientes</h2><p class='muted'>Aquí ves de primera mano quién cargó o recibió documentos nuevos.</p>{alert_items}</div>
     <div class='card span-12'><h2>Últimas cargas</h2>{tabla_docs(ult)}</div></section>"""
     return render_page(content, active='Admin')
 
@@ -1072,7 +1136,7 @@ def admin_documentos():
         try:
             for f in files:
                 if f and f.filename:
-                    guardar_documento(f, dni, tipo, periodo, detalle, obs, session.get('admin_user','admin')); ok += 1
+                    guardar_documento(f, dni, tipo, periodo, detalle, obs, marca_carga(session.get('admin_user','admin'))); ok += 1
             flash(f'Carga completada: {ok} archivo(s).', 'ok')
         except Exception as e:
             flash(f'Error en carga: {e}', 'error')
@@ -1086,8 +1150,8 @@ def admin_documentos():
     periodo_options = "<option value=''>Todos</option>" + ''.join([f"<option {'selected' if p==periodo else ''}>{p}</option>" for p in pers])
     rows = listar_documentos(tipo=tipo if tipo else None, periodo=periodo or None, buscar=buscar, limit=500)
     content = f"""
-    <div class='hero'><div class='topbar'><div><h1>Subir y gestionar documentos</h1><div class='subtitle'>Administrador: pago, empresa y documentos personales.</div></div><a class='btn-green' href='/admin/sincronizar'>Sincronizar carpeta</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear carpetas + detectar</a></div></div><section class='grid'>
-    <div class='card span-12'><h2>Carga de documentos</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>DNI trabajador</label><input name='dni' placeholder='Vacío si es documento de empresa'></div><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}' list='periodos'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Boleta semanal / Política actualizada'></div><div class='field'><label>Boleta Normal</label><select name='periodicidad_normal'><option value=''>No aplica</option><option>Mensual</option><option>Semanal</option></select></div><div class='field'><label>Archivos</label><input type='file' name='archivos' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' multiple required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2'></textarea></div><button class='btn-green'>Subir</button></form></div>
+    <div class='hero'><div class='topbar'><div><h1>Subir y gestionar documentos</h1><div class='subtitle'>Administrador: pago, empresa y documentos personales.</div></div><a class='btn-warn' href='/admin/sincronizar'>Actualizar / detectar PDFs</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear carpetas + detectar</a></div></div><section class='grid'>
+    <div class='card span-12'><h2>📁 Carpeta local automática</h2><p class='muted'>Ruta actual: <b>{DOCUMENTOS_BASE_DIR}</b><br>Coloca PDFs en DOCUMENTOS DE PAGO / BOLETAS NORMAL / SEMANAL o MENSUAL y presiona <b>Actualizar / detectar PDFs</b>. Solo se cargarán trabajadores activos y PDFs con DNI detectado en nombre/ruta.</p><div class='actions'><a class='btn-warn' href='/admin/sincronizar'>Actualizar / detectar PDFs</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear estructura</a></div></div><div class='card span-12'><h2>Carga de documentos</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>DNI trabajador</label><input name='dni' placeholder='Vacío si es documento de empresa'></div><div class='field'><label>Periodo</label><input name='periodo' value='{datetime.now(APP_TZ).strftime('%Y-%m')}' list='periodos'></div><div class='field'><label>Detalle</label><input name='detalle' placeholder='Ej: Boleta semanal / Política actualizada'></div><div class='field'><label>Boleta Normal</label><select name='periodicidad_normal'><option value=''>No aplica</option><option>Mensual</option><option>Semanal</option></select></div><div class='field'><label>Archivos</label><input type='file' name='archivos' accept='.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx' multiple required></div><div class='field'><label>Observación</label><textarea name='observacion' rows='2'></textarea></div><button class='btn-green'>Subir</button></form></div>
     <div class='card span-12'><h2>Filtros</h2><form method='get' class='form-grid'><div class='field'><label>Tipo</label><select name='tipo'>{tipo_options}</select></div><div class='field'><label>Periodo</label><select name='periodo'>{periodo_options}</select></div><div class='field'><label>Buscar</label><input name='buscar' value='{buscar}' placeholder='DNI, detalle, observación'></div><button class='btn-blue'>Filtrar</button><a class='btn' href='/admin/documentos'>Limpiar</a></form></div>
     <div class='card span-12'><h2>Listado</h2>{tabla_docs(rows)}</div></section>"""
     return render_page(content, active='Subir documentos')
@@ -1108,6 +1172,45 @@ def admin_sincronizar():
     total = sincronizar_documentos_carpeta()
     flash(f'Sincronización completada. Documentos nuevos detectados: {total}. Carpeta local usada: {DOCUMENTOS_BASE_DIR}', 'ok')
     return redirect(url_for('admin_documentos'))
+
+@app.route('/admin/modo_prueba/toggle')
+@admin_required
+def admin_modo_prueba_toggle():
+    set_config('modo_prueba', '0' if modo_prueba_activo() else '1')
+    flash('Modo prueba actualizado.', 'ok')
+    return redirect(url_for('admin'))
+
+@app.route('/admin/modo_prueba/limpiar')
+@admin_required
+def admin_modo_prueba_limpiar():
+    borrados = 0
+    with db() as con:
+        rows = con.execute("SELECT id,ruta_archivo FROM documentos WHERE uploaded_by LIKE '%MODO PRUEBA%'").fetchall()
+        ids = [r['id'] for r in rows]
+        for r in rows:
+            try:
+                p = Path(r['ruta_archivo'])
+                if p.exists() and str(p).startswith(str(UPLOAD_DIR)):
+                    p.unlink()
+            except Exception:
+                pass
+        if ids:
+            q = ','.join(['?']*len(ids))
+            con.execute(f'DELETE FROM eventos_documento WHERE documento_id IN ({q})', ids)
+            con.execute(f'DELETE FROM documentos WHERE id IN ({q})', ids)
+            borrados = len(ids)
+        con.commit()
+    flash(f'Modo prueba limpiado. Documentos de prueba borrados: {borrados}.', 'ok')
+    return redirect(url_for('admin'))
+
+@app.route('/admin/desbloquear_usuarios')
+@admin_required
+def admin_desbloquear_usuarios():
+    with db() as con:
+        con.execute('DELETE FROM login_intentos')
+        con.commit()
+    flash('Usuarios desbloqueados. Los intentos fallidos fueron reiniciados.', 'ok')
+    return redirect(url_for('admin'))
 
 # API compatibles
 @app.route('/api/health')
