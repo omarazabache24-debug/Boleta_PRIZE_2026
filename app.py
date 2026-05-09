@@ -227,6 +227,63 @@ def init_db():
             bloqueado INTEGER DEFAULT 0,
             ultima_fecha TEXT
         )''')
+
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS vacaciones_saldos(
+            dni TEXT PRIMARY KEY,
+            trabajador TEXT,
+            empresa TEXT,
+            area TEXT,
+            jefe TEXT,
+            dias_ganados REAL DEFAULT 0,
+            dias_gozados REAL DEFAULT 0,
+            saldo REAL DEFAULT 0,
+            periodo TEXT,
+            fecha_carga TEXT,
+            uploaded_by TEXT
+        )''')
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS vacaciones_solicitudes(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dni TEXT,
+            trabajador TEXT,
+            fecha_inicio TEXT,
+            fecha_fin TEXT,
+            dias REAL,
+            motivo TEXT,
+            estado TEXT DEFAULT 'Pendiente jefe',
+            comentario_jefe TEXT,
+            comentario_gh TEXT,
+            fecha_solicitud TEXT,
+            fecha_jefe TEXT,
+            fecha_gh TEXT
+        )''')
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS contratacion_docs(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dni TEXT,
+            trabajador TEXT,
+            empresa TEXT,
+            etapa TEXT,
+            tipo_doc TEXT,
+            estado TEXT DEFAULT 'Generado',
+            archivo_nombre TEXT,
+            ruta_archivo TEXT,
+            fecha_registro TEXT,
+            uploaded_by TEXT
+        )''')
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS contratacion_tipos(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT,
+            descripcion TEXT,
+            etapa TEXT,
+            obligatorio INTEGER DEFAULT 1,
+            activo INTEGER DEFAULT 1
+        )''')
+        if not con.execute("SELECT 1 FROM contratacion_tipos LIMIT 1").fetchone():
+            base_tipos=[('104','CONTRATO TRABAJADOR','Incorporación'),('619','CONTRATO TRABAJADOR (RENOVACIÓN)','Renovación'),('524','ANEXO DE RIESGOS','Incorporación'),('797','BOLETÍN SIS. PENSIONARIO','Incorporación'),('664','CARGO DE ENTREGA','Incorporación'),('382','CARTA DE COMPROMISO','Incorporación'),('805','ACUERDO PREFERENCIAL','Incorporación'),('809','ELECCIÓN DE BENEFICIOS SOCIALES','Incorporación')]
+            con.executemany("INSERT INTO contratacion_tipos(codigo,descripcion,etapa,obligatorio,activo) VALUES(?,?,?,?,1)", [(a,b,c,1) for a,b,c in base_tipos])
         asegurar_carpetas_documentales()
         # Datos demo seguros
         if not con.execute("SELECT 1 FROM usuarios_admin WHERE usuario='admin'").fetchone():
@@ -618,6 +675,8 @@ button.menu-item{font:inherit;text-align:left;background:transparent;border-top:
 .menu-group.force-open>.menu-title{background:linear-gradient(135deg,var(--yellow2),var(--yellow));color:#181a1f;}
 .nested.force-open>.menu-item.parent-active{background:linear-gradient(90deg,rgba(255,210,63,.14),rgba(255,210,63,.04),transparent)!important;color:#fff!important;}
 .nested>.menu-item:focus,.nested>.menu-item:active{background:linear-gradient(90deg,rgba(255,210,63,.16),rgba(255,210,63,.035),transparent)!important;color:#fff!important;outline:none!important;}
+
+.module-tabs{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:16px}.module-tile{padding:22px;border:1px solid #3a414b;border-radius:18px;background:linear-gradient(145deg,#24272d,#191d23)}.module-tile h2{margin:0 0 8px}.badge-green{display:inline-flex;background:#49a916;color:#fff;border-radius:7px;padding:7px 12px;font-weight:1000}.badge-orange{display:inline-flex;background:#ff8f2d;color:#fff;border-radius:7px;padding:7px 12px;font-weight:1000}.adapta-note{background:#fff;color:#142033;border-radius:14px;padding:14px;border-left:5px solid #ff8f2d}.adapta-table table{background:#fff;color:#102033}.adapta-table th{background:#f4f5f7;color:#102033;text-transform:none;font-size:14px}.adapta-table td{border-bottom:1px solid #e4e7eb}.adapta-table tr:nth-child(even) td{background:#ededed}.adapta-table tr:hover td{background:#ffe9d6}@media(max-width:1000px){.module-tabs{grid-template-columns:1fr}}
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -682,16 +741,22 @@ def sidebar(active):
         return 'menu-group force-open' if active_type in keys else 'menu-group'
     admin = ""
     if session.get('admin_id'):
-        admin_cls = 'menu-group force-open' if active_type in ['Admin','Trabajadores','Usuarios','Subir documentos'] else 'menu-group'
+        admin_cls = 'menu-group force-open' if active_type in ['Admin','Trabajadores','Usuarios','Subir documentos','Modulo documentos','Vacaciones','Contratacion'] else 'menu-group'
         cls_dash = 'menu-item active' if active == 'Admin' else 'menu-item'
         cls_trab = 'menu-item active' if active == 'Trabajadores' else 'menu-item'
         cls_docs = 'menu-item active' if active == 'Subir documentos' else 'menu-item'
         cls_users = 'menu-item active' if active == 'Usuarios' else 'menu-item'
+        cls_moddocs = 'menu-item active' if active == 'Modulo documentos' else 'menu-item'
+        cls_vac = 'menu-item active' if active == 'Vacaciones' else 'menu-item'
+        cls_con = 'menu-item active' if active == 'Contratacion' else 'menu-item'
         admin = f"""
         <div id='grp_admin' data-group='admin' class='{admin_cls}'>
           <button type='button' class='menu-title' onclick="toggleGroup('grp_admin')"><span>⚙️</span><span class='label'>Administrador</span><span class='chev'>∨</span></button>
           <div class='submenu'>
             <a class='{cls_dash}' onclick='saveSideScroll()' href='/admin'><span>📊</span><span class='label'>Dashboard</span></a>
+            <a class='{cls_moddocs}' onclick='saveSideScroll()' href='/admin/modulo/documentos'><span>🗃️</span><span class='label'>1. Módulo documentos</span></a>
+            <a class='{cls_vac}' onclick='saveSideScroll()' href='/admin/vacaciones'><span>🏖️</span><span class='label'>2. Gestión vacaciones</span></a>
+            <a class='{cls_con}' onclick='saveSideScroll()' href='/admin/contratacion'><span>🧾</span><span class='label'>3. Contratación</span></a>
             <a class='{cls_trab}' onclick='saveSideScroll()' href='/admin/trabajadores'><span>👥</span><span class='label'>Trabajadores</span></a>
             <a class='{cls_docs}' onclick='saveSideScroll()' href='/admin/documentos'><span>⬆️</span><span class='label'>Subir documentos</span></a>
             <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><span>🔐</span><span class='label'>Usuarios y claves</span></a>
@@ -717,7 +782,7 @@ def sidebar(active):
       {admin}
       <div id='grp_cuenta' data-group='cuenta' class='menu-group'>
         <button type='button' class='menu-title' onclick="toggleGroup('grp_cuenta')"><span>👤</span><span class='label'>Mi cuenta</span><span class='chev'>∨</span></button>
-        <div class='submenu'><a class='menu-item' onclick='saveSideScroll()' href='/panel'><span>🏠</span><span class='label'>Inicio</span></a><a class='menu-item' href='/logout'><span>🚪</span><span class='label'>Salir</span></a></div>
+        <div class='submenu'><a class='menu-item' onclick='saveSideScroll()' href='/panel'><span>🏠</span><span class='label'>Inicio</span></a><a class='menu-item' onclick='saveSideScroll()' href='/vacaciones/mi_solicitud'><span>🏖️</span><span class='label'>Mis vacaciones</span></a><a class='menu-item' href='/logout'><span>🚪</span><span class='label'>Salir</span></a></div>
       </div>
     </nav>"""
 
@@ -1215,6 +1280,134 @@ def admin_documentos():
     <div class='card span-12'><h2>Listado</h2>{tabla_docs(rows)}</div></section>"""
     return render_page(content, active='Subir documentos')
 
+
+
+def dias_entre_texto(fi, ff):
+    a=parse_fecha_any(fi); b=parse_fecha_any(ff)
+    if not a or not b: return 0
+    return max((b-a).days+1, 0)
+
+@app.route('/admin/modulo/documentos')
+@admin_required
+def admin_modulo_documentos():
+    with db() as con:
+        total=con.execute('SELECT COUNT(*) c FROM documentos').fetchone()['c']
+        pendientes=con.execute("SELECT COUNT(*) c FROM documentos WHERE COALESCE(estado,'Pendiente') IN ('Pendiente','Aceptado','Firmado')").fetchone()['c']
+        aprob=con.execute("SELECT COUNT(*) c FROM documentos WHERE estado='Aprobado'").fetchone()['c']
+    content=f"""
+    <div class='hero'><div class='topbar'><div><h1>Módulo 1: <span class='accent'>Documentos PRIZE</span></h1><div class='subtitle'>Concentra todo lo ya implementado: cargas, PDFs, carpetas locales, aceptación/firma/aprobación y trazabilidad.</div></div><a class='btn-green' href='/admin/documentos'>Entrar a documentos</a></div></div>
+    <section class='grid'><div class='card mini'><div><h3>Total documentos</h3><b>{total}</b></div><div class='ico'>🗃️</div></div><div class='card mini'><div><h3>Pendientes</h3><b>{pendientes}</b></div><div class='ico'>⏳</div></div><div class='card mini'><div><h3>Aprobados</h3><b>{aprob}</b></div><div class='ico'>✅</div></div>
+    <div class='card span-12'><div class='module-tabs'><a class='module-tile' href='/admin/documentos'><h2>📤 Subir documentos</h2><p class='muted'>Pago, empresa y personales.</p></a><a class='module-tile' href='/admin/sincronizar'><h2>🔎 Detectar PDFs</h2><p class='muted'>Lee carpetas locales y detecta DNI.</p></a><a class='module-tile' href='/admin/crear_carpetas'><h2>📁 Crear carpetas</h2><p class='muted'>Estructura automática DOCUMENTOS_PRIZE_AUTO.</p></a></div></div></section>"""
+    return render_page(content, active='Modulo documentos')
+
+@app.route('/admin/vacaciones', methods=['GET','POST'])
+@admin_required
+def admin_vacaciones():
+    if request.method=='POST':
+        f=request.files.get('excel')
+        ok=0
+        if f and f.filename:
+            path=UPLOAD_DIR/'vacaciones'; path.mkdir(parents=True, exist_ok=True)
+            x=path/(now_file()+'_'+secure_filename(f.filename)); f.save(x)
+            wb=load_workbook(x, data_only=True); ws=wb.active
+            headers=[str(c.value or '').strip().upper() for c in ws[1]]
+            def val(row, names):
+                for n in names:
+                    if n in headers: return row[headers.index(n)].value
+                return ''
+            with db() as con:
+                for row in ws.iter_rows(min_row=2):
+                    dni=normalizar_dni(val(row,['DNI','DOCUMENTO','CODIGO','CÓDIGO']))
+                    if not dni: continue
+                    trabajador=clean(val(row,['TRABAJADOR','NOMBRE','APELLIDOS Y NOMBRES']))
+                    gan=float(val(row,['DIAS GANADOS','DÍAS GANADOS','GANADOS']) or 0)
+                    goz=float(val(row,['DIAS GOZADOS','DÍAS GOZADOS','GOZADOS']) or 0)
+                    saldo=float(val(row,['SALDO','SALDO VACACIONAL']) or (gan-goz))
+                    con.execute('INSERT INTO vacaciones_saldos(dni,trabajador,empresa,area,jefe,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dni) DO UPDATE SET trabajador=excluded.trabajador,empresa=excluded.empresa,area=excluded.area,jefe=excluded.jefe,dias_ganados=excluded.dias_ganados,dias_gozados=excluded.dias_gozados,saldo=excluded.saldo,periodo=excluded.periodo,fecha_carga=excluded.fecha_carga,uploaded_by=excluded.uploaded_by', (dni,trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),clean(val(row,['JEFE','JEFE INMEDIATO'])),gan,goz,saldo,clean(val(row,['PERIODO','PERÍODO'])) or datetime.now(APP_TZ).strftime('%Y'),now_txt(),marca_carga(session.get('admin_user','admin'))))
+                    ok+=1
+                con.commit()
+        flash(f'Saldos vacacionales cargados/actualizados: {ok}.','ok')
+        return redirect(url_for('admin_vacaciones'))
+    with db() as con:
+        saldos=con.execute('SELECT * FROM vacaciones_saldos ORDER BY trabajador LIMIT 300').fetchall()
+        solicitudes=con.execute('SELECT * FROM vacaciones_solicitudes ORDER BY id DESC LIMIT 300').fetchall()
+    sal=''.join([f"<tr><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['empresa'] or ''}</td><td>{r['area'] or ''}</td><td>{r['jefe'] or ''}</td><td>{r['dias_ganados']}</td><td>{r['dias_gozados']}</td><td><b>{r['saldo']}</b></td></tr>" for r in saldos])
+    sol=''.join([f"<tr><td>{r['id']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/jefe/aprobar'>Apr. jefe</a><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/gh/aprobar'>Apr. GTH</a><a class='btn-red mini-btn' href='/admin/vacaciones/{r['id']}/rechazar'>Rechazar</a></td></tr>" for r in solicitudes])
+    content=f"""
+    <div class='hero'><div class='topbar'><div><h1>Módulo 2: <span class='accent'>Gestión de Vacaciones</span></h1><div class='subtitle'>Administrador carga saldos; usuario solicita goce; flujo: jefe inmediato → Gestión del Talento Humano.</div></div><a class='btn-green' href='/admin/vacaciones/plantilla'>Descargar plantilla</a></div></div>
+    <section class='grid'><div class='card span-12'><h2>🏖️ Cargar saldos vacacionales</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel saldos</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-green'>Subir saldos</button></form><p class='muted'>Columnas: EMPRESA, DNI, TRABAJADOR, AREA, JEFE INMEDIATO, DIAS GANADOS, DIAS GOZADOS, SALDO, PERIODO.</p></div>
+    <div class='card span-12'><h2>Solicitudes de vacaciones</h2><div class='table-wrap'><table><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Rango</th><th>Días</th><th>Estado</th><th>Acciones</th></tr>{sol or '<tr><td colspan=7>No hay solicitudes.</td></tr>'}</table></div></div>
+    <div class='card span-12'><h2>Saldos cargados</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>Jefe</th><th>Ganados</th><th>Gozados</th><th>Saldo</th></tr>{sal or '<tr><td colspan=8>No hay saldos cargados.</td></tr>'}</table></div></div></section>"""
+    return render_page(content, active='Vacaciones')
+
+@app.route('/admin/vacaciones/plantilla')
+@admin_required
+def admin_vacaciones_plantilla():
+    path=PERSIST_DIR/'PLANTILLA_SALDOS_VACACIONALES.xlsx'
+    wb=Workbook(); ws=wb.active; ws.title='SALDOS'
+    headers=['EMPRESA','DNI','TRABAJADOR','AREA','JEFE INMEDIATO','DIAS GANADOS','DIAS GOZADOS','SALDO','PERIODO']
+    ws.append(headers); ws.append(['AQUANQA I','74324033','APELLIDOS Y NOMBRES','RRHH','JEFE DIRECTO',30,12,18,'2026'])
+    for i,h in enumerate(headers,1): ws.column_dimensions[chr(64+i)].width=24
+    wb.save(path); return send_file(path, as_attachment=True, download_name='PLANTILLA_SALDOS_VACACIONALES.xlsx')
+
+@app.route('/admin/vacaciones/<int:sid>/<rol>/<accion>')
+@admin_required
+def admin_vacaciones_accion(sid, rol, accion):
+    if accion=='aprobar' and rol=='jefe': estado='Pendiente GTH'; col='fecha_jefe'
+    elif accion=='aprobar' and rol=='gh': estado='Aprobado GTH'; col='fecha_gh'
+    else: estado='Rechazado'; col='fecha_gh'
+    with db() as con:
+        con.execute(f'UPDATE vacaciones_solicitudes SET estado=?, {col}=? WHERE id=?', (estado, now_txt(), sid)); con.commit()
+    flash('Solicitud actualizada.', 'ok'); return redirect(url_for('admin_vacaciones'))
+
+@app.route('/vacaciones/mi_solicitud', methods=['GET','POST'])
+@worker_required
+def trabajador_vacaciones():
+    dni=session['dni']; t=get_trabajador(dni)
+    if request.method=='POST':
+        fi=clean(request.form.get('fecha_inicio')); ff=clean(request.form.get('fecha_fin')); dias=dias_entre_texto(fi,ff)
+        with db() as con:
+            con.execute('INSERT INTO vacaciones_solicitudes(dni,trabajador,fecha_inicio,fecha_fin,dias,motivo,estado,fecha_solicitud) VALUES(?,?,?,?,?,?,?,?)',(dni,t['nombre'] if t else '',fi,ff,dias,clean(request.form.get('motivo')),'Pendiente jefe',now_txt())); con.commit()
+        flash('Solicitud registrada. Pasará por jefe inmediato y Gestión del Talento Humano.','ok')
+        return redirect(url_for('trabajador_vacaciones'))
+    with db() as con:
+        saldo=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=?',(dni,)).fetchone()
+        solicitudes=con.execute('SELECT * FROM vacaciones_solicitudes WHERE dni=? ORDER BY id DESC',(dni,)).fetchall()
+    sol=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td>{r['motivo'] or ''}</td></tr>" for r in solicitudes])
+    content=f"""
+    <div class='hero'><div class='topbar'><div><h1>Mis <span class='accent'>Vacaciones</span></h1><div class='subtitle'>Consulta saldo y registra solicitud de goce vacacional.</div></div></div></div>
+    <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo['saldo'] if saldo else 0}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{saldo['dias_ganados'] if saldo else 0}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Días gozados</h3><b>{saldo['dias_gozados'] if saldo else 0}</b></div><div class='ico'>✅</div></div>
+    <div class='card span-12'><h2>Nueva solicitud</h2><form method='post' class='form-grid'><div class='field'><label>Inicio</label><input type='date' name='fecha_inicio' required></div><div class='field'><label>Fin</label><input type='date' name='fecha_fin' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div><button class='btn-green'>Registrar solicitud</button></form></div>
+    <div class='card span-12'><h2>Mis solicitudes</h2><div class='table-wrap'><table><tr><th>Fecha</th><th>Rango</th><th>Días</th><th>Estado</th><th>Comentario</th></tr>{sol or '<tr><td colspan=5>No hay solicitudes.</td></tr>'}</table></div></div></section>"""
+    return render_page(content, active='Vacaciones')
+
+@app.route('/admin/contratacion', methods=['GET','POST'])
+@admin_required
+def admin_contratacion():
+    if request.method=='POST':
+        f=request.files.get('archivo'); dni=normalizar_dni(request.form.get('dni')); trab=get_trabajador(dni); tipo=clean(request.form.get('tipo_doc')); etapa=clean(request.form.get('etapa')) or 'Incorporación'
+        if f and f.filename:
+            folder=UPLOAD_DIR/'contratacion'/dni; folder.mkdir(parents=True, exist_ok=True)
+            name=now_file()+'_'+secure_filename(f.filename); path=folder/name; f.save(path)
+            with db() as con:
+                con.execute('INSERT INTO contratacion_docs(dni,trabajador,empresa,etapa,tipo_doc,estado,archivo_nombre,ruta_archivo,fecha_registro,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?)',(dni, trab['nombre'] if trab else '', trab['empresa'] if trab else '', etapa, tipo, 'Generado', f.filename, str(path), now_txt(), marca_carga(session.get('admin_user','admin')))); con.commit()
+            flash('Documento de contratación registrado.','ok')
+        return redirect(url_for('admin_contratacion'))
+    with db() as con:
+        tipos=con.execute('SELECT * FROM contratacion_tipos ORDER BY etapa, descripcion').fetchall()
+        docs=con.execute('SELECT * FROM contratacion_docs ORDER BY id DESC LIMIT 300').fetchall()
+        trabajadores=con.execute('SELECT dni,nombre FROM trabajadores ORDER BY nombre LIMIT 500').fetchall()
+    opt_tipo=''.join([f"<option value='{r['descripcion']}'>{r['codigo']} - {r['descripcion']} ({r['etapa']})</option>" for r in tipos])
+    opt_trab=''.join([f"<option value='{r['dni']}'>{r['dni']} - {r['nombre']}</option>" for r in trabajadores])
+    tipos_rows=''.join([f"<tr><td>✎ 🗑</td><td><span class='badge-green'>{'Activo' if r['activo'] else 'Inactivo'}</span></td><td>{r['codigo']}</td><td>{r['descripcion']}</td><td>{r['etapa']}</td><td><span class='badge-green'>✓</span></td></tr>" for r in tipos])
+    docs_rows=''.join([f"<tr><td>🔍 📄</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['tipo_doc']}</td><td><span class='badge-green'>F</span></td><td>{r['fecha_registro']}</td></tr>" for r in docs])
+    content=f"""
+    <div class='hero'><div class='topbar'><div><h1>Módulo 3: <span class='accent'>Contratación</span></h1><div class='subtitle'>Inspirado en Adapta: flujos, carga masiva, maestros, tipos de documento, archivos del trabajador y descargas.</div></div></div></div>
+    <section class='grid'><div class='card span-12'><div class='adapta-note'><b>Flujo preparado:</b> trabajador → documentos requeridos por etapa → carga/validación → firmado/archivado → descarga.</div></div>
+    <div class='card span-12'><h2>Subir documento de contratación</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Trabajador</label><input name='dni' list='trabajadores_list' required><datalist id='trabajadores_list'>{opt_trab}</datalist></div><div class='field'><label>Etapa</label><select name='etapa'><option>Incorporación</option><option>Renovación</option><option>Cese</option></select></div><div class='field'><label>Tipo documento</label><select name='tipo_doc'>{opt_tipo}</select></div><div class='field'><label>Archivo</label><input type='file' name='archivo' required></div><button class='btn-green'>Subir / archivar</button></form></div>
+    <div class='card span-12 adapta-table'><h2>Tipos de documento por etapa</h2><div class='table-wrap'><table><tr><th></th><th>Estado</th><th>Código</th><th>Tipo Doc</th><th>Stage</th><th>Mandatorio</th></tr>{tipos_rows}</table></div></div>
+    <div class='card span-12 adapta-table'><h2>Archivos trabajador</h2><div class='table-wrap'><table><tr><th></th><th>Código</th><th>Apellidos y Nombres</th><th>Tipo Documento</th><th>Estado Doc</th><th>Fecha Envío</th></tr>{docs_rows or '<tr><td colspan=6>No hay archivos.</td></tr>'}</table></div></div></section>"""
+    return render_page(content, active='Contratacion')
 
 
 @app.route('/admin/crear_carpetas')
