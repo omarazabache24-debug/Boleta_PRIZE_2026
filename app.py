@@ -739,6 +739,9 @@ def sidebar(active):
     per = ''.join(item(k,l,i,active) for k,l,i in TIPOS_PERSONALES)
     def gclass(keys):
         return 'menu-group force-open' if active_type in keys else 'menu-group'
+    pago_cls = gclass([k for k,_,_ in TIPOS_PAGO])
+    emp_cls = gclass([k for k,_,_ in TIPOS_EMPRESA])
+    per_cls = gclass([k for k,_,_ in TIPOS_PERSONALES])
     admin = ""
     if session.get('admin_id'):
         admin_cls = 'menu-group force-open' if active_type in ['Admin','Trabajadores','Usuarios','Subir documentos','Modulo documentos','Vacaciones','Contratacion'] else 'menu-group'
@@ -782,9 +785,6 @@ def sidebar(active):
             <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><span>🔐</span><span class='label'>Usuarios y claves</span></a>
           </div>
         </div>"""
-    pago_cls = gclass([k for k,_,_ in TIPOS_PAGO])
-    emp_cls = gclass([k for k,_,_ in TIPOS_EMPRESA])
-    per_cls = gclass([k for k,_,_ in TIPOS_PERSONALES])
     documentos_generales = '' if session.get('admin_id') else f"""
       <div id='grp_pago' data-group='pago' class='{pago_cls}'>
         <button type='button' class='menu-title' onclick="toggleGroup('grp_pago')"><span>▣</span><span class='label'>Documentos de pago</span><span class='chev'>∨</span></button>
