@@ -677,6 +677,20 @@ button.menu-item{font:inherit;text-align:left;background:transparent;border-top:
 .nested>.menu-item:focus,.nested>.menu-item:active{background:linear-gradient(90deg,rgba(255,210,63,.16),rgba(255,210,63,.035),transparent)!important;color:#fff!important;outline:none!important;}
 
 .module-tabs{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:16px}.module-tile{padding:22px;border:1px solid #3a414b;border-radius:18px;background:linear-gradient(145deg,#24272d,#191d23)}.module-tile h2{margin:0 0 8px}.badge-green{display:inline-flex;background:#49a916;color:#fff;border-radius:7px;padding:7px 12px;font-weight:1000}.badge-orange{display:inline-flex;background:#ff8f2d;color:#fff;border-radius:7px;padding:7px 12px;font-weight:1000}.adapta-note{background:#fff;color:#142033;border-radius:14px;padding:14px;border-left:5px solid #ff8f2d}.adapta-table table{background:#fff;color:#102033}.adapta-table th{background:#f4f5f7;color:#102033;text-transform:none;font-size:14px}.adapta-table td{border-bottom:1px solid #e4e7eb}.adapta-table tr:nth-child(even) td{background:#ededed}.adapta-table tr:hover td{background:#ffe9d6}@media(max-width:1000px){.module-tabs{grid-template-columns:1fr}}
+
+/* === AJUSTE PRO: MENÚ UNIFORME + DASHBOARDS POR GESTIÓN === */
+.menu-title,.menu-item{min-height:54px;box-sizing:border-box}
+.submenu>.menu-item{padding:14px 18px 14px 36px;margin:4px 0}
+.menu-group.nested .menu-title,.menu-group.nested>.menu-item{font-size:14px}
+.gestion-cards{display:grid;grid-template-columns:repeat(3,minmax(260px,1fr));gap:18px;margin-bottom:18px}
+.gestion-card{min-height:190px;display:flex;gap:18px;align-items:flex-start;position:relative;overflow:hidden}
+.gestion-card:after{content:"";position:absolute;inset:auto -35px -35px auto;width:120px;height:120px;border-radius:999px;background:rgba(255,210,63,.10)}
+.gestion-card.green{border-color:rgba(57,196,99,.40)}.gestion-card.purple{border-color:rgba(160,98,255,.42)}
+.gestion-icon{width:64px;height:64px;border-radius:18px;display:grid;place-items:center;font-size:30px;background:linear-gradient(135deg,var(--yellow),var(--yellow2));color:#17191e;box-shadow:0 16px 30px rgba(0,0,0,.26)}
+.gestion-card.green .gestion-icon{background:linear-gradient(135deg,#27b862,#6ee78f)}.gestion-card.purple .gestion-icon{background:linear-gradient(135deg,#7f43c7,#b77cff);color:#fff}
+.dashboard-panel{grid-column:span 4}.dashboard-panel .mini-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px}.dash-metric{background:#171b21;border:1px solid #343a43;border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center}.dash-metric b{font-size:24px;color:var(--yellow)}
+@media(max-width:1100px){.gestion-cards{grid-template-columns:1fr}.dashboard-panel{grid-column:span 12}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -744,7 +758,8 @@ def sidebar(active):
     per_cls = gclass([k for k,_,_ in TIPOS_PERSONALES])
     admin = ""
     if session.get('admin_id'):
-        admin_cls = 'menu-group force-open' if active_type in ['Admin','Trabajadores','Usuarios','Subir documentos','Modulo documentos','Vacaciones','Contratacion'] else 'menu-group'
+        admin_keys = ['Admin','Trabajadores','Usuarios','Modulo documentos','Subir documentos','Vacaciones','Contratacion','Modo prueba'] + [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES]
+        admin_cls = 'menu-group force-open' if active_type in admin_keys else 'menu-group'
         cls_dash = 'menu-item active' if active == 'Admin' else 'menu-item'
         cls_trab = 'menu-item active' if active == 'Trabajadores' else 'menu-item'
         cls_docs = 'menu-item active' if active == 'Subir documentos' else 'menu-item'
@@ -752,18 +767,23 @@ def sidebar(active):
         cls_moddocs = 'menu-item active' if active == 'Modulo documentos' else 'menu-item'
         cls_vac = 'menu-item active' if active == 'Vacaciones' else 'menu-item'
         cls_con = 'menu-item active' if active == 'Contratacion' else 'menu-item'
+        cls_test = 'menu-item active' if active == 'Modo prueba' else 'menu-item'
         docs_mod_keys = [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES] + ['Modulo documentos','Subir documentos']
         docs_mod_cls = 'menu-group nested force-open' if active_type in docs_mod_keys else 'menu-group nested'
-        cls_mod_link = 'menu-item parent-active active' if active == 'Modulo documentos' else 'menu-item parent-active'
+        vac_cls = 'menu-group nested force-open' if active_type == 'Vacaciones' else 'menu-group nested'
+        con_cls = 'menu-group nested force-open' if active_type == 'Contratacion' else 'menu-group nested'
+        docs_head = 'menu-title' + (' active' if active_type in docs_mod_keys else '')
+        vac_head = 'menu-title' + (' active' if active_type == 'Vacaciones' else '')
+        con_head = 'menu-title' + (' active' if active_type == 'Contratacion' else '')
         admin = f"""
         <div id='grp_admin' data-group='admin' class='{admin_cls}'>
           <button type='button' class='menu-title' onclick="toggleGroup('grp_admin')"><span>⚙️</span><span class='label'>Administrador</span><span class='chev'>∨</span></button>
           <div class='submenu'>
             <a class='{cls_dash}' onclick='saveSideScroll()' href='/admin'><span>📊</span><span class='label'>Dashboard</span></a>
             <div id='grp_modulo_documentos' data-group='modulo_documentos' class='{docs_mod_cls}'>
-              <button type='button' class='{cls_mod_link}' onclick="toggleGroup('grp_modulo_documentos')"><span>🗃️</span><span class='label'>1. Módulo documentos</span><span class='chev'>∨</span></button>
+              <button type='button' class='{docs_head}' onclick="toggleGroup('grp_modulo_documentos')"><span>🗃️</span><span class='label'>1. Gestión Documental</span><span class='chev'>∨</span></button>
               <div class='submenu'>
-                <a class='{cls_moddocs}' onclick='saveSideScroll()' href='/admin/modulo/documentos'><span>📌</span><span class='label'>Centro documental</span></a>
+                <a class='{cls_moddocs}' onclick='saveSideScroll()' href='/admin/modulo/documentos'><span>📊</span><span class='label'>Dashboard documental</span></a>
                 <div id='grp_pago' data-group='pago' class='{pago_cls}'>
                   <button type='button' class='menu-title' onclick="toggleGroup('grp_pago')"><span>▣</span><span class='label'>Documentos de pago</span><span class='chev'>∨</span></button>
                   <div class='submenu'>{pago}</div>
@@ -779,10 +799,17 @@ def sidebar(active):
                 <a class='{cls_docs}' onclick='saveSideScroll()' href='/admin/documentos'><span>⬆️</span><span class='label'>Subir / gestionar documentos</span></a>
               </div>
             </div>
-            <a class='{cls_vac}' onclick='saveSideScroll()' href='/admin/vacaciones'><span>🏖️</span><span class='label'>2. Gestión vacaciones</span></a>
-            <a class='{cls_con}' onclick='saveSideScroll()' href='/admin/contratacion'><span>🧾</span><span class='label'>3. Contratación</span></a>
+            <div id='grp_vacacional' data-group='vacacional' class='{vac_cls}'>
+              <button type='button' class='{vac_head}' onclick="toggleGroup('grp_vacacional')"><span>🏖️</span><span class='label'>2. Gestión Vacacional</span><span class='chev'>∨</span></button>
+              <div class='submenu'><a class='{cls_vac}' onclick='saveSideScroll()' href='/admin/vacaciones'><span>📊</span><span class='label'>Dashboard vacacional</span></a></div>
+            </div>
+            <div id='grp_contratacion' data-group='contratacion' class='{con_cls}'>
+              <button type='button' class='{con_head}' onclick="toggleGroup('grp_contratacion')"><span>🧾</span><span class='label'>3. Gestión Contratación</span><span class='chev'>∨</span></button>
+              <div class='submenu'><a class='{cls_con}' onclick='saveSideScroll()' href='/admin/contratacion'><span>📊</span><span class='label'>Dashboard contratación</span></a></div>
+            </div>
             <a class='{cls_trab}' onclick='saveSideScroll()' href='/admin/trabajadores'><span>👥</span><span class='label'>Trabajadores</span></a>
             <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><span>🔐</span><span class='label'>Usuarios y claves</span></a>
+            <a class='{cls_test}' onclick='saveSideScroll()' href='/admin/modo_prueba'><span>🧪</span><span class='label'>Modo prueba y limpieza</span></a>
           </div>
         </div>"""
     documentos_generales = '' if session.get('admin_id') else f"""
@@ -1138,12 +1165,29 @@ def admin():
         """).fetchall()
     ind_html = ''.join([f"<tr><td>{r['tipo']}</td><td>{r['total']}</td><td><span class='status-pill st-aprobado'>{r['aprobados']}</span></td><td><span class='status-pill st-rechazado'>{r['rechazados']}</span></td><td><span class='status-pill'>{r['leidos']}</span></td></tr>" for r in ind_rows]) or "<tr><td colspan='5'>Sin documentos.</td></tr>"
     modo_txt = 'ACTIVO' if modo_prueba_activo() else 'INACTIVO'
+    with db() as con:
+        vac_saldos = con.execute("SELECT COUNT(*) FROM vacaciones_saldos").fetchone()[0]
+        vac_solicitudes = con.execute("SELECT COUNT(*) FROM vacaciones_solicitudes").fetchone()[0]
+        vac_pendientes = con.execute("SELECT COUNT(*) FROM vacaciones_solicitudes WHERE estado LIKE 'Pendiente%'").fetchone()[0]
+        vac_aprobadas = con.execute("SELECT COUNT(*) FROM vacaciones_solicitudes WHERE estado LIKE 'Aprobado%'").fetchone()[0]
+        con_docs = con.execute("SELECT COUNT(*) FROM contratacion_docs").fetchone()[0]
+        con_tipos = con.execute("SELECT COUNT(*) FROM contratacion_tipos").fetchone()[0]
     content = f"""
-    <div class='hero admin-hero'><div class='topbar'><div><h1>Centro de Control <span class='accent'>Documental</span></h1><div class='subtitle'>Alertas, trabajadores y documentos PRIZE en tiempo real. Modo prueba: <b>{modo_txt}</b></div></div><a class='btn-green' href='/admin/documentos'>Subir documentos</a><a class='btn-blue' href='/admin/crear_carpetas'>Crear carpetas + detectar</a><a class='btn-warn' href='/admin/sincronizar'>Actualizar / detectar PDFs</a></div></div>
-    <section class='grid'><div class='card mini'><div><span>Trabajadores</span><br><b>{trabajadores}</b></div><div class='ico'>👥</div></div><div class='card mini'><div><span>Documentos</span><br><b>{docs}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Empresa</span><br><b>{emp}</b></div><div class='ico'>🏢</div></div><div class='card mini'><div><span>Recibidos/abiertos</span><br><b>{leidos}</b></div><div class='ico'>👁️</div></div><div class='card mini'><div><span>Aprobados</span><br><b>{aprobados}</b></div><div class='ico'>✅</div></div><div class='card mini'><div><span>Rechazados</span><br><b>{rechazados}</b></div><div class='ico'>⛔</div></div>
-    <div class='card span-12'><h2>🧪 Modo prueba y limpieza</h2><p class='muted'>Actívalo para probar con admin/usuario. Todo lo cargado quedará marcado como [MODO PRUEBA]. Luego puedes limpiarlo sin tocar la información real.</p><div style='display:flex;gap:10px;flex-wrap:wrap'><a class='btn-green' href='/admin/modo_prueba/toggle'>Modo prueba: {modo_txt}</a><a class='btn-danger' onclick='return confirm("¿Borrar documentos y eventos de MODO PRUEBA?")' href='/admin/modo_prueba/limpiar'>Limpiar pruebas</a><a class='btn-blue' href='/admin/desbloquear_usuarios'>Desbloquear usuarios</a></div></div>
-    <div class='card span-12'><h2>📈 Rango de cargas</h2><form method='get' class='form-grid'><div class='field'><label>Desde</label><input type='date' name='desde' value='{desde}'></div><div class='field'><label>Hasta</label><input type='date' name='hasta' value='{hasta}'></div><button class='btn-blue'>Visualizar rango</button><a class='btn' href='/admin'>Limpiar rango</a></form><div class='grid' style='margin-top:14px'><div class='detail-box span-3'><small>Rango seleccionado</small><b>{doc_rango}</b></div><div class='detail-box span-3'><small>Hoy</small><b>{doc_dia}</b></div><div class='detail-box span-3'><small>Últimos 7 días</small><b>{doc_semana}</b></div><div class='detail-box span-3'><small>Mes actual</small><b>{doc_mes}</b></div></div></div><div class='card span-12'><h2>📊 Indicadores por tipo de documento</h2><div class='bars'>{chart_html}</div></div><div class='card span-12'><h2>✅ Control por boleta/documento</h2><div class='table-wrap'><table><tr><th>Tipo</th><th>Cargados</th><th>Aprobados</th><th>Rechazados</th><th>Leídos/abiertos</th></tr>{ind_html}</table></div></div><div class='card span-12 alert-card'><h2>🔔 Campanita de cargas recientes</h2><p class='muted'>Aquí ves de primera mano quién cargó o recibió documentos nuevos.</p>{alert_items}</div>
-    <div class='card span-12'><h2>Últimas cargas</h2>{tabla_docs(ult)}</div></section>"""
+    <div class='hero admin-hero'><div class='topbar'><div><h1>Centro de Control <span class='accent'>Administrador</span></h1><div class='subtitle'>Seleccione una gestión para comenzar. Modo prueba general: <b>{modo_txt}</b></div></div></div></div>
+    <div class='gestion-cards'>
+      <div class='card gestion-card'><div class='gestion-icon'>📁</div><div><h2>Gestión Documental</h2><p class='muted'>Administre documentos de pago, empresa y personales.</p><a class='btn-warn' href='/admin/modulo/documentos'>Ir al Dashboard</a></div></div>
+      <div class='card gestion-card green'><div class='gestion-icon'>🏖️</div><div><h2>Gestión Vacacional</h2><p class='muted'>Controle saldos, solicitudes y aprobaciones.</p><a class='btn-green' href='/admin/vacaciones'>Ir al Dashboard</a></div></div>
+      <div class='card gestion-card purple'><div class='gestion-icon'>🧾</div><div><h2>Gestión Contratación</h2><p class='muted'>Gestione procesos, documentos, contratos y archivos.</p><a class='btn-blue' href='/admin/contratacion'>Ir al Dashboard</a></div></div>
+    </div>
+    <section class='grid'>
+      <div class='card dashboard-panel'><h2>📁 Dashboard - Gestión Documental</h2><div class='mini-grid'><div class='dash-metric'><span>Trabajadores</span><b>{trabajadores}</b></div><div class='dash-metric'><span>Documentos</span><b>{docs}</b></div><div class='dash-metric'><span>Aprobados</span><b>{aprobados}</b></div><div class='dash-metric'><span>Rechazados</span><b>{rechazados}</b></div></div><br><a class='btn-warn' href='/admin/modulo/documentos'>Ver Dashboard Completo</a></div>
+      <div class='card dashboard-panel'><h2>🏖️ Dashboard - Gestión Vacacional</h2><div class='mini-grid'><div class='dash-metric'><span>Saldos registrados</span><b>{vac_saldos}</b></div><div class='dash-metric'><span>Solicitudes</span><b>{vac_solicitudes}</b></div><div class='dash-metric'><span>Pendientes</span><b>{vac_pendientes}</b></div><div class='dash-metric'><span>Aprobadas</span><b>{vac_aprobadas}</b></div></div><br><a class='btn-green' href='/admin/vacaciones'>Ver Dashboard Completo</a></div>
+      <div class='card dashboard-panel'><h2>🧾 Dashboard - Gestión Contratación</h2><div class='mini-grid'><div class='dash-metric'><span>Procesos activos</span><b>{con_docs}</b></div><div class='dash-metric'><span>Tipos documento</span><b>{con_tipos}</b></div><div class='dash-metric'><span>Contratos activos</span><b>{con_docs}</b></div><div class='dash-metric'><span>Por vencer</span><b>0</b></div></div><br><a class='btn-blue' href='/admin/contratacion'>Ver Dashboard Completo</a></div>
+      <div class='card span-12'><h2>📈 Rango de cargas documentales</h2><form method='get' class='form-grid'><div class='field'><label>Desde</label><input type='date' name='desde' value='{desde}'></div><div class='field'><label>Hasta</label><input type='date' name='hasta' value='{hasta}'></div><button class='btn-blue'>Visualizar rango</button><a class='btn' href='/admin'>Limpiar rango</a></form><div class='grid' style='margin-top:14px'><div class='detail-box span-3'><small>Rango seleccionado</small><b>{doc_rango}</b></div><div class='detail-box span-3'><small>Hoy</small><b>{doc_dia}</b></div><div class='detail-box span-3'><small>Últimos 7 días</small><b>{doc_semana}</b></div><div class='detail-box span-3'><small>Mes actual</small><b>{doc_mes}</b></div></div></div>
+      <div class='card span-12'><h2>📊 Indicadores por tipo de documento</h2><div class='bars'>{chart_html}</div></div>
+      <div class='card span-12 alert-card'><h2>🔔 Campanita de cargas recientes</h2><p class='muted'>Aquí ves de primera mano quién cargó o recibió documentos nuevos.</p>{alert_items}</div>
+      <div class='card span-12'><h2>Últimas cargas</h2>{tabla_docs(ult)}</div>
+    </section>"""
     return render_page(content, active='Admin')
 
 @app.route('/admin/trabajadores', methods=['GET','POST'])
@@ -1317,7 +1361,7 @@ def admin_modulo_documentos():
         pendientes=con.execute("SELECT COUNT(*) c FROM documentos WHERE COALESCE(estado,'Pendiente') IN ('Pendiente','Aceptado','Firmado')").fetchone()['c']
         aprob=con.execute("SELECT COUNT(*) c FROM documentos WHERE estado='Aprobado'").fetchone()['c']
     content=f"""
-    <div class='hero'><div class='topbar'><div><h1>Módulo 1: <span class='accent'>Documentos PRIZE</span></h1><div class='subtitle'>Concentra todo lo ya implementado: cargas, PDFs, carpetas locales, aceptación/firma/aprobación y trazabilidad.</div></div><a class='btn-green' href='/admin/documentos'>Entrar a documentos</a></div></div>
+    <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Documental</span></h1><div class='subtitle'>Concentra todo lo ya implementado: cargas, PDFs, carpetas locales, aceptación/firma/aprobación y trazabilidad.</div></div><a class='btn-green' href='/admin/documentos'>Entrar a documentos</a></div></div>
     <section class='grid'><div class='card mini'><div><h3>Total documentos</h3><b>{total}</b></div><div class='ico'>🗃️</div></div><div class='card mini'><div><h3>Pendientes</h3><b>{pendientes}</b></div><div class='ico'>⏳</div></div><div class='card mini'><div><h3>Aprobados</h3><b>{aprob}</b></div><div class='ico'>✅</div></div>
     <div class='card span-12'><div class='module-tabs'><a class='module-tile' href='/admin/documentos'><h2>📤 Subir documentos</h2><p class='muted'>Pago, empresa y personales.</p></a><a class='module-tile' href='/admin/sincronizar'><h2>🔎 Detectar PDFs</h2><p class='muted'>Lee carpetas locales y detecta DNI.</p></a><a class='module-tile' href='/admin/crear_carpetas'><h2>📁 Crear carpetas</h2><p class='muted'>Estructura automática DOCUMENTOS_PRIZE_AUTO.</p></a></div></div></section>"""
     return render_page(content, active='Modulo documentos')
@@ -1356,7 +1400,7 @@ def admin_vacaciones():
     sal=''.join([f"<tr><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['empresa'] or ''}</td><td>{r['area'] or ''}</td><td>{r['jefe'] or ''}</td><td>{r['dias_ganados']}</td><td>{r['dias_gozados']}</td><td><b>{r['saldo']}</b></td></tr>" for r in saldos])
     sol=''.join([f"<tr><td>{r['id']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/jefe/aprobar'>Apr. jefe</a><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/gh/aprobar'>Apr. GTH</a><a class='btn-red mini-btn' href='/admin/vacaciones/{r['id']}/rechazar'>Rechazar</a></td></tr>" for r in solicitudes])
     content=f"""
-    <div class='hero'><div class='topbar'><div><h1>Módulo 2: <span class='accent'>Gestión de Vacaciones</span></h1><div class='subtitle'>Administrador carga saldos; usuario solicita goce; flujo: jefe inmediato → Gestión del Talento Humano.</div></div><a class='btn-green' href='/admin/vacaciones/plantilla'>Descargar plantilla</a></div></div>
+    <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Vacacional</span></h1><div class='subtitle'>Administrador carga saldos; usuario solicita goce; flujo: jefe inmediato → Gestión del Talento Humano.</div></div><a class='btn-green' href='/admin/vacaciones/plantilla'>Descargar plantilla</a></div></div>
     <section class='grid'><div class='card span-12'><h2>🏖️ Cargar saldos vacacionales</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel saldos</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-green'>Subir saldos</button></form><p class='muted'>Columnas: EMPRESA, DNI, TRABAJADOR, AREA, JEFE INMEDIATO, DIAS GANADOS, DIAS GOZADOS, SALDO, PERIODO.</p></div>
     <div class='card span-12'><h2>Solicitudes de vacaciones</h2><div class='table-wrap'><table><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Rango</th><th>Días</th><th>Estado</th><th>Acciones</th></tr>{sol or '<tr><td colspan=7>No hay solicitudes.</td></tr>'}</table></div></div>
     <div class='card span-12'><h2>Saldos cargados</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>Jefe</th><th>Ganados</th><th>Gozados</th><th>Saldo</th></tr>{sal or '<tr><td colspan=8>No hay saldos cargados.</td></tr>'}</table></div></div></section>"""
@@ -1424,7 +1468,7 @@ def admin_contratacion():
     tipos_rows=''.join([f"<tr><td>✎ 🗑</td><td><span class='badge-green'>{'Activo' if r['activo'] else 'Inactivo'}</span></td><td>{r['codigo']}</td><td>{r['descripcion']}</td><td>{r['etapa']}</td><td><span class='badge-green'>✓</span></td></tr>" for r in tipos])
     docs_rows=''.join([f"<tr><td>🔍 📄</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['tipo_doc']}</td><td><span class='badge-green'>F</span></td><td>{r['fecha_registro']}</td></tr>" for r in docs])
     content=f"""
-    <div class='hero'><div class='topbar'><div><h1>Módulo 3: <span class='accent'>Contratación</span></h1><div class='subtitle'>Inspirado en Adapta: flujos, carga masiva, maestros, tipos de documento, archivos del trabajador y descargas.</div></div></div></div>
+    <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Contratación</span></h1><div class='subtitle'>Inspirado en Adapta: flujos, carga masiva, maestros, tipos de documento, archivos del trabajador y descargas.</div></div></div></div>
     <section class='grid'><div class='card span-12'><div class='adapta-note'><b>Flujo preparado:</b> trabajador → documentos requeridos por etapa → carga/validación → firmado/archivado → descarga.</div></div>
     <div class='card span-12'><h2>Subir documento de contratación</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Trabajador</label><input name='dni' list='trabajadores_list' required><datalist id='trabajadores_list'>{opt_trab}</datalist></div><div class='field'><label>Etapa</label><select name='etapa'><option>Incorporación</option><option>Renovación</option><option>Cese</option></select></div><div class='field'><label>Tipo documento</label><select name='tipo_doc'>{opt_tipo}</select></div><div class='field'><label>Archivo</label><input type='file' name='archivo' required></div><button class='btn-green'>Subir / archivar</button></form></div>
     <div class='card span-12 adapta-table'><h2>Tipos de documento por etapa</h2><div class='table-wrap'><table><tr><th></th><th>Estado</th><th>Código</th><th>Tipo Doc</th><th>Stage</th><th>Mandatorio</th></tr>{tipos_rows}</table></div></div>
@@ -1446,6 +1490,18 @@ def admin_sincronizar():
     resumen = sincronizar_documentos_carpeta(devolver_resumen=True)
     flash(f"Sincronización completada. Nuevos: {resumen['nuevos']} | Revisados: {resumen['revisados']} | Duplicados: {resumen['duplicados']} | Sin DNI: {resumen['sin_dni']} | Sin trabajador activo: {resumen['sin_trabajador']} | Ruta: {DOCUMENTOS_BASE_DIR}", 'ok')
     return redirect(url_for('admin_documentos'))
+
+
+@app.route('/admin/modo_prueba')
+@admin_required
+def admin_modo_prueba():
+    modo_txt = 'ACTIVO' if modo_prueba_activo() else 'INACTIVO'
+    content = f"""
+    <div class='hero'><div class='topbar'><div><h1>Modo prueba <span class='accent'>y limpieza general</span></h1><div class='subtitle'>Esta opción aplica a todas las gestiones. Actívala solo cuando vayas a probar con usuarios y administrador.</div></div></div></div>
+    <section class='grid'>
+      <div class='card span-12'><h2>🧪 Control general de pruebas</h2><p class='muted'>Todo lo cargado quedará marcado como [MODO PRUEBA]. Luego puedes limpiarlo sin tocar la información real.</p><div class='actions'><a class='btn-green' href='/admin/modo_prueba/toggle'>Modo prueba: {modo_txt}</a><a class='btn-danger' onclick='return confirm("¿Borrar documentos y eventos de MODO PRUEBA?")' href='/admin/modo_prueba/limpiar'>Limpiar pruebas</a><a class='btn-blue' href='/admin/desbloquear_usuarios'>Desbloquear usuarios</a></div></div>
+    </section>"""
+    return render_page(content, active='Modo prueba')
 
 @app.route('/admin/modo_prueba/toggle')
 @admin_required
