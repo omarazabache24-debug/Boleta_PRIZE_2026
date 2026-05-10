@@ -128,6 +128,22 @@ def safe_periodo(p):
     return re.sub(r"[^A-Za-z0-9_\- ]", "", clean(p))[:50] or datetime.now(APP_TZ).strftime("%Y-%m")
 
 
+
+def periodo_anual_texto(inicio='', fin=''):
+    """Devuelve periodo en formato 2025/2026 usando fechas de inicio y fin."""
+    def year(v):
+        if v is None:
+            return ''
+        if hasattr(v, 'year'):
+            return str(v.year)
+        txt = clean(v)
+        m = re.search(r'(20\d{2}|19\d{2})', txt)
+        return m.group(1) if m else ''
+    yi, yf = year(inicio), year(fin)
+    if yi and yf and yi != yf:
+        return f'{yi}/{yf}'
+    return yi or yf or clean(inicio) or clean(fin) or datetime.now(APP_TZ).strftime('%Y')
+
 def logo_url():
     # Reconoce logo en la carpeta raíz o static: logo_prize.png, logo.png, prize.png, etc.
     nombres = ["logo_prize.png", "logo.png", "prize.png", "LOGO.png", "Logo.png", "logo_prize.jpg", "logo_prize.jpeg"]
@@ -722,9 +738,9 @@ function saveSideScroll(){const s=side(); if(s){localStorage.setItem('sideScroll
 function restoreSideScroll(){const s=side(); if(s){s.scrollTop=parseInt(localStorage.getItem('sideScroll')||'0')}}
 function toggleSide(){const s=side(), a=appShell(); if(!s)return; if(window.innerWidth<1000){s.classList.toggle('open')}else{const c=!s.classList.contains('collapsed'); s.classList.toggle('collapsed',c); if(a)a.classList.toggle('side-collapsed',c); localStorage.setItem('sideCollapsed',c?'1':'0')}}
 function toggleGroup(id){const g=document.getElementById(id); if(!g)return; g.classList.toggle('closed'); localStorage.setItem('group_'+id,g.classList.contains('closed')?'1':'0')}
-function initSide(){const s=side(), a=appShell(); if(!s)return; const c=localStorage.getItem('sideCollapsed')==='1' && window.innerWidth>=1000; s.classList.toggle('collapsed',c); if(a)a.classList.toggle('side-collapsed',c); document.querySelectorAll('.menu-group[data-group]').forEach(g=>{const id=g.id; const saved=localStorage.getItem('group_'+id); if(saved==='1' && !g.classList.contains('force-open')) g.classList.add('closed')}); setTimeout(restoreSideScroll,60); document.querySelectorAll('.menu-item').forEach(a=>a.addEventListener('click',()=>{saveSideScroll(); if(window.innerWidth<1000){const s=side(); if(s)s.classList.remove('open')}}));}
+function initSide(){const s=side(), a=appShell(); if(!s)return; const c=localStorage.getItem('sideCollapsed')==='1' && window.innerWidth>=1000; s.classList.toggle('collapsed',c); if(a)a.classList.toggle('side-collapsed',c); document.querySelectorAll('.menu-group[data-group]').forEach(g=>{const id=g.id; const saved=localStorage.getItem('group_'+id); if(saved==='1' && !g.classList.contains('force-open')) g.classList.add('closed')}); if(!location.hash){setTimeout(restoreSideScroll,60)}; document.querySelectorAll('.menu-item').forEach(a=>a.addEventListener('click',()=>{saveSideScroll(); if(window.innerWidth<1000){const s=side(); if(s)s.classList.remove('open')}}));}
 function filterCards(){const q=(document.getElementById('cardSearch')?.value||'').toLowerCase();document.querySelectorAll('.doc-card').forEach(c=>{c.style.display=c.innerText.toLowerCase().includes(q)?'block':'none'})}
-window.addEventListener('DOMContentLoaded',initSide);window.addEventListener('beforeunload',saveSideScroll)
+window.addEventListener('DOMContentLoaded',()=>{initSide(); if(location.hash){document.querySelectorAll('.menu-item').forEach(x=>{if(x.getAttribute('href')&&x.getAttribute('href').endsWith(location.hash)) x.classList.add('active')}); setTimeout(()=>{document.querySelector(location.hash)?.scrollIntoView({block:'start'});},120)}});window.addEventListener('beforeunload',saveSideScroll)
 </script></head><body>{{ body|safe }}</body></html>
 '''
 
@@ -781,23 +797,23 @@ def sidebar(active):
     per_cls = gclass([k for k,_,_ in TIPOS_PERSONALES])
     admin = ""
     if session.get('admin_id'):
-        admin_keys = ['Admin','Trabajadores','Usuarios','Modulo documentos','Subir documentos','Vacaciones','Contratacion','Modo prueba'] + [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES]
+        admin_keys = ['Admin','Trabajadores','Usuarios','Modulo documentos','Subir documentos','Gestion Vacacional','Gestion Contratacion','Modo prueba'] + [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES]
         admin_cls = 'menu-group force-open' if active_type in admin_keys else 'menu-group'
         cls_dash = 'menu-item active' if active == 'Admin' else 'menu-item'
         cls_trab = 'menu-item active' if active == 'Trabajadores' else 'menu-item'
         cls_docs = 'menu-item active' if active == 'Subir documentos' else 'menu-item'
         cls_users = 'menu-item active' if active == 'Usuarios' else 'menu-item'
         cls_moddocs = 'menu-item active' if active == 'Modulo documentos' else 'menu-item'
-        cls_vac = 'menu-item active' if active == 'Vacaciones' else 'menu-item'
-        cls_con = 'menu-item active' if active == 'Contratacion' else 'menu-item'
+        cls_vac = 'menu-item active' if active == 'Gestion Vacacional' else 'menu-item'
+        cls_con = 'menu-item active' if active == 'Gestion Contratacion' else 'menu-item'
         cls_test = 'menu-item active' if active == 'Modo prueba' else 'menu-item'
         docs_mod_keys = [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES] + ['Modulo documentos','Subir documentos']
         docs_mod_cls = 'menu-group nested force-open' if active_type in docs_mod_keys else 'menu-group nested'
-        vac_cls = 'menu-group nested force-open' if active_type == 'Vacaciones' else 'menu-group nested'
-        con_cls = 'menu-group nested force-open' if active_type == 'Contratacion' else 'menu-group nested'
+        vac_cls = 'menu-group nested force-open' if active == 'Gestion Vacacional' else 'menu-group nested'
+        con_cls = 'menu-group nested force-open' if active == 'Gestion Contratacion' else 'menu-group nested'
         docs_head = 'menu-title' + (' active' if active_type in docs_mod_keys else '')
-        vac_head = 'menu-title' + (' active' if active_type == 'Vacaciones' else '')
-        con_head = 'menu-title' + (' active' if active_type == 'Contratacion' else '')
+        vac_head = 'menu-title' + (' active' if active == 'Gestion Vacacional' else '')
+        con_head = 'menu-title' + (' active' if active == 'Gestion Contratacion' else '')
         admin = f"""
         <div id='grp_admin' data-group='admin' class='{admin_cls}'>
           <button type='button' class='menu-title' onclick="toggleGroup('grp_admin')"><span>⚙️</span><span class='label'>Administrador</span><span class='chev'>∨</span></button>
@@ -938,15 +954,12 @@ def logout():
 @worker_required
 def seleccionar_empresa():
     dni=session['dni']; t=get_trabajador(dni)
-    empresas=[]
-    if t and clean(t['empresa']):
-        empresas.append(clean(t['empresa']))
-    with db() as con:
-        for r in con.execute("SELECT DISTINCT empresa FROM trabajadores WHERE dni=? AND COALESCE(empresa,'')<>''", (dni,)).fetchall():
-            if clean(r['empresa']) not in empresas:
-                empresas.append(clean(r['empresa']))
-    if not empresas:
-        empresas=['PRIZE SUPERFRUITS']
+    # Empresas habilitadas para que el trabajador elija al entrar.
+    # Se estandariza según lo solicitado: AQUANQA / AQUANCA II.
+    empresas=['AQUANQA', 'AQUANCA II']
+    emp_real = clean(t['empresa']) if t and 'empresa' in t.keys() else ''
+    if emp_real and emp_real not in empresas:
+        empresas.insert(0, emp_real)
     if request.method=='POST':
         emp=clean(request.form.get('empresa'))
         if emp not in empresas: emp=empresas[0]
@@ -1345,7 +1358,7 @@ def admin_trabajadores():
         else:
             dni=normalizar_dni(request.form.get('dni'))
             with db() as con:
-                fecha_nac=clean(request.form.get('fecha_nacimiento')); clave=generar_clave_trabajador(dni, fecha_nac); con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),clean(request.form.get('empresa')) or 'PRIZE SUPERFRUITS',clean(request.form.get('planilla')),fecha_nac,clean(request.form.get('fecha_ingreso')),dni,clave,now_txt()))
+                fecha_nac=clean(request.form.get('fecha_nacimiento')); clave=generar_clave_trabajador(dni, fecha_nac); con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),clean(request.form.get('empresa')) or 'AQUANQA',clean(request.form.get('planilla')),fecha_nac,clean(request.form.get('fecha_ingreso')),dni,clave,now_txt()))
                 con.commit()
             flash('Trabajador guardado.', 'ok')
         return redirect(url_for('admin_trabajadores'))
@@ -1354,7 +1367,7 @@ def admin_trabajadores():
     table = ''.join([f"<tr><td>{r['dni']}</td><td>{r['nombre']}</td><td>{r['correo']}</td><td>{r['cargo'] or ''}</td><td>{r['empresa'] or ''}</td><td>{r['planilla'] if 'planilla' in r.keys() and r['planilla'] else ''}</td></tr>" for r in rows])
     content = f"""
     <div class='topbar'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div></div></div><section class='grid'>
-    <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><input name='empresa' value='PRIZE SUPERFRUITS'></div><div class='field'><label>Planilla</label><input name='planilla'></div><div class='field'><label>Fecha nacimiento</label><input name='fecha_nacimiento' placeholder='dd/mm/aaaa'></div><div class='field'><label>Fecha de ingreso</label><input name='fecha_ingreso' placeholder='dd/mm/aaaa'></div><button class='btn-green'>Guardar + crear usuario</button></form></div>
+    <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><select name='empresa'><option>AQUANQA</option><option>AQUANCA II</option></select></div><div class='field'><label>Planilla</label><input name='planilla'></div><div class='field'><label>Fecha nacimiento</label><input name='fecha_nacimiento' placeholder='dd/mm/aaaa'></div><div class='field'><label>Fecha de ingreso</label><input name='fecha_ingreso' placeholder='dd/mm/aaaa'></div><button class='btn-green'>Guardar + crear usuario</button></form></div>
     <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial: EMPRESA / DNI / TRABAJADOR / CARGO / AREA / PLANILLA / CORREO / FECHA NACIMIENTO. Crea usuario masivo con DNI y clave automática.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Descargar plantilla</a></form></div>
     <div class='card span-12'><h2>Listado</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Empresa</th><th>Planilla</th></tr>{table}</table></div></div></section>"""
     return render_page(content, active='Trabajadores')
@@ -1402,16 +1415,18 @@ def mi_foto():
 @admin_required
 def admin_usuarios():
     with db() as con:
-        rows = con.execute("SELECT dni,nombre,correo,empresa,cargo,fecha_nacimiento,usuario_portal,clave_portal,activo FROM trabajadores ORDER BY nombre LIMIT 10000").fetchall()
+        rows = con.execute("SELECT t.dni,t.nombre,t.correo,t.empresa,t.cargo,t.fecha_nacimiento,t.usuario_portal,t.clave_portal,t.activo,COALESCE(l.intentos,0) intentos,COALESCE(l.bloqueado,0) bloqueado FROM trabajadores t LEFT JOIN login_intentos l ON l.dni=t.dni ORDER BY t.nombre LIMIT 10000").fetchall()
     trs=[]
     for r in rows:
         dni = r['dni']
         clave = r['clave_portal'] or generar_clave_trabajador(r['dni'], r['fecha_nacimiento'])
-        trs.append(f"<tr><td>{dni}</td><td>{r['nombre']}</td><td>{r['usuario_portal'] or dni}</td><td><b>{clave}</b></td><td>{r['correo'] or ''}</td><td>{r['empresa'] or ''}</td><td><a class='btn-blue mini-btn' href='/admin/usuario/{dni}/reset'>Regenerar</a> <a class='btn-red mini-btn' onclick='return confirm(\"¿Eliminar trabajador/usuario?\")' href='/admin/usuario/{dni}/eliminar'>Eliminar</a></td></tr>")
+        estado = '🔒 Bloqueado' if int(r['bloqueado'] or 0)==1 else '✅ Activo'
+        desbloq = f" <a class='btn-green mini-btn' href='/admin/usuario/{dni}/desbloquear'>Desbloquear</a>" if int(r['bloqueado'] or 0)==1 or int(r['intentos'] or 0)>0 else ''
+        trs.append(f"<tr><td>{dni}</td><td>{r['nombre']}</td><td>{r['usuario_portal'] or dni}</td><td><b>{clave}</b></td><td>{estado}<br><small>Intentos: {int(r['intentos'] or 0)}</small></td><td>{r['empresa'] or ''}</td><td><a class='btn-blue mini-btn' href='/admin/usuario/{dni}/reset'>Regenerar</a>{desbloq} <a class='btn-red mini-btn' onclick='return confirm(\"¿Eliminar trabajador/usuario?\")' href='/admin/usuario/{dni}/eliminar'>Eliminar</a></td></tr>")
     table=''.join(trs)
     content=f"""
     <div class='hero'><div class='topbar'><div><h1>Usuarios y contraseñas</h1><div class='subtitle'>Control para más de 10 mil trabajadores. Usuario = DNI; clave = fecha de nacimiento sin / (ddmmaaaa).</div></div><a class='btn-green' href='/admin/plantilla_trabajadores'>Plantilla masiva</a></div></div>
-    <section class='grid'><div class='card span-12'><h2>Listado de accesos</h2><p class='muted'>El trabajador ingresa con usuario = DNI y clave = fecha nacimiento sin / (ddmmaaaa).</p><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Usuario</th><th>Clave</th><th>Correo</th><th>Empresa</th><th>Opciones</th></tr>{table}</table></div></div></section>"""
+    <section class='grid'><div class='card span-12'><h2>Listado de accesos</h2><p class='muted'>El trabajador ingresa con usuario = DNI y clave = fecha nacimiento sin / (ddmmaaaa).</p><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Usuario</th><th>Clave</th><th>Estado login</th><th>Empresa</th><th>Opciones</th></tr>{table}</table></div></div></section>"""
     return render_page(content, active='Usuarios')
 
 @app.route('/admin/usuario/<dni>/reset')
@@ -1421,8 +1436,16 @@ def admin_usuario_reset(dni):
     if not t: abort(404)
     clave=generar_clave_trabajador(dni, t['fecha_nacimiento'] if 'fecha_nacimiento' in t.keys() else '')
     with db() as con:
-        con.execute("UPDATE trabajadores SET usuario_portal=?, clave_portal=? WHERE dni=?", (normalizar_dni(dni), clave, normalizar_dni(dni))); con.commit()
+        con.execute("UPDATE trabajadores SET usuario_portal=?, clave_portal=? WHERE dni=?", (normalizar_dni(dni), clave, normalizar_dni(dni))); con.execute('DELETE FROM login_intentos WHERE dni=?',(normalizar_dni(dni),)); con.commit()
     flash('Usuario regenerado correctamente.', 'ok')
+    return redirect(url_for('admin_usuarios'))
+
+
+@app.route('/admin/usuario/<dni>/desbloquear')
+@admin_required
+def admin_usuario_desbloquear(dni):
+    reset_intentos_login(dni)
+    flash('Usuario desbloqueado. Ya puede ingresar con DNI y fecha de nacimiento sin /.', 'ok')
     return redirect(url_for('admin_usuarios'))
 
 @app.route('/admin/usuario/<dni>/eliminar')
@@ -1515,7 +1538,7 @@ def admin_vacaciones():
                     fecha_ing=clean(val(row,['FECHA INGRESO','FECHA_INGRESO','INGRESO']))
                     p_ini=clean(val(row,['PERIODO INICIO','INICIO PERIODO','FECHA INICIO PERIODO']))
                     p_fin=clean(val(row,['PERIODO FIN','FIN PERIODO','FECHA FIN PERIODO']))
-                    periodo=(p_ini + ' al ' + p_fin).strip() if (p_ini or p_fin) else (clean(val(row,['PERIODO','PERÍODO'])) or datetime.now(APP_TZ).strftime('%Y'))
+                    periodo=clean(val(row,['PERIODO','PERÍODO'])) or periodo_anual_texto(p_ini, p_fin)
                     con.execute('INSERT INTO vacaciones_saldos(dni,trabajador,empresa,area,jefe,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dni) DO UPDATE SET trabajador=excluded.trabajador,empresa=excluded.empresa,area=excluded.area,jefe=excluded.jefe,fecha_ingreso=excluded.fecha_ingreso,periodo_inicio=excluded.periodo_inicio,periodo_fin=excluded.periodo_fin,dias_ganados=excluded.dias_ganados,dias_gozados=0,saldo=excluded.saldo,periodo=excluded.periodo,fecha_carga=excluded.fecha_carga,uploaded_by=excluded.uploaded_by', (dni,trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),clean(val(row,['JEFE','JEFE INMEDIATO'])),fecha_ing,p_ini,p_fin,gan,0,saldo,periodo,now_txt(),marca_carga(session.get('admin_user','admin'))))
                     ok+=1
                 con.commit()
@@ -1528,18 +1551,18 @@ def admin_vacaciones():
     sol=''.join([f"<tr><td>{r['id']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/jefe/aprobar'>Apr. jefe</a><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/gh/aprobar'>Apr. GTH</a><a class='btn-red mini-btn' href='/admin/vacaciones/{r['id']}/rechazar'>Rechazar</a></td></tr>" for r in solicitudes])
     content=f"""
     <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Vacacional</span></h1><div class='subtitle'>Administrador carga saldos; usuario solicita goce; flujo: jefe inmediato → Gestión del Talento Humano.</div></div><a class='btn-green' href='/admin/vacaciones/plantilla'>Descargar plantilla</a></div></div>
-    <section class='grid'><div id='aprobaciones' class='card mini'><div><h3>Pendientes de aprobación</h3><b>{len([r for r in solicitudes if 'Pendiente' in (r['estado'] or '')])}</b></div><div class='ico'>✅</div></div><div class='card mini'><div><h3>Saldos registrados</h3><b>{len(saldos)}</b></div><div class='ico'>🗓️</div></div><div class='card mini'><div><h3>Solicitudes totales</h3><b>{len(solicitudes)}</b></div><div class='ico'>📄</div></div><div id='cargar-saldos' class='card span-12'><h2>🏖️ Saldos Vacacionales</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel saldos</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-green'>Subir saldos</button></form><p class='muted'>Columnas: EMPRESA, DNI, TRABAJADOR, AREA, JEFE INMEDIATO, FECHA INGRESO, PERIODO INICIO, PERIODO FIN, DIAS GANADOS, SALDO. No usar DÍAS GOZADOS.</p></div>
+    <section class='grid'><div id='aprobaciones' class='card mini'><div><h3>Pendientes de aprobación</h3><b>{len([r for r in solicitudes if 'Pendiente' in (r['estado'] or '')])}</b></div><div class='ico'>✅</div></div><div class='card mini'><div><h3>Saldos registrados</h3><b>{len(saldos)}</b></div><div class='ico'>🗓️</div></div><div class='card mini'><div><h3>Solicitudes totales</h3><b>{len(solicitudes)}</b></div><div class='ico'>📄</div></div><div id='cargar-saldos' class='card span-12'><h2>🏖️ Saldos Vacacionales</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel saldos</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-green'>Subir saldos</button></form><p class='muted'>Columnas: EMPRESA, DNI, TRABAJADOR, AREA, JEFE INMEDIATO, FECHA INGRESO, PERIODO, DIAS GANADOS, SALDO. El PERIODO debe ir como 2025/2026. No usar DÍAS GOZADOS.</p></div>
     <div id='solicitudes' class='card span-12'><h2>📄 Solicitudes de vacaciones</h2><div class='table-wrap'><table><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Rango</th><th>Días</th><th>Estado</th><th>Acciones</th></tr>{sol or '<tr><td colspan=7>No hay solicitudes.</td></tr>'}</table></div></div>
     <div id='reportes' class='card span-12'><h2>📑 Reporte de saldos cargados</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>Jefe</th><th>Fecha ingreso</th><th>Periodo</th><th>Ganados</th><th>Saldo</th></tr>{sal or '<tr><td colspan=9>No hay saldos cargados.</td></tr>'}</table></div></div></section>"""
-    return render_page(content, active='Vacaciones')
+    return render_page(content, active='Gestion Vacacional')
 
 @app.route('/admin/vacaciones/plantilla')
 @admin_required
 def admin_vacaciones_plantilla():
     path=PERSIST_DIR/'PLANTILLA_SALDOS_VACACIONALES.xlsx'
     wb=Workbook(); ws=wb.active; ws.title='SALDOS'
-    headers=['EMPRESA','DNI','TRABAJADOR','AREA','JEFE INMEDIATO','FECHA INGRESO','PERIODO INICIO','PERIODO FIN','DIAS GANADOS','SALDO']
-    ws.append(headers); ws.append(['AQUANQA I','74324033','APELLIDOS Y NOMBRES','RRHH','JEFE DIRECTO','01/05/2024','01/05/2025','30/04/2026',30,30])
+    headers=['EMPRESA','DNI','TRABAJADOR','AREA','JEFE INMEDIATO','FECHA INGRESO','PERIODO','DIAS GANADOS','SALDO']
+    ws.append(headers); ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','RRHH','JEFE DIRECTO','01/05/2024','2025/2026',30,30])
     for i,h in enumerate(headers,1): ws.column_dimensions[chr(64+i)].width=24
     wb.save(path); return send_file(path, as_attachment=True, download_name='PLANTILLA_SALDOS_VACACIONALES.xlsx')
 
@@ -1572,7 +1595,7 @@ def trabajador_vacaciones():
     <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo['saldo'] if saldo else 0}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{saldo['dias_ganados'] if saldo else 0}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Periodo</h3><b>{saldo['periodo'] if saldo else '-'}</b></div><div class='ico'>📅</div></div>
     <div class='card span-12'><h2>Nueva solicitud</h2><form method='post' class='form-grid'><div class='field'><label>Inicio</label><input type='date' name='fecha_inicio' required></div><div class='field'><label>Fin</label><input type='date' name='fecha_fin' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div><button class='btn-green'>Registrar solicitud</button></form></div>
     <div class='card span-12'><h2>Mis solicitudes</h2><div class='table-wrap'><table><tr><th>Fecha</th><th>Rango</th><th>Días</th><th>Estado</th><th>Comentario</th></tr>{sol or '<tr><td colspan=5>No hay solicitudes.</td></tr>'}</table></div></div></section>"""
-    return render_page(content, active='Vacaciones')
+    return render_page(content, active='Gestion Vacacional')
 
 
 @app.route('/contratacion/mis_documentos')
@@ -1586,7 +1609,7 @@ def trabajador_contratacion():
     <div class='hero'><div class='topbar'><div><h1>Gestión de <span class='accent'>Contrato</span></h1><div class='subtitle'>Visualiza y descarga tus contratos, anexos y documentos de incorporación o renovación.</div></div></div></div>
     <section class='grid'><div class='card mini'><div><h3>Trabajador</h3><b>{t['nombre'] if t else dni}</b></div><div class='ico'>👤</div></div><div class='card mini'><div><h3>Empresa</h3><b>{session.get('empresa') or (t['empresa'] if t else '')}</b></div><div class='ico'>🏢</div></div><div class='card mini'><div><h3>Documentos</h3><b>{len(docs)}</b></div><div class='ico'>🧾</div></div>
     <div class='card span-12'><h2>Mis documentos contractuales</h2><div class='table-wrap'><table><tr><th>Documento</th><th>Etapa</th><th>Estado</th><th>Fecha</th><th>Acción</th></tr>{rows or '<tr><td colspan=5>No hay documentos de contratación cargados.</td></tr>'}</table></div></div></section>"""
-    return render_page(content, active='Contratacion')
+    return render_page(content, active='Gestion Contratacion')
 
 @app.route('/contratacion/ver/<int:cid>')
 @worker_required
@@ -1624,7 +1647,7 @@ def admin_contratacion():
     <div id='candidatos' class='card span-6'><h2>👥 Candidatos</h2><p class='muted'>Sección preparada para registrar postulantes, evaluación y estado del proceso.</p></div><div id='plantillas' class='card span-6'><h2>📋 Plantilla Documentos</h2><p class='muted'>Sección preparada para formatos de contrato, anexos, acuerdos y documentos requeridos por etapa.</p></div><div id='contratos' class='card span-12'><h2>📄 Subir documento de contratación / Contratos</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Trabajador</label><input name='dni' list='trabajadores_list' required><datalist id='trabajadores_list'>{opt_trab}</datalist></div><div class='field'><label>Etapa</label><select name='etapa'><option>Incorporación</option><option>Renovación</option><option>Cese</option></select></div><div class='field'><label>Tipo documento</label><select name='tipo_doc'>{opt_tipo}</select></div><div class='field'><label>Archivo</label><input type='file' name='archivo' required></div><button class='btn-green'>Subir / archivar</button></form></div>
     <div id='maestros' class='card span-12 adapta-table'><h2>🧩 Tipos de documento por etapa</h2><div class='table-wrap'><table><tr><th></th><th>Estado</th><th>Código</th><th>Tipo Doc</th><th>Stage</th><th>Mandatorio</th></tr>{tipos_rows}</table></div></div>
     <div id='descargas' class='card span-12 adapta-table'><h2>⬇️ Archivos trabajador / Descargas</h2><div class='table-wrap'><table><tr><th></th><th>Código</th><th>Apellidos y Nombres</th><th>Tipo Documento</th><th>Estado Doc</th><th>Fecha Envío</th></tr>{docs_rows or '<tr><td colspan=6>No hay archivos.</td></tr>'}</table></div></div></section>"""
-    return render_page(content, active='Contratacion')
+    return render_page(content, active='Gestion Contratacion')
 
 
 @app.route('/admin/crear_carpetas')
