@@ -691,6 +691,11 @@ button.menu-item{font:inherit;text-align:left;background:transparent;border-top:
 .dashboard-panel{grid-column:span 4}.dashboard-panel .mini-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px}.dash-metric{background:#171b21;border:1px solid #343a43;border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center}.dash-metric b{font-size:24px;color:var(--yellow)}
 @media(max-width:1100px){.gestion-cards{grid-template-columns:1fr}.dashboard-panel{grid-column:span 12}}
 
+
+
+/* === PRIZE PRO 2026: DASHBOARD ADMIN IGUAL A REFERENCIA === */
+.app{grid-template-columns:270px 1fr;background:radial-gradient(circle at 70% -10%,rgba(255,210,63,.08),transparent 26%),#0f141a!important}.app.side-collapsed{grid-template-columns:82px 1fr}.main{padding:20px 24px 32px!important;background:linear-gradient(180deg,#0f141a,#121820)!important}.side{padding:8px 6px!important;background:linear-gradient(180deg,#111720,#171c23)!important;border-right:1px solid rgba(255,255,255,.08)}.side-top{display:none}.brand{display:none}.side-user{display:none}.menu-group{margin:8px 0!important}.menu-title,.menu-item{min-height:46px!important;border-radius:10px!important;font-size:14px!important;font-weight:950!important;padding:12px 16px!important;gap:12px!important}.submenu>.menu-item{padding:11px 18px 11px 36px!important;min-height:38px!important;font-size:13px!important;margin:2px 0!important}.submenu .menu-group{margin:6px 0 6px 10px!important}.submenu .menu-group .menu-title{min-height:40px!important;font-size:13px!important;padding:11px 14px!important}.menu-item.active,.menu-item.parent-active{border-left:4px solid var(--yellow)!important;background:linear-gradient(90deg,rgba(255,210,63,.16),rgba(255,210,63,.05))!important;box-shadow:inset 4px 0 0 var(--yellow)!important}.menu-group.force-open>.menu-title{background:linear-gradient(135deg,#ffb21a,#ffd23f)!important;color:#111820!important;box-shadow:0 12px 28px rgba(255,178,26,.25)!important}.menu-group.nested.force-open>.menu-title{background:rgba(255,210,63,.08)!important;color:#f8fafc!important;border-left:4px solid var(--yellow)!important;box-shadow:inset 4px 0 0 var(--yellow)!important}.menu-group.nested.force-open>.menu-title .chev{color:#fff}.admin-shell{max-width:1560px;margin:0 auto}.admin-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin:0 0 18px}.admin-title h1{margin:0 0 4px;font-size:27px;line-height:1.15}.admin-title .role{font-size:17px;font-weight:1000;color:var(--yellow);margin-bottom:18px}.admin-title p{margin:0;color:#e5edf8;font-weight:750}.hambox{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#151c24;border:1px solid rgba(255,255,255,.05);margin-right:14px}.admin-title-row{display:flex;align-items:flex-start}.top-actions{display:flex;align-items:center;gap:13px}.top-icon{width:39px;height:39px;border-radius:10px;background:#151c24;border:1px solid rgba(255,255,255,.05);display:grid;place-items:center;position:relative;font-size:19px}.top-icon i{position:absolute;right:-4px;top:-8px;background:#ff4d5c;color:white;border-radius:999px;font-size:11px;min-width:20px;height:20px;display:grid;place-items:center;font-style:normal}.admin-chip{display:flex;align-items:center;gap:10px;font-weight:950}.admin-chip .a{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#ffb21a,#ffd23f);color:#111;display:grid;place-items:center}.gestion-cards{grid-template-columns:repeat(3,minmax(260px,1fr))!important;gap:16px!important;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.05);border-radius:18px;padding:18px}.gestion-card{min-height:160px!important;padding:26px!important;align-items:center!important}.gestion-card h2{font-size:20px;margin:0 0 12px}.gestion-card p{min-height:52px;line-height:1.5}.gestion-card .btn-warn,.gestion-card .btn-green,.gestion-card .btn-blue{margin-top:8px;min-width:150px;justify-content:center;border-radius:8px;padding:10px 15px}.gestion-card.green .btn-green{background:#163024!important;color:#43d96d!important;border:1px solid rgba(67,217,109,.4)!important}.gestion-card.purple .btn-blue{background:#241a33!important;color:#bc85ff!important;border:1px solid rgba(188,133,255,.45)!important}.gestion-icon{width:64px!important;height:64px!important;border-radius:14px!important}.dashboards-admin{display:grid;grid-template-columns:repeat(3,minmax(260px,1fr));gap:16px;margin-top:16px}.dashboard-panel{grid-column:auto!important;padding:22px!important}.dashboard-panel h2{font-size:16px;margin-bottom:18px}.dashboard-panel .mini-grid{grid-template-columns:repeat(2,1fr)!important;gap:14px!important}.dash-metric{min-height:86px!important;align-items:flex-start!important;position:relative;display:block!important}.dash-metric span{display:block;font-size:12px;color:#f2f6fb;margin-bottom:10px}.dash-metric b{font-size:20px!important;color:#fff!important}.dash-metric .mi{position:absolute;right:13px;bottom:13px;width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(135deg,#ffb21a,#ffd23f);color:#101418}.dashboard-panel.green .dash-metric .mi{background:linear-gradient(135deg,#27b862,#6ee78f);color:#fff}.dashboard-panel.purple .dash-metric .mi{background:linear-gradient(135deg,#7f43c7,#b77cff);color:#fff}.dashboard-panel .full-link{margin-top:16px;width:100%;justify-content:space-between;border-radius:8px;padding:12px 16px}.dashboard-panel.green .full-link{background:#142c23!important;color:#44d96d!important;border:1px solid rgba(68,217,109,.38)!important}.dashboard-panel.purple .full-link{background:#241831!important;color:#bd86ff!important;border:1px solid rgba(189,134,255,.42)!important}.admin-footer{display:flex;justify-content:space-between;color:#aab4c1;font-size:12px;margin:24px 4px 0}.test-panel-hidden{margin-top:16px}.admin-section-title{font-size:18px;margin:0 0 14px}.card{background:linear-gradient(145deg,#181e26,#14191f)!important;border-color:#313946!important}@media(max-width:1200px){.dashboards-admin,.gestion-cards{grid-template-columns:1fr!important}.app{grid-template-columns:280px 1fr}.admin-header{flex-direction:column}.top-actions{align-self:flex-end}}@media(max-width:1000px){.main{padding-top:74px!important}.app{grid-template-columns:1fr!important}.side{padding-top:60px!important}.dashboards-admin,.gestion-cards{grid-template-columns:1fr!important}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -783,7 +788,7 @@ def sidebar(active):
             <div id='grp_modulo_documentos' data-group='modulo_documentos' class='{docs_mod_cls}'>
               <button type='button' class='{docs_head}' onclick="toggleGroup('grp_modulo_documentos')"><span>🗃️</span><span class='label'>1. Gestión Documental</span><span class='chev'>∨</span></button>
               <div class='submenu'>
-                <a class='{cls_moddocs}' onclick='saveSideScroll()' href='/admin/modulo/documentos'><span>📊</span><span class='label'>Dashboard documental</span></a>
+                <a class='{cls_moddocs}' onclick='saveSideScroll()' href='/admin/modulo/documentos'><span>📊</span><span class='label'>Dashboard</span></a>
                 <div id='grp_pago' data-group='pago' class='{pago_cls}'>
                   <button type='button' class='menu-title' onclick="toggleGroup('grp_pago')"><span>▣</span><span class='label'>Documentos de pago</span><span class='chev'>∨</span></button>
                   <div class='submenu'>{pago}</div>
@@ -1173,21 +1178,80 @@ def admin():
         con_docs = con.execute("SELECT COUNT(*) FROM contratacion_docs").fetchone()[0]
         con_tipos = con.execute("SELECT COUNT(*) FROM contratacion_tipos").fetchone()[0]
     content = f"""
-    <div class='hero admin-hero'><div class='topbar'><div><h1>Centro de Control <span class='accent'>Administrador</span></h1><div class='subtitle'>Seleccione una gestión para comenzar. Modo prueba general: <b>{modo_txt}</b></div></div></div></div>
-    <div class='gestion-cards'>
-      <div class='card gestion-card'><div class='gestion-icon'>📁</div><div><h2>Gestión Documental</h2><p class='muted'>Administre documentos de pago, empresa y personales.</p><a class='btn-warn' href='/admin/modulo/documentos'>Ir al Dashboard</a></div></div>
-      <div class='card gestion-card green'><div class='gestion-icon'>🏖️</div><div><h2>Gestión Vacacional</h2><p class='muted'>Controle saldos, solicitudes y aprobaciones.</p><a class='btn-green' href='/admin/vacaciones'>Ir al Dashboard</a></div></div>
-      <div class='card gestion-card purple'><div class='gestion-icon'>🧾</div><div><h2>Gestión Contratación</h2><p class='muted'>Gestione procesos, documentos, contratos y archivos.</p><a class='btn-blue' href='/admin/contratacion'>Ir al Dashboard</a></div></div>
+    <div class='admin-shell'>
+      <div class='admin-header'>
+        <div class='admin-title-row'>
+          <button class='hambox' onclick='toggleSide()'>☰</button>
+          <div class='admin-title'>
+            <h1>Centro de Control</h1>
+            <div class='role'>Administrador</div>
+            <p>Bienvenido al panel de administración. Seleccione una gestión para comenzar.</p>
+          </div>
+        </div>
+        <div class='top-actions'>
+          <div class='top-icon'>🔔<i>0</i></div>
+          <div class='top-icon'>☰<i>0</i></div>
+          <div class='admin-chip'><span class='a'>A</span><span>Administrador⌄</span></div>
+        </div>
+      </div>
+
+      <div class='gestion-cards'>
+        <div class='card gestion-card'>
+          <div class='gestion-icon'>📁</div>
+          <div><h2>Gestión Documental</h2><p class='muted'>Administre y controle todos los documentos de la organización.</p><a class='btn-warn' href='/admin/modulo/documentos'>Ir al Dashboard <span>→</span></a></div>
+        </div>
+        <div class='card gestion-card green'>
+          <div class='gestion-icon'>☂️</div>
+          <div><h2>Gestión Vacacional</h2><p class='muted'>Administre saldos y solicitudes de vacaciones de los trabajadores.</p><a class='btn-green' href='/admin/vacaciones'>Ir al Dashboard <span>→</span></a></div>
+        </div>
+        <div class='card gestion-card purple'>
+          <div class='gestion-icon'>📄</div>
+          <div><h2>Gestión Contratación</h2><p class='muted'>Gestione procesos de contratación, candidatos y contratos.</p><a class='btn-blue' href='/admin/contratacion'>Ir al Dashboard <span>→</span></a></div>
+        </div>
+      </div>
+
+      <div class='dashboards-admin'>
+        <div class='card dashboard-panel'>
+          <h2>📁 Dashboard - Gestión Documental</h2>
+          <div class='mini-grid'>
+            <div class='dash-metric'><span>Trabajadores</span><b>{trabajadores}</b><em class='mi'>👥</em></div>
+            <div class='dash-metric'><span>Documentos</span><b>{docs}</b><em class='mi'>📄</em></div>
+            <div class='dash-metric'><span>Recibidos / Abiertos</span><b>{leidos}</b><em class='mi'>👁️</em></div>
+            <div class='dash-metric'><span>Aprobados</span><b>{aprobados}</b><em class='mi'>✓</em></div>
+            <div class='dash-metric'><span>Rechazados</span><b>{rechazados}</b><em class='mi'>−</em></div>
+            <div class='dash-metric'><span>Empresas</span><b>{emp}</b><em class='mi'>🏢</em></div>
+          </div>
+          <a class='btn-warn full-link' href='/admin/modulo/documentos'>Ver Dashboard Completo <span>→</span></a>
+        </div>
+        <div class='card dashboard-panel green'>
+          <h2>☂️ Dashboard - Gestión Vacacional</h2>
+          <div class='mini-grid'>
+            <div class='dash-metric'><span>Saldos Registrados</span><b>{vac_saldos}</b><em class='mi'>🗓️</em></div>
+            <div class='dash-metric'><span>Solicitudes</span><b>{vac_solicitudes}</b><em class='mi'>📄</em></div>
+            <div class='dash-metric'><span>Pendientes</span><b>{vac_pendientes}</b><em class='mi'>⏱️</em></div>
+            <div class='dash-metric'><span>Aprobadas</span><b>{vac_aprobadas}</b><em class='mi'>✓</em></div>
+            <div class='dash-metric'><span>Rechazadas</span><b>0</b><em class='mi'>−</em></div>
+            <div class='dash-metric'><span>En Proceso</span><b>{vac_pendientes}</b><em class='mi'>…</em></div>
+          </div>
+          <a class='btn-green full-link' href='/admin/vacaciones'>Ver Dashboard Completo <span>→</span></a>
+        </div>
+        <div class='card dashboard-panel purple'>
+          <h2>🧾 Dashboard - Gestión Contratación</h2>
+          <div class='mini-grid'>
+            <div class='dash-metric'><span>Procesos Activos</span><b>{con_docs}</b><em class='mi'>💼</em></div>
+            <div class='dash-metric'><span>Candidatos</span><b>0</b><em class='mi'>👥</em></div>
+            <div class='dash-metric'><span>Contratos Activos</span><b>{con_docs}</b><em class='mi'>📄</em></div>
+            <div class='dash-metric'><span>Contratos por Vencer</span><b>0</b><em class='mi'>⏱️</em></div>
+            <div class='dash-metric'><span>Contratos Vencidos</span><b>0</b><em class='mi'>−</em></div>
+            <div class='dash-metric'><span>Contratos Finalizados</span><b>0</b><em class='mi'>✓</em></div>
+          </div>
+          <a class='btn-blue full-link' href='/admin/contratacion'>Ver Dashboard Completo <span>→</span></a>
+        </div>
+      </div>
+
+      <div class='admin-footer'><span>© 2026 PRIZE - Superfruits</span><span>Versión 1.0.0</span></div>
     </div>
-    <section class='grid'>
-      <div class='card dashboard-panel'><h2>📁 Dashboard - Gestión Documental</h2><div class='mini-grid'><div class='dash-metric'><span>Trabajadores</span><b>{trabajadores}</b></div><div class='dash-metric'><span>Documentos</span><b>{docs}</b></div><div class='dash-metric'><span>Aprobados</span><b>{aprobados}</b></div><div class='dash-metric'><span>Rechazados</span><b>{rechazados}</b></div></div><br><a class='btn-warn' href='/admin/modulo/documentos'>Ver Dashboard Completo</a></div>
-      <div class='card dashboard-panel'><h2>🏖️ Dashboard - Gestión Vacacional</h2><div class='mini-grid'><div class='dash-metric'><span>Saldos registrados</span><b>{vac_saldos}</b></div><div class='dash-metric'><span>Solicitudes</span><b>{vac_solicitudes}</b></div><div class='dash-metric'><span>Pendientes</span><b>{vac_pendientes}</b></div><div class='dash-metric'><span>Aprobadas</span><b>{vac_aprobadas}</b></div></div><br><a class='btn-green' href='/admin/vacaciones'>Ver Dashboard Completo</a></div>
-      <div class='card dashboard-panel'><h2>🧾 Dashboard - Gestión Contratación</h2><div class='mini-grid'><div class='dash-metric'><span>Procesos activos</span><b>{con_docs}</b></div><div class='dash-metric'><span>Tipos documento</span><b>{con_tipos}</b></div><div class='dash-metric'><span>Contratos activos</span><b>{con_docs}</b></div><div class='dash-metric'><span>Por vencer</span><b>0</b></div></div><br><a class='btn-blue' href='/admin/contratacion'>Ver Dashboard Completo</a></div>
-      <div class='card span-12'><h2>📈 Rango de cargas documentales</h2><form method='get' class='form-grid'><div class='field'><label>Desde</label><input type='date' name='desde' value='{desde}'></div><div class='field'><label>Hasta</label><input type='date' name='hasta' value='{hasta}'></div><button class='btn-blue'>Visualizar rango</button><a class='btn' href='/admin'>Limpiar rango</a></form><div class='grid' style='margin-top:14px'><div class='detail-box span-3'><small>Rango seleccionado</small><b>{doc_rango}</b></div><div class='detail-box span-3'><small>Hoy</small><b>{doc_dia}</b></div><div class='detail-box span-3'><small>Últimos 7 días</small><b>{doc_semana}</b></div><div class='detail-box span-3'><small>Mes actual</small><b>{doc_mes}</b></div></div></div>
-      <div class='card span-12'><h2>📊 Indicadores por tipo de documento</h2><div class='bars'>{chart_html}</div></div>
-      <div class='card span-12 alert-card'><h2>🔔 Campanita de cargas recientes</h2><p class='muted'>Aquí ves de primera mano quién cargó o recibió documentos nuevos.</p>{alert_items}</div>
-      <div class='card span-12'><h2>Últimas cargas</h2>{tabla_docs(ult)}</div>
-    </section>"""
+    """
     return render_page(content, active='Admin')
 
 @app.route('/admin/trabajadores', methods=['GET','POST'])
