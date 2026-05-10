@@ -326,7 +326,12 @@ def init_db():
                         ("admin", generate_password_hash("admin123"), "Administrador PRIZE", "admin"))
         if not con.execute("SELECT 1 FROM trabajadores WHERE dni='74324033'").fetchone():
             con.execute("INSERT INTO trabajadores(dni,nombre,correo,cargo,area,empresa,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?)",
-                        ("74324033", "AZABACHE LUJAN, OMAR EDUARDO", "omar@demo.com", "Analista", "RR.HH.", "PRIZE SUPERFRUITS", 1, now_txt()))
+                        ("74324033", "AZABACHE LUJAN, OMAR EDUARDO", "omar@demo.com", "Analista", "RR.HH.", "AQUANQA", 1, now_txt()))
+        # Normaliza registros antiguos de demostración para que no aparezca PRIZE SUPERFRUITS al trabajador.
+        try:
+            con.execute("UPDATE trabajadores SET empresa='AQUANQA' WHERE UPPER(COALESCE(empresa,''))='PRIZE SUPERFRUITS'")
+        except Exception:
+            pass
         con.commit()
 
 
@@ -865,18 +870,25 @@ def sidebar(active):
             <a class='{cls_test}' onclick='saveSideScroll()' href='/admin/modo_prueba'><span>🧪</span><span class='label'>Modo prueba y limpieza</span></a>
           </div>
         </div>"""
+    user_docs_keys = [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES]
+    user_docs_cls = 'menu-group force-open' if active_type in user_docs_keys else 'menu-group'
     documentos_generales = '' if session.get('admin_id') else f"""
-      <div id='grp_pago' data-group='pago' class='{pago_cls}'>
-        <button type='button' class='menu-title' onclick="toggleGroup('grp_pago')"><span>▣</span><span class='label'>Documentos de pago</span><span class='chev'>∨</span></button>
-        <div class='submenu'>{pago}</div>
-      </div>
-      <div id='grp_empresa' data-group='empresa' class='{emp_cls}'>
-        <button type='button' class='menu-title' onclick="toggleGroup('grp_empresa')"><span>▦</span><span class='label'>Documentos de la empresa</span><span class='chev'>∨</span></button>
-        <div class='submenu'>{emp}</div>
-      </div>
-      <div id='grp_personal' data-group='personal' class='{per_cls}'>
-        <button type='button' class='menu-title' onclick="toggleGroup('grp_personal')"><span>▤</span><span class='label'>Documentos personales</span><span class='chev'>∨</span></button>
-        <div class='submenu'>{per}</div>
+      <div id='grp_user_documental' data-group='user_documental' class='{user_docs_cls}'>
+        <button type='button' class='menu-title' onclick="toggleGroup('grp_user_documental')"><span>🗃️</span><span class='label'>Gestión Documental</span><span class='chev'>∨</span></button>
+        <div class='submenu'>
+          <div id='grp_pago' data-group='pago' class='{pago_cls}'>
+            <button type='button' class='menu-title' onclick="toggleGroup('grp_pago')"><span>▣</span><span class='label'>Documentos de pago</span><span class='chev'>∨</span></button>
+            <div class='submenu'>{pago}</div>
+          </div>
+          <div id='grp_empresa' data-group='empresa' class='{emp_cls}'>
+            <button type='button' class='menu-title' onclick="toggleGroup('grp_empresa')"><span>▦</span><span class='label'>Documentos de la empresa</span><span class='chev'>∨</span></button>
+            <div class='submenu'>{emp}</div>
+          </div>
+          <div id='grp_personal' data-group='personal' class='{per_cls}'>
+            <button type='button' class='menu-title' onclick="toggleGroup('grp_personal')"><span>▤</span><span class='label'>Documentos personales</span><span class='chev'>∨</span></button>
+            <div class='submenu'>{per}</div>
+          </div>
+        </div>
       </div>"""
     return f"""
     <nav>
@@ -884,7 +896,7 @@ def sidebar(active):
       {admin}
       <div id='grp_cuenta' data-group='cuenta' class='menu-group'>
         <button type='button' class='menu-title' onclick="toggleGroup('grp_cuenta')"><span>👤</span><span class='label'>Mi cuenta</span><span class='chev'>∨</span></button>
-        <div class='submenu'><a class='menu-item' onclick='saveSideScroll()' href='/panel'><span>🏠</span><span class='label'>Inicio</span></a><a class='menu-item' onclick='saveSideScroll()' href='/vacaciones/mi_solicitud'><span>🏖️</span><span class='label'>Gestión vacaciones</span></a><a class='menu-item' onclick='saveSideScroll()' href='/contratacion/mis_documentos'><span>🧾</span><span class='label'>Gestión contrato</span></a><a class='menu-item' href='/logout'><span>🚪</span><span class='label'>Salir</span></a></div>
+        <div class='submenu'><a class='menu-item {'active' if active == 'Inicio' else ''}' onclick='saveSideScroll()' href='/panel'><span>🏠</span><span class='label'>Inicio</span></a><a class='menu-item {'active' if active == 'Gestion Vacacional' else ''}' onclick='saveSideScroll()' href='/vacaciones/mi_solicitud'><span>🏖️</span><span class='label'>Gestión Vacacional</span></a><a class='menu-item {'active' if active == 'Gestion Contratacion' else ''}' onclick='saveSideScroll()' href='/contratacion/mis_documentos'><span>🧾</span><span class='label'>Gestión Contrato</span></a><a class='menu-item' href='/logout'><span>🚪</span><span class='label'>Salir</span></a></div>
       </div>
     </nav>"""
 
@@ -954,12 +966,20 @@ def logout():
 @worker_required
 def seleccionar_empresa():
     dni=session['dni']; t=get_trabajador(dni)
-    # Empresas habilitadas para que el trabajador elija al entrar.
-    # Se estandariza según lo solicitado: AQUANQA / AQUANCA II.
-    empresas=['AQUANQA', 'AQUANCA II']
     emp_real = clean(t['empresa']) if t and 'empresa' in t.keys() else ''
-    if emp_real and emp_real not in empresas:
-        empresas.insert(0, emp_real)
+    # Solo mostrar la(s) empresa(s) que vienen desde la columna EMPRESA del trabajador.
+    # Se elimina cualquier opción fija como PRIZE SUPERFRUITS.
+    empresas=[]
+    for raw in emp_real.replace('|','/').replace(';','/').replace(',','/').split('/'):
+        e=clean(raw)
+        if not e: continue
+        # corrección defensiva para bases antiguas/demostración
+        if e.upper() == 'PRIZE SUPERFRUITS':
+            e = 'AQUANQA'
+        if e not in empresas:
+            empresas.append(e)
+    if not empresas:
+        empresas=['AQUANQA']
     if request.method=='POST':
         emp=clean(request.form.get('empresa'))
         if emp not in empresas: emp=empresas[0]
@@ -969,7 +989,7 @@ def seleccionar_empresa():
     opts=''.join([f"<option value='{e}'>{e}</option>" for e in empresas])
     content=f"""<div class='login-body'><form class='login-card' method='post'><div class='login-inner'>
       <div class='login-logo'><img src='{logo_url()}'></div><div class='login-title'><h1>Elegir empresa</h1><b>{t['nombre'] if t else dni}</b></div>
-      <div class='field'><label>Empresa</label><div class='login-input'>🏢<select name='empresa' style='width:100%;background:transparent;color:#fff;border:0;padding:15px;font-weight:900'>{opts}</select></div></div>
+      <div class='field'><label>Empresa asignada</label><div class='login-input'>🏢<select name='empresa' style='width:100%;background:transparent;color:#fff;border:0;padding:15px;font-weight:900'>{opts}</select></div></div>
       <button class='btn-green'>Ingresar al portal</button></div></form></div>"""
     return render_template_string(BASE, body=content, title='Elegir empresa')
 
@@ -1345,7 +1365,7 @@ def admin_trabajadores():
                     correo = clean(row[idx('CORREO')] if idx('CORREO')>=0 else '').lower()
                     cargo = clean(row[idx('CARGO')] if idx('CARGO')>=0 else '')
                     area = clean(row[idx('AREA')] if idx('AREA')>=0 else '')
-                    empresa = clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'PRIZE SUPERFRUITS')
+                    empresa = clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'AQUANQA')
                     fecha_nac_raw = row[idx('FECHA_NACIMIENTO')] if idx('FECHA_NACIMIENTO')>=0 else ''
                     fecha_nac = fecha_nac_raw.strftime('%d/%m/%Y') if hasattr(fecha_nac_raw, 'strftime') else clean(fecha_nac_raw)
                     planilla = clean(row[idx('PLANILLA')] if idx('PLANILLA')>=0 else '')
@@ -1379,7 +1399,7 @@ def plantilla_trabajadores():
     wb = Workbook(); ws = wb.active; ws.title = 'TRABAJADORES'
     headers = ['EMPRESA','DNI','TRABAJADOR','CARGO','AREA','PLANILLA','CORREO','FECHA NACIMIENTO','FECHA INGRESO']
     ws.append(headers)
-    ws.append(['PRIZE SUPERFRUITS','74324033','APELLIDOS Y NOMBRES','Analista','RR.HH.','PLANILLA 01','correo@empresa.com','01/01/1990','01/05/2024'])
+    ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','Analista','RR.HH.','PLANILLA 01','correo@empresa.com','01/01/1990','01/05/2024'])
     for i, h in enumerate(headers, 1):
         font = copy(ws.cell(1, i).font); font.bold = True; ws.cell(1, i).font = font
         ws.column_dimensions[chr(64+i)].width = 24
@@ -1580,23 +1600,38 @@ def admin_vacaciones_accion(sid, rol, accion):
 @worker_required
 def trabajador_vacaciones():
     dni=session['dni']; t=get_trabajador(dni)
+    with db() as con:
+        saldo=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=?',(dni,)).fetchone()
     if request.method=='POST':
         fi=clean(request.form.get('fecha_inicio')); ff=clean(request.form.get('fecha_fin')); dias=dias_entre_texto(fi,ff)
+        adelanto = '1' if request.form.get('adelanto') else ''
+        saldo_disponible = float(saldo['saldo'] if saldo and saldo['saldo'] is not None else 0)
+        if dias <= 0:
+            flash('Rango de fechas inválido. Revisa inicio y fin.', 'err')
+            return redirect(url_for('trabajador_vacaciones'))
+        if dias > saldo_disponible and not adelanto:
+            flash(f'No se registró la solicitud: necesitas {dias} día(s), pero tu saldo disponible es {saldo_disponible}. Marca ADELANTO DE VACACIONES si corresponde autorización especial.', 'err')
+            return redirect(url_for('trabajador_vacaciones'))
+        estado = 'Pendiente jefe'
+        motivo_base = clean(request.form.get('motivo'))
+        if dias > saldo_disponible and adelanto:
+            estado = 'Pendiente jefe - Adelanto de vacaciones'
+            motivo_base = (motivo_base + ' | ' if motivo_base else '') + f'ADELANTO DE VACACIONES: solicita {dias} día(s) con saldo disponible {saldo_disponible}.'
         with db() as con:
-            con.execute('INSERT INTO vacaciones_solicitudes(dni,trabajador,fecha_inicio,fecha_fin,dias,motivo,estado,fecha_solicitud) VALUES(?,?,?,?,?,?,?,?)',(dni,t['nombre'] if t else '',fi,ff,dias,clean(request.form.get('motivo')),'Pendiente jefe',now_txt())); con.commit()
+            con.execute('INSERT INTO vacaciones_solicitudes(dni,trabajador,fecha_inicio,fecha_fin,dias,motivo,estado,fecha_solicitud) VALUES(?,?,?,?,?,?,?,?)',(dni,t['nombre'] if t else '',fi,ff,dias,motivo_base,estado,now_txt())); con.commit()
         flash('Solicitud registrada. Pasará por jefe inmediato y Gestión del Talento Humano.','ok')
         return redirect(url_for('trabajador_vacaciones'))
     with db() as con:
         saldo=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=?',(dni,)).fetchone()
         solicitudes=con.execute('SELECT * FROM vacaciones_solicitudes WHERE dni=? ORDER BY id DESC',(dni,)).fetchall()
     sol=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td>{r['motivo'] or ''}</td></tr>" for r in solicitudes])
+    saldo_val = float(saldo['saldo'] if saldo and saldo['saldo'] is not None else 0)
     content=f"""
-    <div class='hero'><div class='topbar'><div><h1>Mis <span class='accent'>Vacaciones</span></h1><div class='subtitle'>Consulta saldo y registra solicitud de goce vacacional.</div></div></div></div>
-    <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo['saldo'] if saldo else 0}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{saldo['dias_ganados'] if saldo else 0}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Periodo</h3><b>{saldo['periodo'] if saldo else '-'}</b></div><div class='ico'>📅</div></div>
-    <div class='card span-12'><h2>Nueva solicitud</h2><form method='post' class='form-grid'><div class='field'><label>Inicio</label><input type='date' name='fecha_inicio' required></div><div class='field'><label>Fin</label><input type='date' name='fecha_fin' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div><button class='btn-green'>Registrar solicitud</button></form></div>
+    <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Vacacional</span></h1><div class='subtitle'>Consulta tu saldo, valida días disponibles y registra solicitudes.</div></div></div></div>
+    <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo_val}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{saldo['dias_ganados'] if saldo else 0}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Periodo</h3><b>{saldo['periodo'] if saldo else '-'}</b></div><div class='ico'>📅</div></div>
+    <div class='card span-12'><h2>Nueva solicitud</h2><p class='muted'>El sistema valida el saldo antes de registrar. Si no tiene saldo, solo se permite enviarla marcando adelanto de vacaciones.</p><form method='post' class='form-grid'><div class='field'><label>Inicio</label><input type='date' name='fecha_inicio' required></div><div class='field'><label>Fin</label><input type='date' name='fecha_fin' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div><div class='field'><label>Tipo especial</label><label class='checkline'><input type='checkbox' name='adelanto' value='1'> Adelanto de vacaciones</label></div><button class='btn-green'>Registrar solicitud</button></form></div>
     <div class='card span-12'><h2>Mis solicitudes</h2><div class='table-wrap'><table><tr><th>Fecha</th><th>Rango</th><th>Días</th><th>Estado</th><th>Comentario</th></tr>{sol or '<tr><td colspan=5>No hay solicitudes.</td></tr>'}</table></div></div></section>"""
     return render_page(content, active='Gestion Vacacional')
-
 
 @app.route('/contratacion/mis_documentos')
 @worker_required
