@@ -190,8 +190,16 @@ def init_db():
             ('foto_ruta', 'ALTER TABLE trabajadores ADD COLUMN foto_ruta TEXT'),
             ('fecha_nacimiento', 'ALTER TABLE trabajadores ADD COLUMN fecha_nacimiento TEXT'),
             ('fecha_ingreso', 'ALTER TABLE trabajadores ADD COLUMN fecha_ingreso TEXT'),
+            ('empresa_login', 'ALTER TABLE trabajadores ADD COLUMN empresa_login TEXT'),
             ('usuario_portal', 'ALTER TABLE trabajadores ADD COLUMN usuario_portal TEXT'),
             ('clave_portal', 'ALTER TABLE trabajadores ADD COLUMN clave_portal TEXT'),
+        ]:
+            try: con.execute(ddl)
+            except Exception: pass
+        for col, ddl in [
+            ('fecha_ingreso', 'ALTER TABLE vacaciones_saldos ADD COLUMN fecha_ingreso TEXT'),
+            ('periodo_inicio', 'ALTER TABLE vacaciones_saldos ADD COLUMN periodo_inicio TEXT'),
+            ('periodo_fin', 'ALTER TABLE vacaciones_saldos ADD COLUMN periodo_fin TEXT'),
         ]:
             try: con.execute(ddl)
             except Exception: pass
@@ -235,6 +243,9 @@ def init_db():
             empresa TEXT,
             area TEXT,
             jefe TEXT,
+            fecha_ingreso TEXT,
+            periodo_inicio TEXT,
+            periodo_fin TEXT,
             dias_ganados REAL DEFAULT 0,
             dias_gozados REAL DEFAULT 0,
             saldo REAL DEFAULT 0,
@@ -242,6 +253,14 @@ def init_db():
             fecha_carga TEXT,
             uploaded_by TEXT
         )''')
+        for col, ddl in [
+            ('fecha_ingreso', 'ALTER TABLE vacaciones_saldos ADD COLUMN fecha_ingreso TEXT'),
+            ('periodo_inicio', 'ALTER TABLE vacaciones_saldos ADD COLUMN periodo_inicio TEXT'),
+            ('periodo_fin', 'ALTER TABLE vacaciones_saldos ADD COLUMN periodo_fin TEXT'),
+        ]:
+            try: con.execute(ddl)
+            except Exception: pass
+
         con.execute('''
         CREATE TABLE IF NOT EXISTS vacaciones_solicitudes(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -373,16 +392,15 @@ def get_trabajador(dni):
 
 
 def generar_clave_trabajador(dni, fecha_nac=''):
-    """Clave masiva: DNI + fecha nacimiento si existe; si no, últimos 4 DNI + PRIZE."""
-    dni = normalizar_dni(dni)
-    nums = re.sub(r"\D", "", str(fecha_nac or ""))
+    """Clave del trabajador: fecha de nacimiento sin / ni guiones (ddmmaaaa)."""
+    if hasattr(fecha_nac, 'strftime'):
+        return fecha_nac.strftime('%d%m%Y')
+    txt = str(fecha_nac or '').strip()
+    nums = re.sub(r"\D", "", txt)
     if len(nums) >= 8:
-        clave = dni[-4:] + nums[:8]
-    elif len(nums) >= 6:
-        clave = dni[-4:] + nums[:6]
-    else:
-        clave = dni[-4:] + "PRIZE"
-    return clave.upper()
+        return nums[:8]
+    dni = normalizar_dni(dni)
+    return (dni[-4:] + "PRIZE").upper()
 
 
 def registrar_evento_documento(doc_id, dni, evento, detalle=''):
@@ -850,7 +868,7 @@ def sidebar(active):
       {admin}
       <div id='grp_cuenta' data-group='cuenta' class='menu-group'>
         <button type='button' class='menu-title' onclick="toggleGroup('grp_cuenta')"><span>👤</span><span class='label'>Mi cuenta</span><span class='chev'>∨</span></button>
-        <div class='submenu'><a class='menu-item' onclick='saveSideScroll()' href='/panel'><span>🏠</span><span class='label'>Inicio</span></a><a class='menu-item' onclick='saveSideScroll()' href='/vacaciones/mi_solicitud'><span>🏖️</span><span class='label'>Mis vacaciones</span></a><a class='menu-item' href='/logout'><span>🚪</span><span class='label'>Salir</span></a></div>
+        <div class='submenu'><a class='menu-item' onclick='saveSideScroll()' href='/panel'><span>🏠</span><span class='label'>Inicio</span></a><a class='menu-item' onclick='saveSideScroll()' href='/vacaciones/mi_solicitud'><span>🏖️</span><span class='label'>Gestión vacaciones</span></a><a class='menu-item' onclick='saveSideScroll()' href='/contratacion/mis_documentos'><span>🧾</span><span class='label'>Gestión contrato</span></a><a class='menu-item' href='/logout'><span>🚪</span><span class='label'>Salir</span></a></div>
       </div>
     </nav>"""
 
@@ -863,7 +881,7 @@ def login_template(admin=False, error=""):
       <div class='field'><label>Clave</label><div class='login-input'>🔒<input name='clave' type='password' placeholder='Ingrese su clave' required></div></div>
     """ if admin else """
       <div class='field'><label>DNI</label><div class='login-input'>🪪<input name='dni' maxlength='8' placeholder='Ingrese su DNI' required></div></div>
-      <div class='field'><label>Correo o clave</label><div class='login-input'>🔑<input name='correo' placeholder='Correo o clave generada' required></div></div>
+      <div class='field'><label>Clave</label><div class='login-input'>🔑<input name='correo' type='password' placeholder='Fecha nacimiento: ddmmaaaa' required></div></div>
     """
     body = f"""
     <div class='login-body'><form class='login-card' method='post' action='{action}'><div class='login-inner'>
@@ -899,21 +917,48 @@ def login():
         if bloqueado:
             return login_template(False, "Usuario bloqueado por 3 intentos fallidos. Solicite desbloqueo al administrador.")
         t = get_trabajador(dni)
-        ok_correo = t and clean(t['correo']).lower() == clave
-        ok_clave = t and clean(t['clave_portal'] if 'clave_portal' in t.keys() else '').lower() == clave
-        if not t or not (ok_correo or ok_clave):
+        clave_correcta = generar_clave_trabajador(dni, t['fecha_nacimiento'] if t and 'fecha_nacimiento' in t.keys() else '').lower() if t else ''
+        clave_guardada = clean(t['clave_portal'] if t and 'clave_portal' in t.keys() else '').lower()
+        if not t or not int(t['activo'] or 0) or (clave != clave_correcta and clave != clave_guardada):
             n, b = registrar_intento_fallido(dni)
             if b:
                 return login_template(False, "Usuario bloqueado por 3 intentos fallidos. Solicite desbloqueo al administrador.")
-            return login_template(False, f"DNI y correo/clave no coinciden. Intento {n}/3.")
+            return login_template(False, f"DNI o clave incorrecta. Clave = fecha nacimiento sin / (ddmmaaaa). Intento {n}/3.")
         reset_intentos_login(dni)
         session.clear(); session['dni'] = dni; session['nombre'] = t['nombre']
-        return redirect(url_for('panel'))
+        return redirect(url_for('seleccionar_empresa'))
     return login_template(False)
 
 @app.route('/logout')
 def logout():
     session.clear(); return redirect(url_for('login'))
+
+
+@app.route('/seleccionar_empresa', methods=['GET','POST'])
+@worker_required
+def seleccionar_empresa():
+    dni=session['dni']; t=get_trabajador(dni)
+    empresas=[]
+    if t and clean(t['empresa']):
+        empresas.append(clean(t['empresa']))
+    with db() as con:
+        for r in con.execute("SELECT DISTINCT empresa FROM trabajadores WHERE dni=? AND COALESCE(empresa,'')<>''", (dni,)).fetchall():
+            if clean(r['empresa']) not in empresas:
+                empresas.append(clean(r['empresa']))
+    if not empresas:
+        empresas=['PRIZE SUPERFRUITS']
+    if request.method=='POST':
+        emp=clean(request.form.get('empresa'))
+        if emp not in empresas: emp=empresas[0]
+        session['empresa']=emp
+        flash(f'Empresa seleccionada: {emp}', 'ok')
+        return redirect(url_for('panel'))
+    opts=''.join([f"<option value='{e}'>{e}</option>" for e in empresas])
+    content=f"""<div class='login-body'><form class='login-card' method='post'><div class='login-inner'>
+      <div class='login-logo'><img src='{logo_url()}'></div><div class='login-title'><h1>Elegir empresa</h1><b>{t['nombre'] if t else dni}</b></div>
+      <div class='field'><label>Empresa</label><div class='login-input'>🏢<select name='empresa' style='width:100%;background:transparent;color:#fff;border:0;padding:15px;font-weight:900'>{opts}</select></div></div>
+      <button class='btn-green'>Ingresar al portal</button></div></form></div>"""
+    return render_template_string(BASE, body=content, title='Elegir empresa')
 
 @app.route('/panel')
 @worker_required
@@ -923,7 +968,7 @@ def panel():
     ultimo = docs[0]['tipo'] if docs else 'Sin documento'
     cards = ''.join(doc_card(k,l,i) for k,l,i in (TIPOS_PAGO+TIPOS_EMPRESA+TIPOS_PERSONALES))
     content = f"""
-    <div class='hero'><div class='topbar'><div><h1>Portal Documental <span class='accent'>PRIZE</span></h1><div class='subtitle'>{t['nombre']} · DNI {t['dni']} · {t['empresa']}</div></div><div style='display:flex;gap:10px;align-items:center'><span class='btn'>● Activo</span><a class='btn-blue' href='/panel'>Ver todo</a></div></div></div>
+    <div class='hero'><div class='topbar'><div><h1>Portal Documental <span class='accent'>PRIZE</span></h1><div class='subtitle'>{t['nombre']} · DNI {t['dni']} · {session.get('empresa') or t['empresa']}</div></div><div style='display:flex;gap:10px;align-items:center'><span class='btn'>● Activo</span><a class='btn-blue' href='/panel'>Ver todo</a></div></div></div>
     <section class='grid'><div class='card mini'><div><span>Documentos</span><br><b>{len(docs)}</b></div><div class='ico'>🗂️</div></div><div class='card mini'><div><span>Último tipo</span><br><b>{ultimo}</b></div><div class='ico'>📄</div></div><div class='card mini'><div><span>Estado</span><br><b>Activo</b></div><div class='ico'>✅</div></div><div class='card span-12 profile-card'><div><h2>Mi perfil y foto</h2><p class='muted'>Actualiza tu foto para que el portal quede como panel profesional.</p></div><div class='profile-row'><img class='profile-img' src='{url_for('foto_trabajador', dni=dni) if t['foto_ruta'] else logo_url()}'><form method='post' action='/mi_foto' enctype='multipart/form-data' class='form-grid profile-form'><div class='field'><label>Foto personal</label><input type='file' name='foto' accept='.png,.jpg,.jpeg,.webp' required></div><button class='btn-green'>Cargar foto</button></form></div></div>
     <div class='card span-12'><div style='display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap'><h2>Accesos por pestaña</h2><input id='cardSearch' onkeyup='filterCards()' class='input' style='max-width:310px' placeholder='Buscar pestaña...'></div><div class='doc-grid'>{cards}</div></div>
     <div class='card span-12'><h2>🔔 Notificaciones</h2>{notificaciones_trabajador(dni)}</div><div class='card span-12'><h2>Últimos documentos</h2>{tabla_docs(docs)}</div></section>"""
@@ -1288,7 +1333,8 @@ def admin_trabajadores():
                     cargo = clean(row[idx('CARGO')] if idx('CARGO')>=0 else '')
                     area = clean(row[idx('AREA')] if idx('AREA')>=0 else '')
                     empresa = clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'PRIZE SUPERFRUITS')
-                    fecha_nac = clean(row[idx('FECHA_NACIMIENTO')] if idx('FECHA_NACIMIENTO')>=0 else '')
+                    fecha_nac_raw = row[idx('FECHA_NACIMIENTO')] if idx('FECHA_NACIMIENTO')>=0 else ''
+                    fecha_nac = fecha_nac_raw.strftime('%d/%m/%Y') if hasattr(fecha_nac_raw, 'strftime') else clean(fecha_nac_raw)
                     planilla = clean(row[idx('PLANILLA')] if idx('PLANILLA')>=0 else '')
                     fecha_ing = clean(row[idx('FECHA_INGRESO')] if idx('FECHA_INGRESO')>=0 else '')
                     clave = generar_clave_trabajador(dni, fecha_nac)
@@ -1364,8 +1410,8 @@ def admin_usuarios():
         trs.append(f"<tr><td>{dni}</td><td>{r['nombre']}</td><td>{r['usuario_portal'] or dni}</td><td><b>{clave}</b></td><td>{r['correo'] or ''}</td><td>{r['empresa'] or ''}</td><td><a class='btn-blue mini-btn' href='/admin/usuario/{dni}/reset'>Regenerar</a> <a class='btn-red mini-btn' onclick='return confirm(\"¿Eliminar trabajador/usuario?\")' href='/admin/usuario/{dni}/eliminar'>Eliminar</a></td></tr>")
     table=''.join(trs)
     content=f"""
-    <div class='hero'><div class='topbar'><div><h1>Usuarios y contraseñas</h1><div class='subtitle'>Control para más de 10 mil trabajadores. Usuario = DNI; clave = combinación DNI + fecha nacimiento.</div></div><a class='btn-green' href='/admin/plantilla_trabajadores'>Plantilla masiva</a></div></div>
-    <section class='grid'><div class='card span-12'><h2>Listado de accesos</h2><p class='muted'>El trabajador puede ingresar con DNI + correo o DNI + clave generada.</p><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Usuario</th><th>Clave</th><th>Correo</th><th>Empresa</th><th>Opciones</th></tr>{table}</table></div></div></section>"""
+    <div class='hero'><div class='topbar'><div><h1>Usuarios y contraseñas</h1><div class='subtitle'>Control para más de 10 mil trabajadores. Usuario = DNI; clave = fecha de nacimiento sin / (ddmmaaaa).</div></div><a class='btn-green' href='/admin/plantilla_trabajadores'>Plantilla masiva</a></div></div>
+    <section class='grid'><div class='card span-12'><h2>Listado de accesos</h2><p class='muted'>El trabajador ingresa con usuario = DNI y clave = fecha nacimiento sin / (ddmmaaaa).</p><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Usuario</th><th>Clave</th><th>Correo</th><th>Empresa</th><th>Opciones</th></tr>{table}</table></div></div></section>"""
     return render_page(content, active='Usuarios')
 
 @app.route('/admin/usuario/<dni>/reset')
@@ -1465,9 +1511,12 @@ def admin_vacaciones():
                     if not dni: continue
                     trabajador=clean(val(row,['TRABAJADOR','NOMBRE','APELLIDOS Y NOMBRES']))
                     gan=float(val(row,['DIAS GANADOS','DÍAS GANADOS','GANADOS']) or 0)
-                    goz=float(val(row,['DIAS GOZADOS','DÍAS GOZADOS','GOZADOS']) or 0)
-                    saldo=float(val(row,['SALDO','SALDO VACACIONAL']) or (gan-goz))
-                    con.execute('INSERT INTO vacaciones_saldos(dni,trabajador,empresa,area,jefe,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dni) DO UPDATE SET trabajador=excluded.trabajador,empresa=excluded.empresa,area=excluded.area,jefe=excluded.jefe,dias_ganados=excluded.dias_ganados,dias_gozados=excluded.dias_gozados,saldo=excluded.saldo,periodo=excluded.periodo,fecha_carga=excluded.fecha_carga,uploaded_by=excluded.uploaded_by', (dni,trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),clean(val(row,['JEFE','JEFE INMEDIATO'])),gan,goz,saldo,clean(val(row,['PERIODO','PERÍODO'])) or datetime.now(APP_TZ).strftime('%Y'),now_txt(),marca_carga(session.get('admin_user','admin'))))
+                    saldo=float(val(row,['SALDO','SALDO VACACIONAL']) or gan)
+                    fecha_ing=clean(val(row,['FECHA INGRESO','FECHA_INGRESO','INGRESO']))
+                    p_ini=clean(val(row,['PERIODO INICIO','INICIO PERIODO','FECHA INICIO PERIODO']))
+                    p_fin=clean(val(row,['PERIODO FIN','FIN PERIODO','FECHA FIN PERIODO']))
+                    periodo=(p_ini + ' al ' + p_fin).strip() if (p_ini or p_fin) else (clean(val(row,['PERIODO','PERÍODO'])) or datetime.now(APP_TZ).strftime('%Y'))
+                    con.execute('INSERT INTO vacaciones_saldos(dni,trabajador,empresa,area,jefe,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dni) DO UPDATE SET trabajador=excluded.trabajador,empresa=excluded.empresa,area=excluded.area,jefe=excluded.jefe,fecha_ingreso=excluded.fecha_ingreso,periodo_inicio=excluded.periodo_inicio,periodo_fin=excluded.periodo_fin,dias_ganados=excluded.dias_ganados,dias_gozados=0,saldo=excluded.saldo,periodo=excluded.periodo,fecha_carga=excluded.fecha_carga,uploaded_by=excluded.uploaded_by', (dni,trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),clean(val(row,['JEFE','JEFE INMEDIATO'])),fecha_ing,p_ini,p_fin,gan,0,saldo,periodo,now_txt(),marca_carga(session.get('admin_user','admin'))))
                     ok+=1
                 con.commit()
         flash(f'Saldos vacacionales cargados/actualizados: {ok}.','ok')
@@ -1475,13 +1524,13 @@ def admin_vacaciones():
     with db() as con:
         saldos=con.execute('SELECT * FROM vacaciones_saldos ORDER BY trabajador LIMIT 300').fetchall()
         solicitudes=con.execute('SELECT * FROM vacaciones_solicitudes ORDER BY id DESC LIMIT 300').fetchall()
-    sal=''.join([f"<tr><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['empresa'] or ''}</td><td>{r['area'] or ''}</td><td>{r['jefe'] or ''}</td><td>{r['dias_ganados']}</td><td>{r['dias_gozados']}</td><td><b>{r['saldo']}</b></td></tr>" for r in saldos])
+    sal=''.join([f"<tr><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['empresa'] or ''}</td><td>{r['area'] or ''}</td><td>{r['jefe'] or ''}</td><td>{r['fecha_ingreso'] if 'fecha_ingreso' in r.keys() else ''}</td><td>{r['periodo'] or ''}</td><td>{r['dias_ganados']}</td><td><b>{r['saldo']}</b></td></tr>" for r in saldos])
     sol=''.join([f"<tr><td>{r['id']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/jefe/aprobar'>Apr. jefe</a><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/gh/aprobar'>Apr. GTH</a><a class='btn-red mini-btn' href='/admin/vacaciones/{r['id']}/rechazar'>Rechazar</a></td></tr>" for r in solicitudes])
     content=f"""
     <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Vacacional</span></h1><div class='subtitle'>Administrador carga saldos; usuario solicita goce; flujo: jefe inmediato → Gestión del Talento Humano.</div></div><a class='btn-green' href='/admin/vacaciones/plantilla'>Descargar plantilla</a></div></div>
-    <section class='grid'><div id='aprobaciones' class='card mini'><div><h3>Pendientes de aprobación</h3><b>{len([r for r in solicitudes if 'Pendiente' in (r['estado'] or '')])}</b></div><div class='ico'>✅</div></div><div class='card mini'><div><h3>Saldos registrados</h3><b>{len(saldos)}</b></div><div class='ico'>🗓️</div></div><div class='card mini'><div><h3>Solicitudes totales</h3><b>{len(solicitudes)}</b></div><div class='ico'>📄</div></div><div id='cargar-saldos' class='card span-12'><h2>🏖️ Saldos Vacacionales</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel saldos</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-green'>Subir saldos</button></form><p class='muted'>Columnas: EMPRESA, DNI, TRABAJADOR, AREA, JEFE INMEDIATO, DIAS GANADOS, DIAS GOZADOS, SALDO, PERIODO.</p></div>
+    <section class='grid'><div id='aprobaciones' class='card mini'><div><h3>Pendientes de aprobación</h3><b>{len([r for r in solicitudes if 'Pendiente' in (r['estado'] or '')])}</b></div><div class='ico'>✅</div></div><div class='card mini'><div><h3>Saldos registrados</h3><b>{len(saldos)}</b></div><div class='ico'>🗓️</div></div><div class='card mini'><div><h3>Solicitudes totales</h3><b>{len(solicitudes)}</b></div><div class='ico'>📄</div></div><div id='cargar-saldos' class='card span-12'><h2>🏖️ Saldos Vacacionales</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel saldos</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-green'>Subir saldos</button></form><p class='muted'>Columnas: EMPRESA, DNI, TRABAJADOR, AREA, JEFE INMEDIATO, FECHA INGRESO, PERIODO INICIO, PERIODO FIN, DIAS GANADOS, SALDO. No usar DÍAS GOZADOS.</p></div>
     <div id='solicitudes' class='card span-12'><h2>📄 Solicitudes de vacaciones</h2><div class='table-wrap'><table><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Rango</th><th>Días</th><th>Estado</th><th>Acciones</th></tr>{sol or '<tr><td colspan=7>No hay solicitudes.</td></tr>'}</table></div></div>
-    <div id='reportes' class='card span-12'><h2>📑 Reporte de saldos cargados</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>Jefe</th><th>Ganados</th><th>Gozados</th><th>Saldo</th></tr>{sal or '<tr><td colspan=8>No hay saldos cargados.</td></tr>'}</table></div></div></section>"""
+    <div id='reportes' class='card span-12'><h2>📑 Reporte de saldos cargados</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>Jefe</th><th>Fecha ingreso</th><th>Periodo</th><th>Ganados</th><th>Saldo</th></tr>{sal or '<tr><td colspan=9>No hay saldos cargados.</td></tr>'}</table></div></div></section>"""
     return render_page(content, active='Vacaciones')
 
 @app.route('/admin/vacaciones/plantilla')
@@ -1489,8 +1538,8 @@ def admin_vacaciones():
 def admin_vacaciones_plantilla():
     path=PERSIST_DIR/'PLANTILLA_SALDOS_VACACIONALES.xlsx'
     wb=Workbook(); ws=wb.active; ws.title='SALDOS'
-    headers=['EMPRESA','DNI','TRABAJADOR','AREA','JEFE INMEDIATO','DIAS GANADOS','DIAS GOZADOS','SALDO','PERIODO']
-    ws.append(headers); ws.append(['AQUANQA I','74324033','APELLIDOS Y NOMBRES','RRHH','JEFE DIRECTO',30,12,18,'2026'])
+    headers=['EMPRESA','DNI','TRABAJADOR','AREA','JEFE INMEDIATO','FECHA INGRESO','PERIODO INICIO','PERIODO FIN','DIAS GANADOS','SALDO']
+    ws.append(headers); ws.append(['AQUANQA I','74324033','APELLIDOS Y NOMBRES','RRHH','JEFE DIRECTO','01/05/2024','01/05/2025','30/04/2026',30,30])
     for i,h in enumerate(headers,1): ws.column_dimensions[chr(64+i)].width=24
     wb.save(path); return send_file(path, as_attachment=True, download_name='PLANTILLA_SALDOS_VACACIONALES.xlsx')
 
@@ -1520,10 +1569,34 @@ def trabajador_vacaciones():
     sol=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td>{r['motivo'] or ''}</td></tr>" for r in solicitudes])
     content=f"""
     <div class='hero'><div class='topbar'><div><h1>Mis <span class='accent'>Vacaciones</span></h1><div class='subtitle'>Consulta saldo y registra solicitud de goce vacacional.</div></div></div></div>
-    <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo['saldo'] if saldo else 0}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{saldo['dias_ganados'] if saldo else 0}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Días gozados</h3><b>{saldo['dias_gozados'] if saldo else 0}</b></div><div class='ico'>✅</div></div>
+    <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo['saldo'] if saldo else 0}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{saldo['dias_ganados'] if saldo else 0}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Periodo</h3><b>{saldo['periodo'] if saldo else '-'}</b></div><div class='ico'>📅</div></div>
     <div class='card span-12'><h2>Nueva solicitud</h2><form method='post' class='form-grid'><div class='field'><label>Inicio</label><input type='date' name='fecha_inicio' required></div><div class='field'><label>Fin</label><input type='date' name='fecha_fin' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div><button class='btn-green'>Registrar solicitud</button></form></div>
     <div class='card span-12'><h2>Mis solicitudes</h2><div class='table-wrap'><table><tr><th>Fecha</th><th>Rango</th><th>Días</th><th>Estado</th><th>Comentario</th></tr>{sol or '<tr><td colspan=5>No hay solicitudes.</td></tr>'}</table></div></div></section>"""
     return render_page(content, active='Vacaciones')
+
+
+@app.route('/contratacion/mis_documentos')
+@worker_required
+def trabajador_contratacion():
+    dni=session['dni']; t=get_trabajador(dni)
+    with db() as con:
+        docs=con.execute('SELECT * FROM contratacion_docs WHERE dni=? ORDER BY id DESC', (dni,)).fetchall()
+    rows=''.join([f"<tr><td>{r['tipo_doc']}</td><td>{r['etapa']}</td><td><span class='status-pill'>{r['estado']}</span></td><td>{r['fecha_registro']}</td><td><a class='btn-blue mini-btn' target='_blank' href='/contratacion/ver/{r['id']}'>Ver</a></td></tr>" for r in docs])
+    content=f"""
+    <div class='hero'><div class='topbar'><div><h1>Gestión de <span class='accent'>Contrato</span></h1><div class='subtitle'>Visualiza y descarga tus contratos, anexos y documentos de incorporación o renovación.</div></div></div></div>
+    <section class='grid'><div class='card mini'><div><h3>Trabajador</h3><b>{t['nombre'] if t else dni}</b></div><div class='ico'>👤</div></div><div class='card mini'><div><h3>Empresa</h3><b>{session.get('empresa') or (t['empresa'] if t else '')}</b></div><div class='ico'>🏢</div></div><div class='card mini'><div><h3>Documentos</h3><b>{len(docs)}</b></div><div class='ico'>🧾</div></div>
+    <div class='card span-12'><h2>Mis documentos contractuales</h2><div class='table-wrap'><table><tr><th>Documento</th><th>Etapa</th><th>Estado</th><th>Fecha</th><th>Acción</th></tr>{rows or '<tr><td colspan=5>No hay documentos de contratación cargados.</td></tr>'}</table></div></div></section>"""
+    return render_page(content, active='Contratacion')
+
+@app.route('/contratacion/ver/<int:cid>')
+@worker_required
+def ver_contratacion(cid):
+    with db() as con:
+        r=con.execute('SELECT * FROM contratacion_docs WHERE id=?', (cid,)).fetchone()
+    if not r or r['dni'] != session.get('dni'): abort(404)
+    path=Path(r['ruta_archivo'])
+    if not path.exists(): abort(404)
+    return send_file(path, as_attachment=False, download_name=r['archivo_nombre'])
 
 @app.route('/admin/contratacion', methods=['GET','POST'])
 @admin_required
