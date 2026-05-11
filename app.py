@@ -26,6 +26,7 @@ from flask import Flask, request, redirect, url_for, session, send_file, render_
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from openpyxl import load_workbook, Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 try:
     from pypdf import PdfReader
 except Exception:
@@ -128,6 +129,18 @@ def safe_periodo(p):
     return re.sub(r"[^A-Za-z0-9_\- ]", "", clean(p))[:50] or datetime.now(APP_TZ).strftime("%Y-%m")
 
 
+
+
+
+def periodo_year_value(v):
+    """Normaliza I_PERIODO/F_PERIODO para trabajar solo con años: 2025, 2026, etc."""
+    if v is None:
+        return ''
+    if hasattr(v, 'year'):
+        return str(v.year)
+    txt = clean(v)
+    m = re.search(r'(20\d{2}|19\d{2})', txt)
+    return m.group(1) if m else txt
 
 def periodo_anual_texto(inicio='', fin=''):
     """Devuelve periodo en formato 2025/2026 usando fechas de inicio y fin."""
@@ -1631,8 +1644,8 @@ def admin_vacaciones():
                         fecha_ing = trabajador_db['fecha_ingreso'] if 'fecha_ingreso' in trabajador_db.keys() else ''
                     else:
                         fecha_ing = ''
-                    p_ini=clean(val(row,['I_PERIODO','PERIODO INICIO','INICIO PERIODO','FECHA INICIO PERIODO']))
-                    p_fin=clean(val(row,['F_PERIODO','PERIODO FIN','FIN PERIODO','FECHA FIN PERIODO']))
+                    p_ini=periodo_year_value(val(row,['I_PERIODO','PERIODO INICIO','INICIO PERIODO','FECHA INICIO PERIODO']))
+                    p_fin=periodo_year_value(val(row,['F_PERIODO','PERIODO FIN','FIN PERIODO','FECHA FIN PERIODO']))
                     periodo=clean(val(row,['PERIODO','PERÍODO'])) or periodo_anual_texto(p_ini, p_fin)
                     jefe_raw=clean(val(row,['JEFE DNI','DNI JEFE','JEFE INMEDIATO','JEFE']))
                     jefe_dni=normalizar_dni(jefe_raw)
@@ -1667,8 +1680,18 @@ def admin_vacaciones_plantilla():
     path=PERSIST_DIR/'PLANTILLA_SALDOS_VACACIONALES.xlsx'
     wb=Workbook(); ws=wb.active; ws.title='SALDOS'
     headers=['EMPRESA','DNI','TRABAJADOR','AREA','JEFE INMEDIATO','I_PERIODO','F_PERIODO','DIAS GANADOS','SALDO']
-    ws.append(headers); ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','RRHH','43043999','2025-01-01','2026-12-31',30,30])
-    for i,h in enumerate(headers,1): ws.column_dimensions[chr(64+i)].width=24
+    ws.append(headers); ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','RRHH','43043999','2025','2026',30,30])
+    # Formato simple: I_PERIODO y F_PERIODO son SOLO AÑOS, no fechas completas.
+    for i,h in enumerate(headers,1):
+        ws.column_dimensions[chr(64+i)].width=24
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='166534')
+        cell.alignment = Alignment(horizontal='center')
+    for col in ('F','G'):
+        for row in range(2, 502):
+            ws[f'{col}{row}'].number_format = '@'
+    ws.freeze_panes='A2'
     wb.save(path); return send_file(path, as_attachment=True, download_name='PLANTILLA_SALDOS_VACACIONALES.xlsx')
 
 @app.route('/admin/vacaciones/<int:sid>/<rol>/<accion>')
