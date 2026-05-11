@@ -1979,6 +1979,10 @@ def trabajador_vacaciones():
         if ff_date < fi_date:
             flash('No se registró la solicitud: la fecha fin no puede ser menor que la fecha inicio.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
+        dias_anticipacion = (fi_date - hoy).days
+        if dias_anticipacion > 90:
+            flash(f'No se registró la solicitud: solo se permiten solicitudes con máximo 90 días de anticipación. Inicio seleccionado: {fi_date.strftime("%d/%m/%Y")}.', 'err')
+            return redirect(url_for('trabajador_vacaciones'))
         fi=fi_date.isoformat(); ff=ff_date.isoformat(); dias=dias_entre_texto(fi,ff)
         adelanto = '1' if request.form.get('adelanto') else ''
         periodo_ids = [int(x) for x in request.form.getlist('periodos') if str(x).isdigit()]
@@ -2021,7 +2025,7 @@ def trabajador_vacaciones():
         saldos_usuario=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=? ORDER BY periodo_inicio, periodo_fin',(dni,)).fetchall()
         saldo=saldos_usuario[0] if saldos_usuario else None
         solicitudes=con.execute('SELECT * FROM vacaciones_solicitudes WHERE dni=? ORDER BY id DESC',(dni,)).fetchall()
-        por_aprobar=con.execute(sql_solicitudes_jefe("AND vs.estado='Pendiente jefe' ORDER BY vs.id DESC"),(dni,dni,dni)).fetchall()
+        por_aprobar=con.execute(sql_solicitudes_jefe("AND vs.estado='Pendiente jefe' ORDER BY vs.id DESC"),(dni,dni,dni,dni)).fetchall()
     sol=''.join([f"<div class='sol-card'><div data-label='Fecha'><b>{r['fecha_solicitud']}</b></div><div data-label='Rango'><b>{r['fecha_inicio']} al {r['fecha_fin']}</b></div><div data-label='Días' class='dias'><b>{r['dias']}</b></div><div data-label='Periodo usado'><b>{r['periodo_detalle'] if 'periodo_detalle' in r.keys() and r['periodo_detalle'] else '-'}</b></div><div data-label='Estado'><span class='status-pill'>{r['estado']}</span></div><div data-label='Comentario' class='coment'>{r['motivo'] or '-'}</div></div>" for r in solicitudes])
     sol_aprobar=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/vacaciones/aprobar_jefe/{r['id']}'>Aprobar</a><a class='btn-red mini-btn' href='/vacaciones/rechazar_jefe/{r['id']}'>Rechazar</a></td></tr>" for r in por_aprobar])
     with db() as con:
@@ -2119,7 +2123,7 @@ def vacaciones_rechazar_jefe(sid):
 def vacaciones_aprobaciones_jefe():
     dni=session['dni']; t=get_trabajador(dni)
     with db() as con:
-        rows=con.execute(sql_solicitudes_jefe("ORDER BY CASE WHEN vs.estado='Pendiente jefe' THEN 0 ELSE 1 END, vs.id DESC"), (dni,dni,dni)).fetchall()
+        rows=con.execute(sql_solicitudes_jefe("ORDER BY CASE WHEN vs.estado='Pendiente jefe' THEN 0 ELSE 1 END, vs.id DESC"), (dni,dni,dni,dni)).fetchall()
     pendientes=sum(1 for r in rows if (r['estado'] or '') == 'Pendiente jefe')
     aprobadas=sum(1 for r in rows if 'GTH' in (r['estado'] or '') or 'Aprobado' in (r['estado'] or ''))
     rechazadas=sum(1 for r in rows if 'Rechazado' in (r['estado'] or ''))
