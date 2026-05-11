@@ -573,6 +573,49 @@ def init_db():
         if not con.execute("SELECT 1 FROM contratacion_tipos LIMIT 1").fetchone():
             base_tipos=[('104','CONTRATO TRABAJADOR','Incorporación'),('619','CONTRATO TRABAJADOR (RENOVACIÓN)','Renovación'),('524','ANEXO DE RIESGOS','Incorporación'),('797','BOLETÍN SIS. PENSIONARIO','Incorporación'),('664','CARGO DE ENTREGA','Incorporación'),('382','CARTA DE COMPROMISO','Incorporación'),('805','ACUERDO PREFERENCIAL','Incorporación'),('809','ELECCIÓN DE BENEFICIOS SOCIALES','Incorporación')]
             con.executemany("INSERT INTO contratacion_tipos(codigo,descripcion,etapa,obligatorio,activo) VALUES(?,?,?,?,1)", [(a,b,c,1) for a,b,c in base_tipos])
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS contratacion_plantillas(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre_plantilla TEXT,
+            descripcion TEXT,
+            tipo_documento TEXT,
+            esquema TEXT DEFAULT 'Trabajador Contrato Laboral',
+            condicion TEXT DEFAULT 'SIN CONDICIONES',
+            version TEXT DEFAULT 'Version 01',
+            activo INTEGER DEFAULT 1,
+            archivo_nombre TEXT,
+            ruta_archivo TEXT,
+            fecha_creacion TEXT,
+            fecha_actualizacion TEXT,
+            creado_por TEXT
+        )''')
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS contratacion_plantilla_campos(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plantilla_id INTEGER,
+            descripcion TEXT,
+            tipo_campo TEXT DEFAULT 'Origen de Datos',
+            nombre_campo TEXT,
+            campo_origen TEXT,
+            tipo_dato TEXT DEFAULT 'Text',
+            requerido TEXT DEFAULT 'SI',
+            activo INTEGER DEFAULT 1
+        )''')
+        if not con.execute("SELECT 1 FROM contratacion_plantillas LIMIT 1").fetchone():
+            semillas=[
+                ('ACUERDO PREFERENCIAL','ACUERDO PREFERENCIAL','ACUERDO PREFERENCIAL','CONTRATACION PREFERENCIAL AQUII'),
+                ('AUTODECLARACION BUENAS PRACTICAS','AUTODECLARACION BUENAS PRACTICAS','AUTODECLARACION BUENAS PRACTICAS','AUTODECLARACION AQU ANQA II'),
+                ('CARGO ENTREGA RENOVACION','CARGO ENTREGA RENOVACION','CARGO ENTREGA RENOVACION','CARGO DE ENTREGA - RENOVACION - AQII'),
+                ('ELECCIÓN DE BENEFICIOS SOCIALES','ELECCIÓN DE BENEFICIOS SOCIALES','ELECCIÓN DE BENEFICIOS SOCIALES','ELECCION DE BENEFICIOS SOCIALES AQII'),
+                ('NOTA DE CARGO','NOTA DE CARGO','NOTA DE CARGO','NOTA DE CARGO AQII'),
+                ('CARTA DE COMPROMISO','CARTA DE COMPROMISO','CARTA DE COMPROMISO','CARTA DE COMPROMISO - AQ II'),
+                ('CARGO DE ENTREGA','CARGO DE ENTREGA','CARGO DE ENTREGA','CARGO DE ENTREGA AQII')]
+            for nom, desc, tipo, arch in semillas:
+                con.execute("INSERT INTO contratacion_plantillas(nombre_plantilla,descripcion,tipo_documento,archivo_nombre,fecha_creacion,fecha_actualizacion,creado_por) VALUES(?,?,?,?,?,?,?)", (nom,desc,tipo,arch,now_txt(),now_txt(),'Admin_AQUA'))
+            campos=[('Fecha Ini Contrato Minúscula','FechaIniContratoTextoMinuscula','DateTime'),('Zona','Zona','Text'),('Número Celular','NroTelefonoMovil','Text'),('Email','Email','Text'),('Dirección Simple','DireccionActual','Text'),('Fecha de Nacimiento Barra','FechaNacimientoBarra','DateTime'),('Dni','Dni','Text'),('Nombre Trabajador','NombreCompletoTrabajador','Text')]
+            for pid in [r['id'] for r in con.execute('SELECT id FROM contratacion_plantillas').fetchall()]:
+                for nom, origen, td in campos:
+                    con.execute("INSERT INTO contratacion_plantilla_campos(plantilla_id,descripcion,nombre_campo,campo_origen,tipo_dato) VALUES(?,?,?,?,?)", (pid,'',nom,origen,td))
         asegurar_carpetas_documentales()
         # Datos demo seguros
         if not con.execute("SELECT 1 FROM usuarios_admin WHERE usuario='admin'").fetchone():
@@ -2369,6 +2412,55 @@ def ver_contratacion(cid):
     return send_file(path, as_attachment=False, download_name=r['archivo_nombre'])
 
 
+@app.route('/admin/contratacion/plantilla/<int:pid>')
+@admin_required
+def contratacion_plantilla_detalle(pid):
+    tab=request.args.get('tab','contenido')
+    with db() as con:
+        pl=con.execute('SELECT * FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
+        campos=con.execute('SELECT * FROM contratacion_plantilla_campos WHERE plantilla_id=? ORDER BY id',(pid,)).fetchall()
+    if not pl: abort(404)
+    estado = 'Activo' if pl['activo'] else 'Inactivo'
+    tabs=f"""<div class='c-card'><div class='tabs'><a class='tab {'active' if tab=='contenido' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='contenido')}'>Contenido</a><a class='tab {'active' if tab=='campos' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='campos')}'>Campos</a></div></div>"""
+    if tab=='campos':
+        rows=''.join([f"<tr><td><span class='state'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{c['descripcion'] or ''}</td><td>{c['tipo_campo']}</td><td>{c['nombre_campo']}</td><td>{c['campo_origen']}</td><td>{c['tipo_dato']}</td><td>{c['requerido']}</td></tr>" for c in campos])
+        body=f"""<div class='toolbar'>↻ Refrescar</div><div class='c-card table-wrap'><table class='c-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows}</table></div>"""
+    else:
+        if pl['ruta_archivo'] and Path(pl['ruta_archivo']).exists() and str(pl['archivo_nombre']).lower().endswith('.pdf'):
+            preview=f"<iframe class='pdf-frame' src='{url_for('contratacion_plantilla_archivo',pid=pid)}'></iframe>"
+        elif pl['ruta_archivo'] and Path(pl['ruta_archivo']).exists():
+            preview=f"<div class='preview-empty'><b>Archivo cargado:</b> {pl['archivo_nombre']}<br><br><a class='c-btn' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>Descargar / abrir archivo</a><p class='muted2'>La previsualización directa funciona mejor con PDF. Para Word, descárgalo y ábrelo en Word.</p></div>"
+        else:
+            preview="<div class='preview-empty'><b>Sin archivo cargado.</b><br>Usa el lapicito para subir PDF/DOCX de la plantilla.</div>"
+        body=f"""<div class='preview-tools'><input placeholder='Código de Trabajador'><button class='c-btn green'>Previsualizar</button></div><div class='toolbar'>↻ Refrescar</div>{preview}"""
+    edit_url=url_for('contratacion_plantilla_editar',pid=pid)
+    file_btn = f"<a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar Archivo</a>" if pl['ruta_archivo'] else "<span class='c-btn gray'>Sin archivo</span>"
+    content=f"""
+    <style>.template-head{{background:#fff;border:1px solid #dde2e7;border-radius:10px;padding:22px;display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:12px}}.template-head h1{{margin:0 0 12px;font-size:30px}}.tpl-line{{margin:13px 0;color:#6b7280}}.tpl-line b{{color:#1f2937;margin-right:10px}}.green-dot{{display:inline-block;width:11px;height:11px;border-radius:50%;background:#4dcc69;margin-right:9px}}.preview-tools{{display:flex;gap:14px;margin:8px 0 16px}}.preview-tools input{{max-width:450px;background:#fff!important;color:#111!important;border:1px solid #d1d5db;border-radius:8px;padding:11px}}.pdf-frame{{width:100%;height:720px;border:1px solid #d1d5db;background:#eee}}.preview-empty{{background:#fff;border:1px dashed #cbd5e1;border-radius:12px;padding:28px;margin-top:12px}}</style>
+    <div class='template-head'><div><h1>{pl['nombre_plantilla']} <a class='icon-btn' href='{edit_url}'>✎</a></h1><div class='tpl-line'><b>Descripción:</b>{pl['descripcion']}</div><div class='tpl-line'><b>Nombre Archivo:</b>{pl['archivo_nombre'] or 'SIN ARCHIVO'} <a class='icon-btn' href='{edit_url}'>⌕</a></div>{file_btn}<div style='margin-top:14px;background:#eee;padding:8px'><b>Fecha de Creación:</b> {pl['fecha_creacion'] or ''} &nbsp;&nbsp; <b>Creado por:</b> {pl['creado_por'] or ''}</div></div><div style='border-left:2px dashed #d1d5db;padding-left:24px'><div class='tpl-line'><b>Versión:</b>{pl['version']}</div><div class='tpl-line'><b>Condición:</b>{pl['condicion']}</div><div class='tpl-line'><b>Esquema:</b>{pl['esquema']}</div><div class='tpl-line'><b>Tipo Documento:</b>{pl['tipo_documento']}</div><div class='tpl-line'><b>Estado:</b><span class='green-dot'></span>{estado}</div></div></div>{tabs}{body}<br><a class='c-btn' href='/admin/contratacion?sec=plantillas'>← Atrás</a>
+    """
+    return render_page(content, active='Gestion Contratacion:plantillas')
+
+@app.route('/admin/contratacion/plantilla/<int:pid>/archivo')
+@admin_required
+def contratacion_plantilla_archivo(pid):
+    with db() as con:
+        pl=con.execute('SELECT archivo_nombre,ruta_archivo FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
+    if not pl or not pl['ruta_archivo'] or not Path(pl['ruta_archivo']).exists(): abort(404)
+    return send_file(Path(pl['ruta_archivo']), as_attachment=False, download_name=pl['archivo_nombre'] or 'plantilla')
+
+@app.route('/admin/contratacion/plantilla/<int:pid>/editar')
+@admin_required
+def contratacion_plantilla_editar(pid):
+    with db() as con:
+        pl=con.execute('SELECT * FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
+    if not pl: abort(404)
+    content=f"""
+    <style>.modal-page{{max-width:760px;margin:25px auto;background:#fff;border-radius:12px;border:1px solid #dbe1e8;box-shadow:0 16px 35px #0001;padding:26px}}.modal-page h1{{margin-top:0}}.edit-grid{{display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:center}}.edit-grid input,.edit-grid select,.edit-grid textarea{{background:#fff!important;color:#111!important;border:1px solid #cfd6df;border-radius:8px;padding:10px;width:100%}}</style>
+    <div class='modal-page'><h1>Editar Plantilla</h1><form method='post' action='/admin/contratacion?sec=plantillas' enctype='multipart/form-data' class='edit-grid'><input type='hidden' name='accion' value='plantilla'><input type='hidden' name='plantilla_id' value='{pid}'><label>Tipo Documento</label><input name='tipo_documento' value='{pl['tipo_documento'] or ''}'><label>Esquema</label><input name='esquema' value='{pl['esquema'] or 'Trabajador Contrato Laboral'}'><label>Nombre Plantilla</label><input name='nombre_plantilla' value='{pl['nombre_plantilla'] or ''}'><label>Descripción</label><textarea name='descripcion'>{pl['descripcion'] or ''}</textarea><label>Versión</label><input name='version' value='{pl['version'] or 'Version 01'}'><label>Condición</label><select name='condicion'><option>{pl['condicion'] or 'SIN CONDICIONES'}</option><option>SIN CONDICIONES</option><option>CON CONDICIONES</option></select><label>Estado</label><select name='activo'><option value='1' {'selected' if pl['activo'] else ''}>Activo</option><option value='0' {'selected' if not pl['activo'] else ''}>Inactivo</option></select><label>Plantilla</label><input type='file' name='archivo' accept='.pdf,.doc,.docx'><span></span><div><button class='c-btn'>Actualizar</button> <a class='c-btn gray' href='{url_for('contratacion_plantilla_detalle',pid=pid)}'>Cerrar</a></div></form></div>
+    """
+    return render_page(content, active='Gestion Contratacion:plantillas')
+
 @app.route('/admin/contratacion', methods=['GET','POST'])
 @admin_required
 def admin_contratacion():
@@ -2386,6 +2478,46 @@ def admin_contratacion():
             else:
                 flash('Completa el archivo del anuncio.', 'error')
             return redirect(url_for('admin_contratacion', sec='anuncios'))
+        if accion == 'estado_trabajador':
+            dni_estado = normalizar_dni(request.form.get('dni'))
+            nuevo_estado = 1 if request.form.get('nuevo_estado') == '1' else 0
+            with db() as con:
+                con.execute('UPDATE trabajadores SET activo=? WHERE dni=?', (nuevo_estado, dni_estado)); con.commit()
+            flash(('Trabajador reactivado.' if nuevo_estado else 'Trabajador cesado/inactivado. Sus documentos se mantienen archivados.'), 'ok')
+            return redirect(url_for('admin_contratacion', sec='actualizar'))
+        if accion == 'plantilla':
+            pid = request.form.get('plantilla_id')
+            nombre = clean(request.form.get('nombre_plantilla')) or 'PLANTILLA SIN NOMBRE'
+            descripcion = clean(request.form.get('descripcion')) or nombre
+            tipo_doc = clean(request.form.get('tipo_documento')) or descripcion
+            esquema = clean(request.form.get('esquema')) or 'Trabajador Contrato Laboral'
+            condicion = clean(request.form.get('condicion')) or 'SIN CONDICIONES'
+            version = clean(request.form.get('version')) or 'Version 01'
+            activo = 1 if request.form.get('activo','1') == '1' else 0
+            f = request.files.get('archivo')
+            ruta = None; archivo_nombre = None
+            carpeta = UPLOAD_DIR/'contratacion'/'plantillas'; carpeta.mkdir(parents=True, exist_ok=True)
+            if f and f.filename:
+                archivo_nombre = secure_filename(f.filename)
+                path = carpeta/(now_file()+'_'+archivo_nombre)
+                f.save(path); ruta = str(path)
+            with db() as con:
+                if pid:
+                    row = con.execute('SELECT ruta_archivo,archivo_nombre FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
+                    if not ruta and row:
+                        ruta=row['ruta_archivo']; archivo_nombre=row['archivo_nombre']
+                    con.execute('''UPDATE contratacion_plantillas SET nombre_plantilla=?,descripcion=?,tipo_documento=?,esquema=?,condicion=?,version=?,activo=?,archivo_nombre=?,ruta_archivo=?,fecha_actualizacion=? WHERE id=?''', (nombre,descripcion,tipo_doc,esquema,condicion,version,activo,archivo_nombre,ruta,now_txt(),pid))
+                    flash('Plantilla actualizada correctamente.', 'ok')
+                    redir = url_for('contratacion_plantilla_detalle', pid=pid, tab='contenido')
+                else:
+                    cur=con.execute('''INSERT INTO contratacion_plantillas(nombre_plantilla,descripcion,tipo_documento,esquema,condicion,version,activo,archivo_nombre,ruta_archivo,fecha_creacion,fecha_actualizacion,creado_por) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''', (nombre,descripcion,tipo_doc,esquema,condicion,version,activo,archivo_nombre,ruta,now_txt(),now_txt(),marca_carga(session.get('admin_user','admin'))))
+                    nuevo_id=cur.lastrowid
+                    for nom,origen,td in [('Fecha Ini Contrato Minúscula','FechaIniContratoTextoMinuscula','DateTime'),('Zona','Zona','Text'),('Número Celular','NroTelefonoMovil','Text'),('Email','Email','Text'),('Dirección Simple','DireccionActual','Text'),('Fecha de Nacimiento Barra','FechaNacimientoBarra','DateTime'),('Dni','Dni','Text'),('Nombre Trabajador','NombreCompletoTrabajador','Text')]:
+                        con.execute('INSERT INTO contratacion_plantilla_campos(plantilla_id,nombre_campo,campo_origen,tipo_dato) VALUES(?,?,?,?)',(nuevo_id,nom,origen,td))
+                    flash('Plantilla creada correctamente.', 'ok')
+                    redir = url_for('contratacion_plantilla_detalle', pid=nuevo_id, tab='contenido')
+                con.commit()
+            return redirect(redir)
         f=request.files.get('archivo'); dni=normalizar_dni(request.form.get('dni')); trab=get_trabajador(dni); tipo=clean(request.form.get('tipo_doc')); etapa=clean(request.form.get('etapa')) or 'Incorporación'
         if f and f.filename and dni:
             folder=UPLOAD_DIR/'contratacion'/dni; folder.mkdir(parents=True, exist_ok=True)
@@ -2400,14 +2532,17 @@ def admin_contratacion():
         tipos=con.execute('SELECT * FROM contratacion_tipos ORDER BY etapa, descripcion').fetchall()
         docs=con.execute('SELECT * FROM contratacion_docs ORDER BY id DESC LIMIT 300').fetchall()
         trabajadores=con.execute('SELECT dni,nombre,empresa,cargo,area,correo,activo,fecha_registro FROM trabajadores ORDER BY nombre LIMIT 700').fetchall()
+        plantillas=con.execute('SELECT * FROM contratacion_plantillas ORDER BY id DESC').fetchall()
     opt_tipo=''.join([f"<option value='{r['descripcion']}'>{r['descripcion']}</option>" for r in tipos])
     opt_trab=''.join([f"<option value='{r['dni']}'>{r['dni']} - {r['nombre']}</option>" for r in trabajadores])
     sample_trab = trabajadores[0] if trabajadores else None
     docs_rows=''.join([f"<tr><td><input type='checkbox'></td><td>🔍 📄</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['tipo_doc']}</td><td><span class='c-badge cyan'>{r['estado'][:1] or 'F'}</span></td><td>{r['fecha_registro']}</td></tr>" for r in docs])
     renov_rows=''.join([f"<tr><td><input type='checkbox'></td><td>{t['dni']}</td><td>{t['nombre']}</td><td>INICIO</td><td>{fecha_sin_hora(t['fecha_registro'])}</td><td></td><td>30/06/2026</td><td><span class='c-badge green'>✓</span></td><td><span class='c-badge green'>✓</span></td><td>0</td></tr>" for t in trabajadores[:12]])
     tipos_rows=''.join([f"<tr><td>✎ 🗑</td><td><span class='state'>Activo</span></td><td>{r['codigo']}</td><td>{r['descripcion']}</td><td>{r['etapa']}</td><td>Trabajador Contrato Laboral</td><td>Documento requerido</td></tr>" for r in tipos])
+    plantillas_rows=''.join([f"<tr><td><a class='icon-btn' title='Editar' href='/admin/contratacion/plantilla/{r['id']}/editar'>✎</a> <a class='icon-btn' title='Ver detalle' href='/admin/contratacion/plantilla/{r['id']}'>⌕</a></td><td><span class='state'>{'Activo' if r['activo'] else 'Inactivo'}</span></td><td><a href='/admin/contratacion/plantilla/{r['id']}'>{r['nombre_plantilla']}</a></td><td>{r['tipo_documento']}</td><td>{r['esquema']}</td><td>{r['descripcion']}</td><td>{r['version']}</td><td>{r['condicion']}</td><td>{r['archivo_nombre'] or ''}</td></tr>" for r in plantillas])
     obs_rows=''.join([f"<tr><td><input type='checkbox'></td><td>🔗 ✎ 🗑</td><td><span class='state'>Activo</span></td><td>DNI</td><td>{t['dni']}</td><td>{t['nombre']}</td><td>SINDICALISTA</td><td>NIVEL 3</td></tr>" for t in trabajadores[:10]])
     report_rows="<tr><td>✎ ⬇</td><td>RHTR01</td><td>Reporte Datos Trabajador</td><td>Reporte Datos Trabajador</td><td>TR_REPORT_1</td><td>Admin</td></tr>"
+    trabajadores_estado_rows=''.join([f"<tr><td>{t['dni']}</td><td>{t['nombre']}</td><td>{t['empresa']}</td><td>{t['cargo'] or ''}</td><td><span class='state'>{'ACTIVO' if t['activo'] else 'CESADO/INACTIVO'}</span></td><td><form method='post' style='display:flex;gap:8px'><input type='hidden' name='accion' value='estado_trabajador'><input type='hidden' name='dni' value='{t['dni']}'><button class='c-btn {'gray' if t['activo'] else ''}' name='nuevo_estado' value='0'>Cesar</button><button class='c-btn green' name='nuevo_estado' value='1'>Reactivar</button></form></td></tr>" for t in trabajadores])
     # CSS local de contenido: se eliminó el segundo menú blanco tipo Adapta.
     # Todo se maneja desde el panel principal oscuro, con una sola pestaña activa por vez.
     css="""
@@ -2423,7 +2558,9 @@ def admin_contratacion():
         content=wrap("<h2 class='c-title'>Carga Masiva</h2><div class='c-card'><div class='tabs'><div class='tab active'>Carga Masiva</div><div class='tab'>Registros de Carga Masiva</div></div></div><div class='c-filter' style='grid-template-columns:1fr 1fr;max-width:980px;margin:auto'><input placeholder='Codigo/Nombre'><select><option>Grupo</option></select></div><div class='tile-grid'><div class='c-tile'><div class='tile-icon'>▤</div><h2>Carga Masiva Actualizar Datos Trabajo</h2><span class='download-corner'>⬇</span></div><div class='c-tile'><div class='tile-icon'>▤</div><h2>Carga Masiva Bajas Trabajador</h2><span class='download-corner'>⬇</span></div></div>")
     elif sec=='reportes':
         content=wrap(f"<h2 class='c-title'>Reportes</h2><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th>Código</th><th>Nombre</th><th>Nombre</th><th>Componente</th><th>Creado por</th></tr>{report_rows}</table></div>")
-    elif sec in ['maestros','observados','tipos_etapa','tipo_empleado','cargo','actualizar']:
+    elif sec=='actualizar':
+        content=wrap(f"<h2 class='c-title'>Actualizar Trabajador / Estado laboral</h2><div class='c-card' style='padding:16px'><p class='muted2'>Aquí se controla la base de trabajadores activos. Al cesar se cambia el estado a inactivo, pero NO se elimina ningún documento ni contrato archivado.</p><div class='c-filter' style='grid-template-columns:1fr 1fr'><input placeholder='Buscar por DNI o apellidos'><button class='c-btn'>⌕ Buscar</button></div></div><div class='c-card table-wrap'><table class='c-table'><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Cargo</th><th>Estado</th><th>Acción</th></tr>{trabajadores_estado_rows}</table></div>")
+    elif sec in ['maestros','observados','tipos_etapa','tipo_empleado','cargo']:
         content=wrap(f"<h2 class='c-title'>Listas de trabajadores observados</h2><div class='c-bar'><div><input class='input' style='background:#fff!important;color:#111!important;max-width:520px' placeholder='Nombre / Num. Documento'><br><br><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button></div><a class='c-btn'>+ Crear trabajador observado</a></div><div class='toolbar'>⚙ Acción ▾ &nbsp; ⬇ Descargar ▾</div><div class='c-card'><div class='tabs'><div class='tab active'>Trabajadores observados</div><div class='tab'>Lista de anulados</div></div><div class='table-wrap'><table class='c-table'><tr><th></th><th></th><th>Estado</th><th>Tipo Documento</th><th>Número Documento</th><th>Nombre</th><th>Motivo</th><th>Nivel Restricción</th></tr>{obs_rows}</table></div></div><div class='c-card'><div class='tabs'><div class='tab active'>Tipos de Documento por Etapa</div></div><div class='table-wrap'><table class='c-table'><tr><th></th><th>Estado</th><th>Código</th><th>Tipo Documento</th><th>Etapa</th><th>Esquema</th><th>Descripción</th></tr>{tipos_rows}</table></div></div>")
     elif sec=='anuncios':
         content=wrap("<h2 class='c-title'>Anuncios de la empresa</h2><div class='c-bar'><div class='c-form'><b>Fecha Registro</b><span><input placeholder='Desde'> - <input placeholder='Hasta'></span><b>Nombre</b><input></div><a class='c-btn'>+ Crear Anuncio</a></div><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button><br><br><form class='anuncio-upload' method='post' enctype='multipart/form-data'><input type='hidden' name='accion' value='anuncio'><h2>Subir anuncio multimedia</h2><p class='muted2'>Acepta video MP4, PDF, imagen o documento para comunicar a trabajadores.</p><input name='titulo' placeholder='Título del anuncio'><br><br><input type='file' name='archivo' accept='.mp4,.pdf,.png,.jpg,.jpeg,.doc,.docx' required><br><br><button class='c-btn'>Subir anuncio</button><div class='video-box'><b>Vista previa MP4</b><video controls></video></div></form>")
@@ -2433,7 +2570,24 @@ def admin_contratacion():
         nombre=sample_trab['nombre'] if sample_trab else ''
         content=wrap(f"<h2 class='c-title'>Ficha Trabajador</h2><div class='profile'><div class='avatar-big'>👤</div><div><input placeholder='Buscar trabajador' value='{nombre}'><p><b>Dirección:</b></p><p>✉ &nbsp;&nbsp; ☎ &nbsp;&nbsp; 📱</p><div style='background:#e9e9e9;padding:8px'><b>Fecha de Creación:</b> &nbsp;&nbsp; <b>Creado por:</b></div></div><div class='divider'><p><b>Gerencia:</b></p><p><b>Area:</b></p><p><b>Puesto:</b></p><p><b>Supervisor:</b></p><p><b>Planilla:</b></p><p><b>Condición:</b></p></div><div class='divider'><p><b>Estado:</b></p><p><b>Fecha de Ingreso:</b></p><p><b>Fecha de Cese:</b></p><p><b>Centro Costo:</b></p><p><b>Zona:</b></p><p><b>Cargo:</b></p><p><b>Sindicalizado:</b></p></div></div><div class='c-card'><div class='tabs'><div class='tab active'>Datos Laborales</div><div class='tab'>Documentos</div><div class='tab'>Contratos</div></div></div>")
     elif sec=='plantillas':
-        content=wrap(f"<h2 class='c-title'>Plantillas</h2><div class='c-bar'><div class='c-form'><b>Nombre Plantilla:</b><input><b>Tipo Documento:</b><select>{opt_tipo}</select><b>Esquema:</b><select><option></option><option>Trabajador Contrato Laboral</option></select><b>Condición:</b><input></div><a class='c-btn'>+ Crear Plantilla</a></div><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th>Estado</th><th>Nombre Plantilla</th><th>Tipo Documento</th><th>Esquema</th><th>Descripción</th></tr>{tipos_rows}</table></div>")
+        content=wrap(f"""
+        <h2 class='c-title'>Plantilla Documentos</h2>
+        <div class='c-card' style='padding:18px'>
+          <form method='post' enctype='multipart/form-data' class='c-form'>
+            <input type='hidden' name='accion' value='plantilla'>
+            <b>Nombre Plantilla:</b><input name='nombre_plantilla' required>
+            <b>Tipo Documento:</b><input name='tipo_documento' list='tipos_doc_list' required><datalist id='tipos_doc_list'>{opt_tipo}</datalist>
+            <b>Esquema:</b><select name='esquema'><option>Trabajador Contrato Laboral</option></select>
+            <b>Condición:</b><select name='condicion'><option>SIN CONDICIONES</option><option>CON CONDICIONES</option></select>
+            <b>Versión:</b><input name='version' value='Version 01'>
+            <b>Archivo plantilla:</b><input type='file' name='archivo' accept='.pdf,.doc,.docx'>
+            <b>Descripción:</b><textarea name='descripcion' placeholder='Descripción de la plantilla'></textarea>
+            <span></span><button class='c-btn'>+ Crear / Cargar Plantilla</button>
+          </form>
+        </div>
+        <div class='c-bar'><div><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button></div><div class='muted2'>Flujo: cargar plantilla → revisar Contenido → configurar Campos → editar/actualizar con lapicito.</div></div>
+        <div class='c-card table-wrap'><table class='c-table'><tr><th>Acción</th><th>Estado</th><th>Nombre Plantilla</th><th>Tipo Documento</th><th>Esquema</th><th>Descripción</th><th>Versión</th><th>Condición</th><th>Nombre Archivo</th></tr>{plantillas_rows or '<tr><td colspan=9>No hay plantillas registradas.</td></tr>'}</table></div>
+        """)
     elif sec=='nisira':
         content=wrap("<h2 class='c-title'>Contratación NISIRA</h2><div class='c-card' style='padding:22px'><p class='muted2'>Sección preparada para importar contratos / altas desde NISIRA y cruzar por DNI.</p><button class='c-btn'>Sincronizar NISIRA</button></div>")
     elif sec=='descargas':
