@@ -2034,16 +2034,44 @@ def trabajador_vacaciones():
     <div class='card span-12' style='{"display:block" if sol_aprobar else "display:none"}'><h2>✅ Solicitudes pendientes por aprobar como jefe inmediato</h2><p class='muted'>Te aparecen aquí solo los trabajadores que tienen tu DNI como jefe inmediato en la plantilla de saldos.</p><div class='table-wrap'><table><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Rango</th><th>Días</th><th>Estado</th><th>Acciones</th></tr>{sol_aprobar or '<tr><td colspan=7>No tienes solicitudes pendientes por aprobar.</td></tr>'}</table></div></div>
     <div id='solicitar' class='card span-12 vac-request-card'><div class='vac-head'><div><h2>🗓️ Nueva solicitud</h2><p class='vac-help'>Marca el periodo que vas a utilizar. Puedes seleccionar más de uno cuando el descanso consuma saldos acumulados.</p></div></div><form method='post' id='formSolicitudVacaciones'><div class='field'><label>Periodos disponibles</label><div class='period-list'>{periodos_html}</div></div><div class='vac-form-row'><div class='field'><label>Inicio</label><input type='date' id='fecha_inicio_vac' name='fecha_inicio' min='{hoy_lima().isoformat()}' required></div><div class='field'><label>Fin</label><input type='date' id='fecha_fin_vac' name='fecha_fin' min='{hoy_lima().isoformat()}' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div></div><div class='vac-submit-row'><label class='check-card'><input type='checkbox' name='adelanto' value='1'> Requiere revisión especial</label><button class='btn-green'>Registrar solicitud</button></div></form><script>
 (function(){{
-  const hoy = '{hoy_lima().isoformat()}';
+  const hoyISO = '{hoy_lima().isoformat()}';
   const f = document.getElementById('formSolicitudVacaciones');
   const ini = document.getElementById('fecha_inicio_vac');
   const fin = document.getElementById('fecha_fin_vac');
-  [ini, fin].forEach(x => {{ if(x){{ x.min = hoy; x.addEventListener('change', () => {{ if(x.value && x.value < hoy){{ alert('No se permite registrar vacaciones con fecha anterior a hoy: ' + hoy); x.value=''; }} }}); }} }});
-  if(f){{ f.addEventListener('submit', function(e){{
-    if((ini && ini.value && ini.value < hoy) || (fin && fin.value && fin.value < hoy)){{
-      e.preventDefault(); alert('No se registró: la fecha de inicio y fin no pueden ser anteriores a hoy (' + hoy + ').'); return false;
+
+  function valorISO(campo){{
+    if(!campo || !campo.value) return '';
+    const v = campo.value.trim();
+    // Navegadores modernos devuelven YYYY-MM-DD.
+    if(/^\d{{4}}-\d{{2}}-\d{{2}}$/.test(v)) return v;
+    // Soporte adicional si el navegador deja escribir DD/MM/AAAA.
+    const m = v.match(/^(\d{{1,2}})[\/\-](\d{{1,2}})[\/\-](\d{{4}})$/);
+    if(m){{
+      const d = m[1].padStart(2,'0');
+      const mo = m[2].padStart(2,'0');
+      return `${{m[3]}}-${{mo}}-${{d}}`;
     }}
-    if(ini && fin && ini.value && fin.value && fin.value < ini.value){{
+    return '';
+  }}
+
+  [ini, fin].forEach(x => {{
+    if(x){{
+      x.setAttribute('min', hoyISO);
+      x.setAttribute('autocomplete', 'off');
+      // No mostrar alertas mientras la fecha está incompleta; solo validar al registrar.
+    }}
+  }});
+
+  if(f){{ f.addEventListener('submit', function(e){{
+    const iniISO = valorISO(ini);
+    const finISO = valorISO(fin);
+    if(!iniISO || !finISO){{
+      e.preventDefault(); alert('Seleccione fecha de inicio y fin válidas.'); return false;
+    }}
+    if(iniISO < hoyISO || finISO < hoyISO){{
+      e.preventDefault(); alert('No se registró: la fecha de inicio y fin no pueden ser anteriores a hoy (' + hoyISO + ').'); return false;
+    }}
+    if(finISO < iniISO){{
       e.preventDefault(); alert('La fecha fin no puede ser menor que inicio.'); return false;
     }}
   }});}}
