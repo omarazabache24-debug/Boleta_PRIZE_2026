@@ -171,7 +171,7 @@ def exportar_tabla_excel(nombre_archivo, tabla, columnas):
 
 def respaldar_exceles_locales():
     exportar_tabla_excel('01_TRABAJADORES_LOCAL.xlsx', 'trabajadores', [
-        ('EMPRESA','empresa'),('DNI','dni'),('TRABAJADOR','nombre'),('CARGO','cargo'),('AREA','area'),('PLANILLA','planilla'),('CORREO','correo'),('FECHA NACIMIENTO','fecha_nacimiento'),('FECHA INGRESO','fecha_ingreso'),('USUARIO','usuario_portal'),('CLAVE','clave_portal'),('ACTIVO','activo'),('FECHA REGISTRO','fecha_registro')])
+        ('EMPRESA','empresa'),('DNI','dni'),('TRABAJADOR','nombre'),('CARGO','cargo'),('AREA','area'),('JEFE INMEDIATO','jefe_dni'),('JEFE NOMBRE','jefe_nombre'),('PLANILLA','planilla'),('CORREO','correo'),('FECHA NACIMIENTO','fecha_nacimiento'),('FECHA INGRESO','fecha_ingreso'),('USUARIO','usuario_portal'),('CLAVE','clave_portal'),('ACTIVO','activo'),('FECHA REGISTRO','fecha_registro')])
     exportar_tabla_excel('02_VACACIONES_SALDOS_LOCAL.xlsx', 'vacaciones_saldos', [
         ('DNI','dni'),('TRABAJADOR','trabajador'),('EMPRESA','empresa'),('AREA','area'),('JEFE','jefe'),('JEFE DNI','jefe_dni'),('FECHA INGRESO','fecha_ingreso'),('I_PERIODO','periodo_inicio'),('F_PERIODO','periodo_fin'),('DIAS GANADOS','dias_ganados'),('DIAS GOZADOS','dias_gozados'),('SALDO','saldo'),('PERIODO','periodo'),('FECHA CARGA','fecha_carga')])
     exportar_tabla_excel('03_VACACIONES_SOLICITUDES_LOCAL.xlsx', 'vacaciones_solicitudes', [
@@ -197,7 +197,7 @@ def restaurar_trabajadores_desde_excel_si_db_vacia():
                 fecha_nac=excel_cell_fecha(row[idx('FECHA NACIMIENTO')] if idx('FECHA NACIMIENTO')>=0 else '')
                 fecha_ing=excel_cell_fecha(row[idx('FECHA INGRESO')] if idx('FECHA INGRESO')>=0 else '')
                 clave=clean(row[idx('CLAVE')] if idx('CLAVE')>=0 else '') or (re.sub(r'\D','', fecha_nac) or dni)
-                con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(row[idx('TRABAJADOR')] if idx('TRABAJADOR')>=0 else ''),clean(row[idx('CORREO')] if idx('CORREO')>=0 else '').lower(),clean(row[idx('CARGO')] if idx('CARGO')>=0 else ''),clean(row[idx('AREA')] if idx('AREA')>=0 else ''),clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'AQUANQA') or 'AQUANQA',clean(row[idx('PLANILLA')] if idx('PLANILLA')>=0 else ''),fecha_nac,fecha_ing,dni,clave,now_txt()))
+                con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,jefe_dni,jefe_nombre,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(row[idx('TRABAJADOR')] if idx('TRABAJADOR')>=0 else ''),clean(row[idx('CORREO')] if idx('CORREO')>=0 else '').lower(),clean(row[idx('CARGO')] if idx('CARGO')>=0 else ''),clean(row[idx('AREA')] if idx('AREA')>=0 else ''),normalizar_dni(row[idx('JEFE INMEDIATO')] if idx('JEFE INMEDIATO')>=0 else row[idx('JEFE DNI')] if idx('JEFE DNI')>=0 else ''),clean(row[idx('JEFE NOMBRE')] if idx('JEFE NOMBRE')>=0 else ''),clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'AQUANQA') or 'AQUANQA',clean(row[idx('PLANILLA')] if idx('PLANILLA')>=0 else ''),fecha_nac,fecha_ing,dni,clave,now_txt()))
             con.commit()
     except Exception as e:
         print('No se pudo restaurar trabajadores desde Excel local', e)
@@ -255,6 +255,7 @@ def logo_url():
 def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.create_function('normalizar_dni_sql', 1, normalizar_dni)
     return conn
 
 
@@ -304,6 +305,8 @@ def init_db():
             ('empresa_login', 'ALTER TABLE trabajadores ADD COLUMN empresa_login TEXT'),
             ('usuario_portal', 'ALTER TABLE trabajadores ADD COLUMN usuario_portal TEXT'),
             ('clave_portal', 'ALTER TABLE trabajadores ADD COLUMN clave_portal TEXT'),
+            ('jefe_dni', 'ALTER TABLE trabajadores ADD COLUMN jefe_dni TEXT'),
+            ('jefe_nombre', 'ALTER TABLE trabajadores ADD COLUMN jefe_nombre TEXT'),
         ]:
             try: con.execute(ddl)
             except Exception: pass
@@ -1547,7 +1550,7 @@ def admin_trabajadores():
         if 'excel' in request.files and request.files['excel'].filename:
             f = request.files['excel']; path = UPLOAD_DIR / f"base_{now_file()}_{secure_filename(f.filename)}"; f.save(path)
             wb = load_workbook(path, data_only=True); ws = wb.active
-            headers = [clean(c.value).upper().replace('TRABAJADOR','NOMBRE').replace('FECHA NACIMIENTO','FECHA_NACIMIENTO').replace('FECHA INGRESO','FECHA_INGRESO') for c in ws[1]]
+            headers = [clean(c.value).upper().replace('TRABAJADOR','NOMBRE').replace('FECHA NACIMIENTO','FECHA_NACIMIENTO').replace('FECHA INGRESO','FECHA_INGRESO').replace('JEFE INMEDIATO','JEFE_INMEDIATO').replace('JEFE DNI','JEFE_INMEDIATO') for c in ws[1]]
             def idx(name):
                 return headers.index(name) if name in headers else -1
             n=0
@@ -1559,13 +1562,15 @@ def admin_trabajadores():
                     correo = clean(row[idx('CORREO')] if idx('CORREO')>=0 else '').lower()
                     cargo = clean(row[idx('CARGO')] if idx('CARGO')>=0 else '')
                     area = clean(row[idx('AREA')] if idx('AREA')>=0 else '')
+                    jefe_dni = normalizar_dni(row[idx('JEFE_INMEDIATO')] if idx('JEFE_INMEDIATO')>=0 else '')
+                    jefe_nombre = ''
                     empresa = clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'AQUANQA')
                     fecha_nac_raw = row[idx('FECHA_NACIMIENTO')] if idx('FECHA_NACIMIENTO')>=0 else ''
                     fecha_nac = excel_cell_fecha(fecha_nac_raw)
                     planilla = clean(row[idx('PLANILLA')] if idx('PLANILLA')>=0 else '')
                     fecha_ing = excel_cell_fecha(row[idx('FECHA_INGRESO')] if idx('FECHA_INGRESO')>=0 else '')
                     clave = generar_clave_trabajador(dni, fecha_nac)
-                    con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,nombre,correo,cargo,area,empresa,planilla,fecha_nac,fecha_ing,dni,clave,now_txt()))
+                    con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,jefe_dni,jefe_nombre,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,nombre,correo,cargo,area,jefe_dni,jefe_nombre,empresa,planilla,fecha_nac,fecha_ing,dni,clave,now_txt()))
                     n+=1
                 con.commit()
             respaldar_exceles_locales()
@@ -1573,19 +1578,19 @@ def admin_trabajadores():
         else:
             dni=normalizar_dni(request.form.get('dni'))
             with db() as con:
-                fecha_nac=clean(request.form.get('fecha_nacimiento')); clave=generar_clave_trabajador(dni, fecha_nac); con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),clean(request.form.get('empresa')) or 'AQUANQA',clean(request.form.get('planilla')),fecha_nac,fecha_sin_hora(request.form.get('fecha_ingreso')),dni,clave,now_txt()))
+                fecha_nac=clean(request.form.get('fecha_nacimiento')); clave=generar_clave_trabajador(dni, fecha_nac); con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,jefe_dni,jefe_nombre,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),normalizar_dni(request.form.get('jefe_dni')),clean(request.form.get('jefe_nombre')),clean(request.form.get('empresa')) or 'AQUANQA',clean(request.form.get('planilla')),fecha_nac,fecha_sin_hora(request.form.get('fecha_ingreso')),dni,clave,now_txt()))
                 con.commit()
             respaldar_exceles_locales()
             flash('Trabajador guardado y respaldo Excel actualizado.', 'ok')
         return redirect(url_for('admin_trabajadores'))
     with db() as con:
         rows = con.execute("SELECT * FROM trabajadores ORDER BY nombre LIMIT 300").fetchall()
-    table = ''.join([f"<tr><td>{r['dni']}</td><td>{r['nombre']}</td><td>{r['correo']}</td><td>{r['cargo'] or ''}</td><td>{r['empresa'] or ''}</td><td>{r['planilla'] if 'planilla' in r.keys() and r['planilla'] else ''}</td></tr>" for r in rows])
+    table = ''.join([f"<tr><td>{r['dni']}</td><td>{r['nombre']}</td><td>{r['correo']}</td><td>{r['cargo'] or ''}</td><td>{r['empresa'] or ''}</td><td>{r['jefe_dni'] if 'jefe_dni' in r.keys() and r['jefe_dni'] else ''}</td><td>{r['planilla'] if 'planilla' in r.keys() and r['planilla'] else ''}</td></tr>" for r in rows])
     content = f"""
     <div class='topbar'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div><div class='local-note'>Respaldo local automático: REGISTROS_EXCEL_LOCAL / 01_TRABAJADORES_LOCAL.xlsx</div></div></div><section class='grid'>
-    <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><select name='empresa'><option>AQUANQA</option><option>AQUANCA II</option></select></div><div class='field'><label>Planilla</label><input name='planilla'></div><div class='field'><label>Fecha nacimiento</label><input name='fecha_nacimiento' placeholder='dd/mm/aaaa'></div><div class='field'><label>Fecha de ingreso</label><input name='fecha_ingreso' placeholder='dd/mm/aaaa'></div><button class='btn-green'>Guardar + crear usuario</button></form></div>
-    <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial: EMPRESA / DNI / TRABAJADOR / CARGO / AREA / PLANILLA / CORREO / FECHA NACIMIENTO. Crea usuario masivo con DNI y clave automática.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Descargar plantilla</a></form></div>
-    <div class='card span-12'><h2>Listado</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Empresa</th><th>Planilla</th></tr>{table}</table></div></div></section>"""
+    <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><select name='empresa'><option>AQUANQA</option><option>AQUANCA II</option></select></div><div class='field'><label>Jefe inmediato DNI</label><input name='jefe_dni' placeholder='DNI del jefe'></div><div class='field'><label>Jefe nombre</label><input name='jefe_nombre' placeholder='Opcional'></div><div class='field'><label>Planilla</label><input name='planilla'></div><div class='field'><label>Fecha nacimiento</label><input name='fecha_nacimiento' placeholder='dd/mm/aaaa'></div><div class='field'><label>Fecha de ingreso</label><input name='fecha_ingreso' placeholder='dd/mm/aaaa'></div><button class='btn-green'>Guardar + crear usuario</button></form></div>
+    <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial: EMPRESA / DNI / TRABAJADOR / CARGO / AREA / JEFE INMEDIATO / PLANILLA / CORREO / FECHA NACIMIENTO. Crea usuario masivo con DNI y clave automática.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Descargar plantilla</a></form></div>
+    <div class='card span-12'><h2>Listado</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Empresa</th><th>Jefe DNI</th><th>Planilla</th></tr>{table}</table></div></div></section>"""
     return render_page(content, active='Trabajadores')
 
 @app.route('/admin/plantilla_trabajadores')
@@ -1593,9 +1598,9 @@ def admin_trabajadores():
 def plantilla_trabajadores():
     path = PERSIST_DIR / 'PLANTILLA_CARGA_MASIVA_TRABAJADORES.xlsx'
     wb = Workbook(); ws = wb.active; ws.title = 'TRABAJADORES'
-    headers = ['EMPRESA','DNI','TRABAJADOR','CARGO','AREA','PLANILLA','CORREO','FECHA NACIMIENTO','FECHA INGRESO']
+    headers = ['EMPRESA','DNI','TRABAJADOR','CARGO','AREA','JEFE INMEDIATO','PLANILLA','CORREO','FECHA NACIMIENTO','FECHA INGRESO']
     ws.append(headers)
-    ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','Analista','RR.HH.','PLANILLA 01','correo@empresa.com','01/01/1990','01/05/2024'])
+    ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','Analista','RR.HH.','43043999','PLANILLA 01','correo@empresa.com','01/01/1990','01/05/2024'])
     for i, h in enumerate(headers, 1):
         font = copy(ws.cell(1, i).font); font.bold = True; ws.cell(1, i).font = font
         ws.column_dimensions[chr(64+i)].width = 24
@@ -1875,10 +1880,13 @@ def trabajador_vacaciones():
     if request.method=='POST':
         fi=clean(request.form.get('fecha_inicio')); ff=clean(request.form.get('fecha_fin')); dias=dias_entre_texto(fi,ff)
         hoy_iso = datetime.now(APP_TZ).date().isoformat()
-        if fi and fi < hoy_iso:
+        if not fi or not ff:
+            flash('Debe seleccionar fecha de inicio y fecha fin.', 'err')
+            return redirect(url_for('trabajador_vacaciones'))
+        if parse_fecha_any(fi) and parse_fecha_any(fi) < datetime.now(APP_TZ).date():
             flash('No se registró la solicitud: la fecha de inicio no puede ser menor a la fecha de hoy.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
-        if ff and fi and ff < fi:
+        if parse_fecha_any(ff) and parse_fecha_any(fi) and parse_fecha_any(ff) < parse_fecha_any(fi):
             flash('No se registró la solicitud: la fecha fin no puede ser menor que la fecha inicio.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
         adelanto = '1' if request.form.get('adelanto') else ''
@@ -1913,7 +1921,10 @@ def trabajador_vacaciones():
                     jefe_dni = normalizar_dni(_s['jefe_dni'])
                     break
             if not jefe_dni:
-                flash('No se registró la solicitud: este periodo no tiene DNI de jefe inmediato. Cargue la plantilla con JEFE INMEDIATO = DNI del jefe.', 'err')
+                tr_jefe = con.execute('SELECT jefe_dni FROM trabajadores WHERE dni=?', (dni,)).fetchone()
+                jefe_dni = normalizar_dni(tr_jefe['jefe_dni'] if tr_jefe and 'jefe_dni' in tr_jefe.keys() else '')
+            if not jefe_dni:
+                flash('No se registró la solicitud: este trabajador no tiene DNI de jefe inmediato. Cargue la plantilla de trabajadores o saldos con JEFE INMEDIATO = DNI del jefe.', 'err')
                 return redirect(url_for('trabajador_vacaciones'))
             con.execute('INSERT INTO vacaciones_solicitudes(dni,trabajador,jefe_dni,fecha_inicio,fecha_fin,dias,motivo,estado,fecha_solicitud,periodo_detalle,periodo_ids) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(dni,t['nombre'] if t else '',jefe_dni,fi,ff,dias,motivo_base,estado,now_txt(),periodo_detalle,periodo_ids_txt)); con.commit(); respaldar_exceles_locales()
         flash('Solicitud registrada. Pasará por jefe inmediato y Gestión del Talento Humano.','ok')
@@ -1922,7 +1933,7 @@ def trabajador_vacaciones():
         saldos_usuario=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=? ORDER BY periodo_inicio, periodo_fin',(dni,)).fetchall()
         saldo=saldos_usuario[0] if saldos_usuario else None
         solicitudes=con.execute('SELECT * FROM vacaciones_solicitudes WHERE dni=? ORDER BY id DESC',(dni,)).fetchall()
-        por_aprobar=con.execute("SELECT * FROM vacaciones_solicitudes WHERE jefe_dni=? AND estado='Pendiente jefe' ORDER BY id DESC",(dni,)).fetchall()
+        por_aprobar=con.execute("SELECT vs.* FROM vacaciones_solicitudes vs LEFT JOIN trabajadores tr ON tr.dni=vs.dni WHERE vs.estado='Pendiente jefe' AND (normalizar_dni_sql(COALESCE(vs.jefe_dni,''))=? OR normalizar_dni_sql(COALESCE(tr.jefe_dni,''))=?) ORDER BY vs.id DESC",(dni,dni)).fetchall()
     sol=''.join([f"<div class='sol-card'><div data-label='Fecha'><b>{r['fecha_solicitud']}</b></div><div data-label='Rango'><b>{r['fecha_inicio']} al {r['fecha_fin']}</b></div><div data-label='Días' class='dias'><b>{r['dias']}</b></div><div data-label='Periodo usado'><b>{r['periodo_detalle'] if 'periodo_detalle' in r.keys() and r['periodo_detalle'] else '-'}</b></div><div data-label='Estado'><span class='status-pill'>{r['estado']}</span></div><div data-label='Comentario' class='coment'>{r['motivo'] or '-'}</div></div>" for r in solicitudes])
     sol_aprobar=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/vacaciones/aprobar_jefe/{r['id']}'>Aprobar</a><a class='btn-red mini-btn' href='/vacaciones/rechazar_jefe/{r['id']}'>Rechazar</a></td></tr>" for r in por_aprobar])
     with db() as con:
@@ -1944,7 +1955,10 @@ def vacaciones_aprobar_jefe(sid):
     dni=session['dni']
     with db() as con:
         r=con.execute("SELECT * FROM vacaciones_solicitudes WHERE id=?", (sid,)).fetchone()
-        if not r or (r['jefe_dni'] if 'jefe_dni' in r.keys() else '') != dni:
+        tr=con.execute('SELECT jefe_dni FROM trabajadores WHERE dni=?', (r['dni'],)).fetchone() if r else None
+        jefe_solicitud = normalizar_dni(r['jefe_dni'] if r and 'jefe_dni' in r.keys() else '')
+        jefe_trabajador = normalizar_dni(tr['jefe_dni'] if tr and 'jefe_dni' in tr.keys() else '')
+        if not r or (jefe_solicitud != dni and jefe_trabajador != dni):
             flash('No autorizado: esta solicitud no corresponde a tu aprobación como jefe inmediato.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
         con.execute("UPDATE vacaciones_solicitudes SET estado='Pendiente GTH', fecha_jefe=?, comentario_jefe=? WHERE id=?", (now_txt(), 'Aprobado por jefe inmediato', sid))
@@ -1958,7 +1972,10 @@ def vacaciones_rechazar_jefe(sid):
     dni=session['dni']
     with db() as con:
         r=con.execute("SELECT * FROM vacaciones_solicitudes WHERE id=?", (sid,)).fetchone()
-        if not r or (r['jefe_dni'] if 'jefe_dni' in r.keys() else '') != dni:
+        tr=con.execute('SELECT jefe_dni FROM trabajadores WHERE dni=?', (r['dni'],)).fetchone() if r else None
+        jefe_solicitud = normalizar_dni(r['jefe_dni'] if r and 'jefe_dni' in r.keys() else '')
+        jefe_trabajador = normalizar_dni(tr['jefe_dni'] if tr and 'jefe_dni' in tr.keys() else '')
+        if not r or (jefe_solicitud != dni and jefe_trabajador != dni):
             flash('No autorizado: esta solicitud no corresponde a tu aprobación como jefe inmediato.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
         con.execute("UPDATE vacaciones_solicitudes SET estado='Rechazado por jefe', fecha_jefe=?, comentario_jefe=? WHERE id=?", (now_txt(), 'Rechazado por jefe inmediato', sid))
@@ -1973,10 +1990,11 @@ def vacaciones_aprobaciones_jefe():
     dni=session['dni']; t=get_trabajador(dni)
     with db() as con:
         rows=con.execute("""
-            SELECT * FROM vacaciones_solicitudes
-            WHERE jefe_dni=?
-            ORDER BY CASE WHEN estado='Pendiente jefe' THEN 0 ELSE 1 END, id DESC
-        """, (dni,)).fetchall()
+            SELECT vs.* FROM vacaciones_solicitudes vs
+            LEFT JOIN trabajadores tr ON tr.dni = vs.dni
+            WHERE normalizar_dni_sql(COALESCE(vs.jefe_dni,''))=? OR normalizar_dni_sql(COALESCE(tr.jefe_dni,''))=?
+            ORDER BY CASE WHEN vs.estado='Pendiente jefe' THEN 0 ELSE 1 END, vs.id DESC
+        """, (dni,dni)).fetchall()
     pendientes=sum(1 for r in rows if (r['estado'] or '') == 'Pendiente jefe')
     aprobadas=sum(1 for r in rows if 'GTH' in (r['estado'] or '') or 'Aprobado' in (r['estado'] or ''))
     rechazadas=sum(1 for r in rows if 'Rechazado' in (r['estado'] or ''))
