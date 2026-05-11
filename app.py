@@ -36,10 +36,11 @@ BASE_DIR = Path(__file__).resolve().parent
 PERSIST_DIR = Path(os.getenv("PERSIST_DIR", "/data" if Path("/data").is_dir() else str(BASE_DIR)))
 STATIC_DIR = BASE_DIR / "static"
 UPLOAD_DIR = PERSIST_DIR / "uploads"
+EXCEL_LOCAL_DIR = PERSIST_DIR / "REGISTROS_EXCEL_LOCAL"
 DB_PATH = PERSIST_DIR / "boletas_prize.db"
 APP_TZ = ZoneInfo(os.getenv("APP_TIMEZONE", "America/Lima"))
 
-for d in (PERSIST_DIR, STATIC_DIR, UPLOAD_DIR):
+for d in (PERSIST_DIR, STATIC_DIR, UPLOAD_DIR, EXCEL_LOCAL_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
@@ -119,6 +120,87 @@ def now_file():
 def clean(v):
     return str(v or "").strip()
 
+
+
+def fecha_sin_hora(v):
+    """Muestra fechas sin 00:00:00, aceptando Excel datetime, ISO y texto dd/mm/aaaa."""
+    if v is None:
+        return ''
+    if hasattr(v, 'strftime'):
+        return v.strftime('%d/%m/%Y')
+    txt = clean(v)
+    if not txt:
+        return ''
+    txt = re.sub(r'\s+00:00:00$', '', txt)
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y %H:%M:%S', '%d/%m/%Y'):
+        try:
+            return datetime.strptime(txt, fmt).strftime('%d/%m/%Y')
+        except Exception:
+            pass
+    return txt.split()[0] if '00:00:00' in txt else txt
+
+
+def excel_cell_fecha(v):
+    return fecha_sin_hora(v)
+
+
+def exportar_tabla_excel(nombre_archivo, tabla, columnas):
+    """Respaldo local en Excel para que la información sobreviva reinicios y se pueda auditar."""
+    try:
+        EXCEL_LOCAL_DIR.mkdir(parents=True, exist_ok=True)
+        path = EXCEL_LOCAL_DIR / nombre_archivo
+        wb = Workbook(); ws = wb.active; ws.title = tabla[:31]
+        ws.append([titulo for titulo, campo in columnas])
+        with db() as con:
+            rows = con.execute(f"SELECT * FROM {tabla}").fetchall()
+        for r in rows:
+            ws.append([fecha_sin_hora(r[campo]) if 'fecha' in campo.lower() else (r[campo] if campo in r.keys() else '') for titulo, campo in columnas])
+        for i, _ in enumerate(columnas, 1):
+            ws.column_dimensions[chr(64+i) if i <= 26 else 'A'].width = 24
+        for cell in ws[1]:
+            cell.font = Font(bold=True, color='FFFFFF')
+            cell.fill = PatternFill('solid', fgColor='1F2937')
+            cell.alignment = Alignment(horizontal='center')
+        ws.freeze_panes = 'A2'
+        wb.save(path)
+        return path
+    except Exception as e:
+        print('No se pudo exportar Excel local', tabla, e)
+        return None
+
+
+def respaldar_exceles_locales():
+    exportar_tabla_excel('01_TRABAJADORES_LOCAL.xlsx', 'trabajadores', [
+        ('EMPRESA','empresa'),('DNI','dni'),('TRABAJADOR','nombre'),('CARGO','cargo'),('AREA','area'),('PLANILLA','planilla'),('CORREO','correo'),('FECHA NACIMIENTO','fecha_nacimiento'),('FECHA INGRESO','fecha_ingreso'),('USUARIO','usuario_portal'),('CLAVE','clave_portal'),('ACTIVO','activo'),('FECHA REGISTRO','fecha_registro')])
+    exportar_tabla_excel('02_VACACIONES_SALDOS_LOCAL.xlsx', 'vacaciones_saldos', [
+        ('DNI','dni'),('TRABAJADOR','trabajador'),('EMPRESA','empresa'),('AREA','area'),('JEFE','jefe'),('JEFE DNI','jefe_dni'),('FECHA INGRESO','fecha_ingreso'),('I_PERIODO','periodo_inicio'),('F_PERIODO','periodo_fin'),('DIAS GANADOS','dias_ganados'),('DIAS GOZADOS','dias_gozados'),('SALDO','saldo'),('PERIODO','periodo'),('FECHA CARGA','fecha_carga')])
+    exportar_tabla_excel('03_VACACIONES_SOLICITUDES_LOCAL.xlsx', 'vacaciones_solicitudes', [
+        ('ID','id'),('DNI','dni'),('TRABAJADOR','trabajador'),('JEFE DNI','jefe_dni'),('FECHA INICIO','fecha_inicio'),('FECHA FIN','fecha_fin'),('DIAS','dias'),('MOTIVO','motivo'),('ESTADO','estado'),('FECHA SOLICITUD','fecha_solicitud'),('PERIODO DETALLE','periodo_detalle'),('COMENTARIO JEFE','comentario_jefe'),('COMENTARIO GH','comentario_gh')])
+
+
+def restaurar_trabajadores_desde_excel_si_db_vacia():
+    """Si Render/local reinicia con BD vacía, recupera trabajadores desde el Excel local."""
+    path = EXCEL_LOCAL_DIR / '01_TRABAJADORES_LOCAL.xlsx'
+    if not path.exists():
+        return
+    try:
+        with db() as con:
+            total = con.execute('SELECT COUNT(*) FROM trabajadores').fetchone()[0]
+            if total > 1:
+                return
+            wb = load_workbook(path, data_only=True); ws = wb.active
+            headers=[clean(c.value).upper() for c in ws[1]]
+            def idx(n): return headers.index(n) if n in headers else -1
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                dni=normalizar_dni(row[idx('DNI')] if idx('DNI')>=0 else '')
+                if not dni: continue
+                fecha_nac=excel_cell_fecha(row[idx('FECHA NACIMIENTO')] if idx('FECHA NACIMIENTO')>=0 else '')
+                fecha_ing=excel_cell_fecha(row[idx('FECHA INGRESO')] if idx('FECHA INGRESO')>=0 else '')
+                clave=clean(row[idx('CLAVE')] if idx('CLAVE')>=0 else '') or (re.sub(r'\D','', fecha_nac) or dni)
+                con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(row[idx('TRABAJADOR')] if idx('TRABAJADOR')>=0 else ''),clean(row[idx('CORREO')] if idx('CORREO')>=0 else '').lower(),clean(row[idx('CARGO')] if idx('CARGO')>=0 else ''),clean(row[idx('AREA')] if idx('AREA')>=0 else ''),clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'AQUANQA') or 'AQUANQA',clean(row[idx('PLANILLA')] if idx('PLANILLA')>=0 else ''),fecha_nac,fecha_ing,dni,clave,now_txt()))
+            con.commit()
+    except Exception as e:
+        print('No se pudo restaurar trabajadores desde Excel local', e)
 
 def normalizar_dni(v):
     d = re.sub(r"\D", "", str(v or ""))
@@ -383,6 +465,8 @@ def init_db():
 
 
 init_db()
+restaurar_trabajadores_desde_excel_si_db_vacia()
+respaldar_exceles_locales()
 
 def get_config(clave, default=''):
     with db() as con:
@@ -782,6 +866,7 @@ button.menu-item{font:inherit;text-align:left;background:transparent;border-top:
 /* === PRIZE PRO 2026: DASHBOARD ADMIN IGUAL A REFERENCIA === */
 .app{grid-template-columns:270px minmax(0,1fr);background:radial-gradient(circle at 70% -10%,rgba(255,210,63,.08),transparent 26%),#0f141a!important}.app.side-collapsed{grid-template-columns:82px minmax(0,1fr)}.main{padding:20px 24px 32px!important;background:linear-gradient(180deg,#0f141a,#121820)!important}.side{width:270px!important;padding:8px 6px!important;background:linear-gradient(180deg,#111720,#171c23)!important;border-right:1px solid rgba(255,255,255,.08)}.side.collapsed{width:82px!important}.app.side-collapsed .side{width:82px!important}.side-top{display:flex!important;height:48px!important;background:#111720!important}.side-top .label{font-size:13px!important}.brand{display:none}.side-user{display:none}.menu-group{margin:8px 0!important}.menu-title,.menu-item{min-height:46px!important;border-radius:10px!important;font-size:14px!important;font-weight:950!important;padding:12px 16px!important;gap:12px!important}.submenu>.menu-item{padding:11px 18px 11px 36px!important;min-height:38px!important;font-size:13px!important;margin:2px 0!important}.submenu .menu-group{margin:6px 0 6px 10px!important}.submenu .menu-group .menu-title{min-height:40px!important;font-size:13px!important;padding:11px 14px!important}.menu-item.active,.menu-item.parent-active{border-left:4px solid var(--yellow)!important;background:linear-gradient(90deg,rgba(255,210,63,.16),rgba(255,210,63,.05))!important;box-shadow:inset 4px 0 0 var(--yellow)!important}.menu-group.force-open>.menu-title{background:linear-gradient(135deg,#ffb21a,#ffd23f)!important;color:#111820!important;box-shadow:0 12px 28px rgba(255,178,26,.25)!important}.menu-group.nested.force-open>.menu-title{background:rgba(255,210,63,.08)!important;color:#f8fafc!important;border-left:4px solid var(--yellow)!important;box-shadow:inset 4px 0 0 var(--yellow)!important}.menu-group.nested.force-open>.menu-title .chev{color:#fff}.admin-shell{max-width:1560px;margin:0 auto}.admin-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin:0 0 18px}.admin-title h1{margin:0 0 4px;font-size:27px;line-height:1.15}.admin-title .role{font-size:17px;font-weight:1000;color:var(--yellow);margin-bottom:18px}.admin-title p{margin:0;color:#e5edf8;font-weight:750}.hambox{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#151c24;border:1px solid rgba(255,255,255,.05);margin-right:14px}.admin-title-row{display:flex;align-items:flex-start}.top-actions{display:flex;align-items:center;gap:13px}.top-icon{width:39px;height:39px;border-radius:10px;background:#151c24;border:1px solid rgba(255,255,255,.05);display:grid;place-items:center;position:relative;font-size:19px}.top-icon i{position:absolute;right:-4px;top:-8px;background:#ff4d5c;color:white;border-radius:999px;font-size:11px;min-width:20px;height:20px;display:grid;place-items:center;font-style:normal}.admin-chip{display:flex;align-items:center;gap:10px;font-weight:950}.admin-chip .a{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#ffb21a,#ffd23f);color:#111;display:grid;place-items:center}.gestion-cards{grid-template-columns:repeat(3,minmax(240px,1fr))!important;gap:16px!important;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.05);border-radius:18px;padding:18px}.gestion-card{min-height:160px!important;padding:26px!important;align-items:center!important}.gestion-card h2{font-size:20px;margin:0 0 12px}.gestion-card p{min-height:52px;line-height:1.5}.gestion-card .btn-warn,.gestion-card .btn-green,.gestion-card .btn-blue{margin-top:8px;min-width:150px;justify-content:center;border-radius:8px;padding:10px 15px}.gestion-card.green .btn-green{background:#163024!important;color:#43d96d!important;border:1px solid rgba(67,217,109,.4)!important}.gestion-card.purple .btn-blue{background:#241a33!important;color:#bc85ff!important;border:1px solid rgba(188,133,255,.45)!important}.gestion-icon{width:64px!important;height:64px!important;border-radius:14px!important}.dashboards-admin{display:grid;grid-template-columns:repeat(3,minmax(240px,1fr));gap:16px;margin-top:16px}.dashboard-panel{grid-column:auto!important;padding:22px!important}.dashboard-panel h2{font-size:16px;margin-bottom:18px}.dashboard-panel .mini-grid{grid-template-columns:repeat(2,1fr)!important;gap:14px!important}.dash-metric{min-height:86px!important;align-items:flex-start!important;position:relative;display:block!important}.dash-metric span{display:block;font-size:12px;color:#f2f6fb;margin-bottom:10px}.dash-metric b{font-size:20px!important;color:#fff!important}.dash-metric .mi{position:absolute;right:13px;bottom:13px;width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(135deg,#ffb21a,#ffd23f);color:#101418}.dashboard-panel.green .dash-metric .mi{background:linear-gradient(135deg,#27b862,#6ee78f);color:#fff}.dashboard-panel.purple .dash-metric .mi{background:linear-gradient(135deg,#7f43c7,#b77cff);color:#fff}.dashboard-panel .full-link{margin-top:16px;width:100%;justify-content:space-between;border-radius:8px;padding:12px 16px}.dashboard-panel.green .full-link{background:#142c23!important;color:#44d96d!important;border:1px solid rgba(68,217,109,.38)!important}.dashboard-panel.purple .full-link{background:#241831!important;color:#bd86ff!important;border:1px solid rgba(189,134,255,.42)!important}.admin-footer{display:flex;justify-content:space-between;color:#aab4c1;font-size:12px;margin:24px 4px 0}.test-panel-hidden{margin-top:16px}.admin-section-title{font-size:18px;margin:0 0 14px}.card{background:linear-gradient(145deg,#181e26,#14191f)!important;border-color:#313946!important}@media(max-width:1200px){.dashboards-admin,.gestion-cards{grid-template-columns:1fr!important}.app{grid-template-columns:280px 1fr}.admin-header{flex-direction:column}.top-actions{align-self:flex-end}}@media(max-width:1000px){.main{padding-top:74px!important}.app{grid-template-columns:1fr!important}.side{padding-top:60px!important}.dashboards-admin,.gestion-cards{grid-template-columns:1fr!important}}
 
+.sol-cards{display:grid;gap:14px}.sol-card{display:grid;grid-template-columns:1.1fr 1.5fr .55fr 1.6fr 1fr 1fr;gap:14px;align-items:center;background:linear-gradient(145deg,#151a21,#101419);border:1px solid #303844;border-radius:18px;padding:18px 20px;box-shadow:0 12px 30px rgba(0,0,0,.18)}.sol-card.head{background:#0e1217;color:var(--yellow);font-size:13px;font-weight:1000;text-transform:uppercase;box-shadow:none}.sol-card b{color:#fff;font-size:16px}.sol-card .dias{font-size:18px;color:#fff}.sol-card .coment{color:#dbe4ee;font-weight:800}.sol-empty{padding:22px;border:1px dashed #3b4552;border-radius:16px;color:#b8c0cb}.local-note{margin-top:10px;color:#b8c0cb;font-size:13px}@media(max-width:900px){.sol-card,.sol-card.head{grid-template-columns:1fr}.sol-card.head{display:none}.sol-card{gap:7px}.sol-card>div:before{content:attr(data-label);display:block;color:var(--yellow);font-size:11px;text-transform:uppercase;margin-bottom:3px}}
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -1474,26 +1559,28 @@ def admin_trabajadores():
                     area = clean(row[idx('AREA')] if idx('AREA')>=0 else '')
                     empresa = clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'AQUANQA')
                     fecha_nac_raw = row[idx('FECHA_NACIMIENTO')] if idx('FECHA_NACIMIENTO')>=0 else ''
-                    fecha_nac = fecha_nac_raw.strftime('%d/%m/%Y') if hasattr(fecha_nac_raw, 'strftime') else clean(fecha_nac_raw)
+                    fecha_nac = excel_cell_fecha(fecha_nac_raw)
                     planilla = clean(row[idx('PLANILLA')] if idx('PLANILLA')>=0 else '')
-                    fecha_ing = clean(row[idx('FECHA_INGRESO')] if idx('FECHA_INGRESO')>=0 else '')
+                    fecha_ing = excel_cell_fecha(row[idx('FECHA_INGRESO')] if idx('FECHA_INGRESO')>=0 else '')
                     clave = generar_clave_trabajador(dni, fecha_nac)
                     con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,nombre,correo,cargo,area,empresa,planilla,fecha_nac,fecha_ing,dni,clave,now_txt()))
                     n+=1
                 con.commit()
-            flash(f'Base cargada correctamente: {n} trabajadores.', 'ok')
+            respaldar_exceles_locales()
+            flash(f'Base cargada correctamente: {n} trabajadores. Respaldo actualizado en REGISTROS_EXCEL_LOCAL.', 'ok')
         else:
             dni=normalizar_dni(request.form.get('dni'))
             with db() as con:
-                fecha_nac=clean(request.form.get('fecha_nacimiento')); clave=generar_clave_trabajador(dni, fecha_nac); con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),clean(request.form.get('empresa')) or 'AQUANQA',clean(request.form.get('planilla')),fecha_nac,clean(request.form.get('fecha_ingreso')),dni,clave,now_txt()))
+                fecha_nac=clean(request.form.get('fecha_nacimiento')); clave=generar_clave_trabajador(dni, fecha_nac); con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,clean(request.form.get('nombre')),clean(request.form.get('correo')).lower(),clean(request.form.get('cargo')),clean(request.form.get('area')),clean(request.form.get('empresa')) or 'AQUANQA',clean(request.form.get('planilla')),fecha_nac,fecha_sin_hora(request.form.get('fecha_ingreso')),dni,clave,now_txt()))
                 con.commit()
-            flash('Trabajador guardado.', 'ok')
+            respaldar_exceles_locales()
+            flash('Trabajador guardado y respaldo Excel actualizado.', 'ok')
         return redirect(url_for('admin_trabajadores'))
     with db() as con:
         rows = con.execute("SELECT * FROM trabajadores ORDER BY nombre LIMIT 300").fetchall()
     table = ''.join([f"<tr><td>{r['dni']}</td><td>{r['nombre']}</td><td>{r['correo']}</td><td>{r['cargo'] or ''}</td><td>{r['empresa'] or ''}</td><td>{r['planilla'] if 'planilla' in r.keys() and r['planilla'] else ''}</td></tr>" for r in rows])
     content = f"""
-    <div class='topbar'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div></div></div><section class='grid'>
+    <div class='topbar'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div><div class='local-note'>Respaldo local automático: REGISTROS_EXCEL_LOCAL / 01_TRABAJADORES_LOCAL.xlsx</div></div></div><section class='grid'>
     <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><select name='empresa'><option>AQUANQA</option><option>AQUANCA II</option></select></div><div class='field'><label>Planilla</label><input name='planilla'></div><div class='field'><label>Fecha nacimiento</label><input name='fecha_nacimiento' placeholder='dd/mm/aaaa'></div><div class='field'><label>Fecha de ingreso</label><input name='fecha_ingreso' placeholder='dd/mm/aaaa'></div><button class='btn-green'>Guardar + crear usuario</button></form></div>
     <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial: EMPRESA / DNI / TRABAJADOR / CARGO / AREA / PLANILLA / CORREO / FECHA NACIMIENTO. Crea usuario masivo con DNI y clave automática.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Descargar plantilla</a></form></div>
     <div class='card span-12'><h2>Listado</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Empresa</th><th>Planilla</th></tr>{table}</table></div></div></section>"""
@@ -1684,7 +1771,8 @@ def admin_vacaciones():
                     con.execute('INSERT INTO vacaciones_saldos(dni,trabajador,empresa,area,jefe,jefe_dni,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dni,periodo_inicio,periodo_fin) DO UPDATE SET trabajador=excluded.trabajador,empresa=excluded.empresa,area=excluded.area,jefe=excluded.jefe,jefe_dni=excluded.jefe_dni,fecha_ingreso=excluded.fecha_ingreso,dias_ganados=excluded.dias_ganados,dias_gozados=0,saldo=excluded.saldo,periodo=excluded.periodo,fecha_carga=excluded.fecha_carga,uploaded_by=excluded.uploaded_by', (dni,trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),jefe_nombre,jefe_dni,fecha_ing,p_ini,p_fin,gan,0,saldo,periodo,now_txt(),marca_carga(session.get('admin_user','admin'))))
                     ok+=1
                 con.commit()
-        flash(f'Saldos vacacionales cargados/actualizados: {ok}.','ok')
+                respaldar_exceles_locales()
+        flash(f'Saldos vacacionales cargados/actualizados: {ok}. Respaldo Excel local actualizado.','ok')
         return redirect(url_for('admin_vacaciones'))
     q_sol=clean(request.args.get('q_sol'))
     q_sal=clean(request.args.get('q_sal'))
@@ -1735,7 +1823,7 @@ def admin_vacaciones_accion(sid, rol, accion):
     elif accion=='aprobar' and rol=='gh': estado='Aprobado GTH'; col='fecha_gh'
     else: estado='Rechazado'; col='fecha_gh'
     with db() as con:
-        con.execute(f'UPDATE vacaciones_solicitudes SET estado=?, {col}=? WHERE id=?', (estado, now_txt(), sid)); con.commit()
+        con.execute(f'UPDATE vacaciones_solicitudes SET estado=?, {col}=? WHERE id=?', (estado, now_txt(), sid)); con.commit(); respaldar_exceles_locales()
     flash('Solicitud actualizada.', 'ok'); return redirect(url_for('admin_vacaciones'))
 
 @app.route('/vacaciones/mi_solicitud', methods=['GET','POST'])
@@ -1779,7 +1867,7 @@ def trabajador_vacaciones():
             motivo_base = (motivo_base + ' | ' if motivo_base else '') + 'Solicitud marcada como comentario especial; validada dentro del saldo disponible.'
         with db() as con:
             jefe_dni = saldos_sel[0]['jefe_dni'] if saldos_sel and 'jefe_dni' in saldos_sel[0].keys() else ''
-            con.execute('INSERT INTO vacaciones_solicitudes(dni,trabajador,jefe_dni,fecha_inicio,fecha_fin,dias,motivo,estado,fecha_solicitud,periodo_detalle) VALUES(?,?,?,?,?,?,?,?,?,?)',(dni,t['nombre'] if t else '',jefe_dni,fi,ff,dias,motivo_base,estado,now_txt(),periodo_detalle)); con.commit()
+            con.execute('INSERT INTO vacaciones_solicitudes(dni,trabajador,jefe_dni,fecha_inicio,fecha_fin,dias,motivo,estado,fecha_solicitud,periodo_detalle) VALUES(?,?,?,?,?,?,?,?,?,?)',(dni,t['nombre'] if t else '',jefe_dni,fi,ff,dias,motivo_base,estado,now_txt(),periodo_detalle)); con.commit(); respaldar_exceles_locales()
         flash('Solicitud registrada. Pasará por jefe inmediato y Gestión del Talento Humano.','ok')
         return redirect(url_for('trabajador_vacaciones'))
     with db() as con:
@@ -1787,16 +1875,16 @@ def trabajador_vacaciones():
         saldo=saldos_usuario[0] if saldos_usuario else None
         solicitudes=con.execute('SELECT * FROM vacaciones_solicitudes WHERE dni=? ORDER BY id DESC',(dni,)).fetchall()
         por_aprobar=con.execute("SELECT * FROM vacaciones_solicitudes WHERE jefe_dni=? AND estado='Pendiente jefe' ORDER BY id DESC",(dni,)).fetchall()
-    sol=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td>{r['periodo_detalle'] if 'periodo_detalle' in r.keys() and r['periodo_detalle'] else ''}</td><td><span class='status-pill'>{r['estado']}</span></td><td>{r['motivo'] or ''}</td></tr>" for r in solicitudes])
+    sol=''.join([f"<div class='sol-card'><div data-label='Fecha'><b>{r['fecha_solicitud']}</b></div><div data-label='Rango'><b>{r['fecha_inicio']} al {r['fecha_fin']}</b></div><div data-label='Días' class='dias'><b>{r['dias']}</b></div><div data-label='Periodo usado'><b>{r['periodo_detalle'] if 'periodo_detalle' in r.keys() and r['periodo_detalle'] else '-'}</b></div><div data-label='Estado'><span class='status-pill'>{r['estado']}</span></div><div data-label='Comentario' class='coment'>{r['motivo'] or '-'}</div></div>" for r in solicitudes])
     sol_aprobar=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/vacaciones/aprobar_jefe/{r['id']}'>Aprobar</a><a class='btn-red mini-btn' href='/vacaciones/rechazar_jefe/{r['id']}'>Rechazar</a></td></tr>" for r in por_aprobar])
     saldo_val = sum(float(r['saldo'] or 0) for r in saldos_usuario)
     periodos_html = ''.join([f"<label class='checkline period-card'><input type='checkbox' name='periodos' value='{r['id']}' {'disabled' if float(r['saldo'] or 0) <= 0 else ''}> <b>{r['periodo_inicio'] or ''} - {r['periodo_fin'] or ''}</b> &nbsp; Ganados: {r['dias_ganados']} &nbsp; Saldo: <b>{r['saldo']}</b></label>" for r in saldos_usuario]) or '<p class=\'muted\'>No tiene periodos vacacionales cargados.</p>'
     content=f"""
     <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Vacacional</span></h1><div class='subtitle'>Consulta tu saldo, valida días disponibles y registra solicitudes.</div></div></div></div>
-    <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo_val}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{sum(float(r['dias_ganados'] or 0) for r in saldos_usuario)}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Periodos</h3><b>{len(saldos_usuario)}</b></div><div class='ico'>📅</div></div><div class='card mini'><div><h3>Fecha ingreso</h3><b>{(t['fecha_ingreso'] if t and 'fecha_ingreso' in t.keys() else '') or '-'}</b></div><div class='ico'>🗓️</div></div>
+    <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo_val}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{sum(float(r['dias_ganados'] or 0) for r in saldos_usuario)}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Periodos</h3><b>{len(saldos_usuario)}</b></div><div class='ico'>📅</div></div><div class='card mini'><div><h3>Fecha ingreso</h3><b>{fecha_sin_hora(t['fecha_ingreso'] if t and 'fecha_ingreso' in t.keys() else '') or '-'}</b></div><div class='ico'>🗓️</div></div>
     <div class='card span-12' style='{"display:block" if sol_aprobar else "display:none"}'><h2>✅ Solicitudes pendientes por aprobar como jefe inmediato</h2><p class='muted'>Te aparecen aquí solo los trabajadores que tienen tu DNI como jefe inmediato en la plantilla de saldos.</p><div class='table-wrap'><table><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Rango</th><th>Días</th><th>Estado</th><th>Acciones</th></tr>{sol_aprobar or '<tr><td colspan=7>No tienes solicitudes pendientes por aprobar.</td></tr>'}</table></div></div>
     <div id='solicitar' class='card span-12'><h2>Nueva solicitud</h2><p class='muted'>Seleccione con check el periodo que se va a gozar. Puede marcar más de uno si el descanso consume saldos acumulados.</p><form method='post' class='form-grid'><div class='field span-12'><label>Periodos disponibles</label><div class='period-list'>{periodos_html}</div></div><div class='field'><label>Inicio</label><input type='date' name='fecha_inicio' min='{datetime.now(APP_TZ).date().isoformat()}' required></div><div class='field'><label>Fin</label><input type='date' name='fecha_fin' min='{datetime.now(APP_TZ).date().isoformat()}' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div><div class='field'><label>Comentario especial</label><label class='checkline'><input type='checkbox' name='adelanto' value='1'> Requiere revisión especial</label></div><button class='btn-green'>Registrar solicitud</button></form></div>
-    <div class='card span-12'><h2>Mis solicitudes</h2><div class='table-wrap'><table><tr><th>Fecha</th><th>Rango</th><th>Días</th><th>Periodo usado</th><th>Estado</th><th>Comentario</th></tr>{sol or '<tr><td colspan=6>No hay solicitudes.</td></tr>'}</table></div></div></section>"""
+    <div class='card span-12'><h2>Mis solicitudes</h2><div class='sol-cards'><div class='sol-card head'><div>Fecha</div><div>Rango</div><div>Días</div><div>Periodo usado</div><div>Estado</div><div>Comentario</div></div>{sol or "<div class='sol-empty'>No hay solicitudes registradas.</div>"}</div></div></section>"""
     return render_page(content, active='Gestion Vacacional')
 
 
