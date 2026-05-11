@@ -1162,13 +1162,12 @@ def sidebar(active):
             <div id='grp_contratacion' data-group='contratacion' class='{con_cls}'>
               <button type='button' class='{con_head}' onclick="toggleGroup('grp_contratacion')"><span>🧾</span><span class='label'>3. Gestión Contratación</span><span class='chev'>∨</span></button>
               <div class='submenu'>
-                <a class='{cls_con}' onclick='saveSideScroll()' href='/admin/contratacion'><span>📊</span><span class='label'>Dashboard contratación</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion#procesos'><span>💼</span><span class='label'>Procesos de Contratación</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion#candidatos'><span>👥</span><span class='label'>Candidatos</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion#contratos'><span>📄</span><span class='label'>Contratos</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion#plantillas'><span>📋</span><span class='label'>Plantilla Documentos</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion#descargas'><span>⬇️</span><span class='label'>Descargas</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion#maestros'><span>🧩</span><span class='label'>Datos Maestros</span></a>
+                <a class='{cls_con}' onclick='saveSideScroll()' href='/admin/contratacion?sec=flujo'><span>☰</span><span class='label'>Flujos de aprobación</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion?sec=carga'><span>⬆️</span><span class='label'>Carga Masiva</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion?sec=reportes'><span>▤</span><span class='label'>Reportes</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion?sec=maestros'><span>💼</span><span class='label'>Datos Maestros</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion?sec=anuncios'><span>!</span><span class='label'>Anuncios</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/contratacion?sec=documentaria'><span>🪪</span><span class='label'>Gestión Documentaria</span></a>
               </div>
             </div>
             <a class='{cls_trab}' onclick='saveSideScroll()' href='/admin/trabajadores'><span>👥</span><span class='label'>Trabajadores</span></a>
@@ -2349,32 +2348,89 @@ def ver_contratacion(cid):
     if not path.exists(): abort(404)
     return send_file(path, as_attachment=False, download_name=r['archivo_nombre'])
 
+
 @app.route('/admin/contratacion', methods=['GET','POST'])
 @admin_required
 def admin_contratacion():
+    """Gestión Contratos estilo Adapta: flujos, cargas, reportes, maestros, anuncios y documentaria."""
+    sec = request.args.get('sec','flujo')
     if request.method=='POST':
+        accion = request.form.get('accion','doc')
+        if accion == 'anuncio':
+            f = request.files.get('archivo')
+            titulo = clean(request.form.get('titulo')) or 'Anuncio de contratación'
+            carpeta = UPLOAD_DIR/'contratacion'/'anuncios'; carpeta.mkdir(parents=True, exist_ok=True)
+            if f and f.filename:
+                name = now_file()+'_'+secure_filename(f.filename); path = carpeta/name; f.save(path)
+                flash(f'Anuncio cargado: {titulo} / {f.filename}', 'ok')
+            else:
+                flash('Completa el archivo del anuncio.', 'error')
+            return redirect(url_for('admin_contratacion', sec='anuncios'))
         f=request.files.get('archivo'); dni=normalizar_dni(request.form.get('dni')); trab=get_trabajador(dni); tipo=clean(request.form.get('tipo_doc')); etapa=clean(request.form.get('etapa')) or 'Incorporación'
-        if f and f.filename:
+        if f and f.filename and dni:
             folder=UPLOAD_DIR/'contratacion'/dni; folder.mkdir(parents=True, exist_ok=True)
             name=now_file()+'_'+secure_filename(f.filename); path=folder/name; f.save(path)
             with db() as con:
-                con.execute('INSERT INTO contratacion_docs(dni,trabajador,empresa,etapa,tipo_doc,estado,archivo_nombre,ruta_archivo,fecha_registro,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?)',(dni, trab['nombre'] if trab else '', trab['empresa'] if trab else '', etapa, tipo, 'Generado', f.filename, str(path), now_txt(), marca_carga(session.get('admin_user','admin')))); con.commit()
-            flash('Documento de contratación registrado.','ok')
-        return redirect(url_for('admin_contratacion'))
+                con.execute('INSERT INTO contratacion_docs(dni,trabajador,empresa,etapa,tipo_doc,estado,archivo_nombre,ruta_archivo,fecha_registro,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?)',(dni, trab['nombre'] if trab else '', trab['empresa'] if trab else '', etapa, tipo, 'FIRMADO', f.filename, str(path), now_txt(), marca_carga(session.get('admin_user','admin')))); con.commit()
+            flash('Documento de contratación registrado y archivado.', 'ok')
+        else:
+            flash('Selecciona trabajador y archivo.', 'error')
+        return redirect(url_for('admin_contratacion', sec='documentaria'))
     with db() as con:
         tipos=con.execute('SELECT * FROM contratacion_tipos ORDER BY etapa, descripcion').fetchall()
         docs=con.execute('SELECT * FROM contratacion_docs ORDER BY id DESC LIMIT 300').fetchall()
-        trabajadores=con.execute('SELECT dni,nombre FROM trabajadores ORDER BY nombre LIMIT 500').fetchall()
-    opt_tipo=''.join([f"<option value='{r['descripcion']}'>{r['codigo']} - {r['descripcion']} ({r['etapa']})</option>" for r in tipos])
+        trabajadores=con.execute('SELECT dni,nombre,empresa,cargo,area,correo,activo,fecha_registro FROM trabajadores ORDER BY nombre LIMIT 700').fetchall()
+    opt_tipo=''.join([f"<option value='{r['descripcion']}'>{r['descripcion']}</option>" for r in tipos])
     opt_trab=''.join([f"<option value='{r['dni']}'>{r['dni']} - {r['nombre']}</option>" for r in trabajadores])
-    tipos_rows=''.join([f"<tr><td>✎ 🗑</td><td><span class='badge-green'>{'Activo' if r['activo'] else 'Inactivo'}</span></td><td>{r['codigo']}</td><td>{r['descripcion']}</td><td>{r['etapa']}</td><td><span class='badge-green'>✓</span></td></tr>" for r in tipos])
-    docs_rows=''.join([f"<tr><td>🔍 📄</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['tipo_doc']}</td><td><span class='badge-green'>F</span></td><td>{r['fecha_registro']}</td></tr>" for r in docs])
-    content=f"""
-    <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Contratación</span></h1><div class='subtitle'>Inspirado en Adapta: flujos, carga masiva, maestros, tipos de documento, archivos del trabajador y descargas.</div></div></div></div>
-    <section class='grid'><div id='procesos' class='card span-12'><div class='adapta-note'><b>Flujo preparado:</b> trabajador → documentos requeridos por etapa → carga/validación → firmado/archivado → descarga.</div></div>
-    <div id='candidatos' class='card span-6'><h2>👥 Candidatos</h2><p class='muted'>Sección preparada para registrar postulantes, evaluación y estado del proceso.</p></div><div id='plantillas' class='card span-6'><h2>📋 Plantilla Documentos</h2><p class='muted'>Sección preparada para formatos de contrato, anexos, acuerdos y documentos requeridos por etapa.</p></div><div id='contratos' class='card span-12'><h2>📄 Subir documento de contratación / Contratos</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Trabajador</label><input name='dni' list='trabajadores_list' required><datalist id='trabajadores_list'>{opt_trab}</datalist></div><div class='field'><label>Etapa</label><select name='etapa'><option>Incorporación</option><option>Renovación</option><option>Cese</option></select></div><div class='field'><label>Tipo documento</label><select name='tipo_doc'>{opt_tipo}</select></div><div class='field'><label>Archivo</label><input type='file' name='archivo' required></div><button class='btn-green'>Subir / archivar</button></form></div>
-    <div id='maestros' class='card span-12 adapta-table'><h2>🧩 Tipos de documento por etapa</h2><div class='table-wrap'><table><tr><th></th><th>Estado</th><th>Código</th><th>Tipo Doc</th><th>Stage</th><th>Mandatorio</th></tr>{tipos_rows}</table></div></div>
-    <div id='descargas' class='card span-12 adapta-table'><h2>⬇️ Archivos trabajador / Descargas</h2><div class='table-wrap'><table><tr><th></th><th>Código</th><th>Apellidos y Nombres</th><th>Tipo Documento</th><th>Estado Doc</th><th>Fecha Envío</th></tr>{docs_rows or '<tr><td colspan=6>No hay archivos.</td></tr>'}</table></div></div></section>"""
+    sample_trab = trabajadores[0] if trabajadores else None
+    docs_rows=''.join([f"<tr><td><input type='checkbox'></td><td>🔍 📄</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['tipo_doc']}</td><td><span class='c-badge cyan'>{r['estado'][:1] or 'F'}</span></td><td>{r['fecha_registro']}</td></tr>" for r in docs])
+    renov_rows=''.join([f"<tr><td><input type='checkbox'></td><td>{t['dni']}</td><td>{t['nombre']}</td><td>INICIO</td><td>{fecha_sin_hora(t['fecha_registro'])}</td><td></td><td>30/06/2026</td><td><span class='c-badge green'>✓</span></td><td><span class='c-badge green'>✓</span></td><td>0</td></tr>" for t in trabajadores[:12]])
+    tipos_rows=''.join([f"<tr><td>✎ 🗑</td><td><span class='state'>Activo</span></td><td>{r['codigo']}</td><td>{r['descripcion']}</td><td>{r['etapa']}</td><td>Trabajador Contrato Laboral</td><td>Documento requerido</td></tr>" for r in tipos])
+    obs_rows=''.join([f"<tr><td><input type='checkbox'></td><td>🔗 ✎ 🗑</td><td><span class='state'>Activo</span></td><td>DNI</td><td>{t['dni']}</td><td>{t['nombre']}</td><td>SINDICALISTA</td><td>NIVEL 3</td></tr>" for t in trabajadores[:10]])
+    report_rows="<tr><td>✎ ⬇</td><td>RHTR01</td><td>Reporte Datos Trabajador</td><td>Reporte Datos Trabajador</td><td>TR_REPORT_1</td><td>Admin</td></tr>"
+    # CSS local estilo blanco/naranja tipo las imágenes adjuntas
+    css="""
+    <style>
+    .main{background:#f4f4f4!important;color:#111827!important;padding:0!important}.contract-shell{display:flex;min-height:calc(100vh - 0px);background:#f4f4f4;color:#111827}.contract-menu{width:280px;background:#fff;border-right:1px solid #ddd;position:sticky;top:0;height:calc(100vh);overflow:auto}.contract-menu a,.contract-menu .cm-title{display:flex;gap:14px;align-items:center;padding:14px 18px;color:#111827;font-weight:800}.contract-menu a.active,.contract-menu .cm-title.active,.contract-menu a:hover{background:#fde8d5}.contract-sub a{padding-left:74px;font-size:14px}.contract-content{flex:1;padding:18px 26px;overflow:auto}.c-title{font-size:24px;margin:0 0 20px}.c-bar{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}.c-filter{display:grid;grid-template-columns:180px minmax(260px,420px) 160px minmax(260px,420px);gap:10px 24px;align-items:center;margin-bottom:22px}.c-filter input,.c-filter select,.c-form input,.c-form select{background:#fff!important;color:#111827!important;border:1px solid #cfd6df!important;border-radius:6px!important;padding:10px!important}.c-btn{background:#ff8d35;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:900;display:inline-flex;gap:8px;align-items:center}.c-btn.gray{background:#66707c}.c-btn.small{padding:8px 12px}.c-card{background:#fff;border:1px solid #ddd;border-radius:5px;box-shadow:0 1px 5px #0001;margin-bottom:18px}.tabs{display:flex;border-bottom:1px solid #ddd}.tab{padding:14px 24px;font-weight:900;color:#7a7f87;border-bottom:2px solid transparent}.tab.active{color:#1f2937;border-bottom-color:#ff8d35}.c-table{width:100%;border-collapse:collapse;background:#fff;font-size:15px}.c-table th{font-weight:800;text-align:left;background:#f7f8fa;border:1px solid #dde2e7;padding:12px}.c-table td{border:1px solid #e1e5ea;padding:11px;vertical-align:middle}.c-table tr:nth-child(even) td{background:#e8e8e8}.c-table tr.selected td{background:#bcd7fb!important}.c-badge{display:inline-grid;place-items:center;min-width:70px;border-radius:5px;padding:6px 10px;color:#fff;font-weight:900}.c-badge.green{background:#55ad11}.c-badge.cyan{background:#51c2d4}.state{border:1px solid #d1d5db;border-radius:99px;padding:7px 12px;background:white;color:#16a34a;font-weight:900}.tile-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:30px;max-width:1100px;margin:60px auto}.c-tile{background:#fff;border:1px solid #ddd;border-radius:6px;min-height:185px;padding:28px;display:flex;gap:18px;align-items:flex-start;position:relative;box-shadow:0 1px 5px #0001}.tile-icon{width:74px;height:74px;border-radius:50%;background:#ffe5cc;color:#ff8d35;display:grid;place-items:center;font-size:34px}.download-corner{position:absolute;right:18px;bottom:14px;font-size:24px}.toolbar{display:flex;justify-content:flex-end;gap:18px;color:#7b8088;margin:12px 0}.c-form{display:grid;grid-template-columns:180px minmax(260px,430px) 180px minmax(260px,430px);gap:12px 22px;align-items:center}.profile{display:grid;grid-template-columns:150px 1fr 1fr 1fr;gap:24px;align-items:start}.avatar-big{width:135px;height:135px;border-radius:50%;background:#f7c26d;display:grid;place-items:center;font-size:80px}.divider{border-left:2px dashed #c8c8c8;padding-left:20px}.muted2{color:#667085}.top-adapta{height:48px;background:#fff;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:24px;padding:0 22px}.top-adapta b{font-size:24px}.anuncio-upload{background:#fff;padding:22px;border-radius:8px;border:1px dashed #ff8d35;max-width:900px}.anuncio-upload input[type=file]{background:#fff!important;color:#111!important;border:1px solid #ddd!important;padding:10px!important;border-radius:8px!important}.video-box{margin-top:16px;background:#111827;color:#fff;padding:18px;border-radius:10px}.video-box video{width:100%;max-height:260px;background:#000;border-radius:8px}@media(max-width:1000px){.contract-shell{display:block}.contract-menu{width:100%;height:auto;position:relative}.contract-content{padding:14px}.c-filter,.c-form,.profile{grid-template-columns:1fr}.tile-grid{grid-template-columns:1fr;margin:20px 0}.contract-sub a{padding-left:30px}.c-table{min-width:1000px}.table-wrap{overflow:auto}}
+    </style>"""
+    menu=f"""
+    <div class='top-adapta'><b>Adapta</b><span>AQUANQA I⌄</span></div>
+    <div class='contract-shell'><nav class='contract-menu'>
+      <a class='{ 'active' if sec=='flujo' else ''}' href='/admin/contratacion?sec=flujo'>☰ Flujos de aprobación</a>
+      <a class='{ 'active' if sec=='carga' else ''}' href='/admin/contratacion?sec=carga'>⬆ Carga Masiva</a>
+      <a class='{ 'active' if sec=='reportes' else ''}' href='/admin/contratacion?sec=reportes'>▤ Reportes</a>
+      <div class='cm-title { 'active' if sec=='maestros' else ''}'>💼 Datos Maestros ›</div>
+      <div class='contract-sub'><a href='/admin/contratacion?sec=maestros'>Mantenedor General</a><a href='/admin/contratacion?sec=observados'>Trabajadores Obs.</a><a href='/admin/contratacion?sec=tipos_etapa'>Tipos de Documento por Etapa</a><a href='/admin/contratacion?sec=tipo_empleado'>Tipo Documento Empleado</a><a href='/admin/contratacion?sec=cargo'>Cargo</a><a href='/admin/contratacion?sec=actualizar'>Actualizar Trabajador</a></div>
+      <a class='{ 'active' if sec=='anuncios' else ''}' href='/admin/contratacion?sec=anuncios'>! Anuncios</a>
+      <div class='cm-title { 'active' if sec=='documentaria' else ''}'>🪪 Gestión Documentaria⌄</div>
+      <div class='contract-sub'><a href='/admin/contratacion?sec=renovacion'>Renovación Contrato</a><a href='/admin/contratacion?sec=documentaria'>Archivos Trabajador</a><a href='/admin/contratacion?sec=ficha'>Ficha Trabajador</a><a href='/admin/contratacion?sec=plantillas'>Plantilla Documentos</a><a href='/admin/contratacion?sec=nisira'>Contratación NISIRA</a><a href='/admin/contratacion?sec=descargas'>Descargas</a></div>
+    </nav><main class='contract-content'>"""
+    def wrap(inner):
+        return css + menu + inner + "</main></div>"
+    if sec=='flujo':
+        rows=''.join([f"<tr class='{ 'selected' if i==0 else ''}'><td><input type='checkbox' {'checked' if i==0 else ''}></td><td>🔍 📄</td><td>{232105-i}</td><td><span class='c-badge green'>APROBADO</span></td><td>{'Eliminar Contrato' if i%2==0 else 'Eliminar Alta Trabajador'}</td><td>{now_txt()}</td><td>{now_txt()}</td><td>{(trabajadores[i]['nombre'] if i < len(trabajadores) else 'TRABAJADOR DEMO')}</td></tr>" for i in range(10)])
+        content=wrap(f"<h2 class='c-title'>Eventos</h2><div class='c-filter'><b>Tipos de Evento:</b><select><option>Renovar Contrato</option><option>Eliminar Contrato</option></select><b>Estados:</b><select><option></option><option>Aprobado</option><option>Pendiente</option></select><b>Código Trabajador</b><input><span></span><span><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button></span></div><div class='toolbar'>⚙ Acción ▾</div><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th></th><th>No.Operación</th><th>Estado</th><th>Tipo de Evento</th><th>Fecha Registro</th><th>Fecha último Estado</th><th>Trabajador</th></tr>{rows}</table></div>")
+    elif sec=='carga':
+        content=wrap("<h2 class='c-title'>Carga Masiva</h2><div class='c-card'><div class='tabs'><div class='tab active'>Carga Masiva</div><div class='tab'>Registros de Carga Masiva</div></div></div><div class='c-filter' style='grid-template-columns:1fr 1fr;max-width:980px;margin:auto'><input placeholder='Codigo/Nombre'><select><option>Grupo</option></select></div><div class='tile-grid'><div class='c-tile'><div class='tile-icon'>▤</div><h2>Carga Masiva Actualizar Datos Trabajo</h2><span class='download-corner'>⬇</span></div><div class='c-tile'><div class='tile-icon'>▤</div><h2>Carga Masiva Bajas Trabajador</h2><span class='download-corner'>⬇</span></div></div>")
+    elif sec=='reportes':
+        content=wrap(f"<h2 class='c-title'>Reportes</h2><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th>Código</th><th>Nombre</th><th>Nombre</th><th>Componente</th><th>Creado por</th></tr>{report_rows}</table></div>")
+    elif sec in ['maestros','observados','tipos_etapa','tipo_empleado','cargo','actualizar']:
+        content=wrap(f"<h2 class='c-title'>Listas de trabajadores observados</h2><div class='c-bar'><div><input class='input' style='background:#fff!important;color:#111!important;max-width:520px' placeholder='Nombre / Num. Documento'><br><br><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button></div><a class='c-btn'>+ Crear trabajador observado</a></div><div class='toolbar'>⚙ Acción ▾ &nbsp; ⬇ Descargar ▾</div><div class='c-card'><div class='tabs'><div class='tab active'>Trabajadores observados</div><div class='tab'>Lista de anulados</div></div><div class='table-wrap'><table class='c-table'><tr><th></th><th></th><th>Estado</th><th>Tipo Documento</th><th>Número Documento</th><th>Nombre</th><th>Motivo</th><th>Nivel Restricción</th></tr>{obs_rows}</table></div></div><div class='c-card'><div class='tabs'><div class='tab active'>Tipos de Documento por Etapa</div></div><div class='table-wrap'><table class='c-table'><tr><th></th><th>Estado</th><th>Código</th><th>Tipo Documento</th><th>Etapa</th><th>Esquema</th><th>Descripción</th></tr>{tipos_rows}</table></div></div>")
+    elif sec=='anuncios':
+        content=wrap("<h2 class='c-title'>Anuncios de la empresa</h2><div class='c-bar'><div class='c-form'><b>Fecha Registro</b><span><input placeholder='Desde'> - <input placeholder='Hasta'></span><b>Nombre</b><input></div><a class='c-btn'>+ Crear Anuncio</a></div><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button><br><br><form class='anuncio-upload' method='post' enctype='multipart/form-data'><input type='hidden' name='accion' value='anuncio'><h2>Subir anuncio multimedia</h2><p class='muted2'>Acepta video MP4, PDF, imagen o documento para comunicar a trabajadores.</p><input name='titulo' placeholder='Título del anuncio'><br><br><input type='file' name='archivo' accept='.mp4,.pdf,.png,.jpg,.jpeg,.doc,.docx' required><br><br><button class='c-btn'>Subir anuncio</button><div class='video-box'><b>Vista previa MP4</b><video controls></video></div></form>")
+    elif sec=='renovacion':
+        content=wrap(f"<h2 class='c-title'>Renovación masiva de contratos</h2><div class='c-form'><b>Renovar por:</b><span>Meses <input type='checkbox' checked> Fecha Termino</span><b>Fecha Termino:</b><input placeholder='d/MM/yyyy'><b>Meses:</b><input type='number' value='0'></div><div class='toolbar'>🔎 Filtros &nbsp; ⚙ Acción ▾ &nbsp; ⬇ Descargar</div><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th>Código</th><th>Apellidos y Nombres</th><th>Modalidad</th><th>FI Planilla</th><th>Fecha Migración</th><th>FI Contrato</th><th>FF Contrato</th><th>Firmado</th><th>Archivado</th><th>Nro File</th></tr>{renov_rows}</table></div>")
+    elif sec=='ficha':
+        nombre=sample_trab['nombre'] if sample_trab else ''
+        content=wrap(f"<h2 class='c-title'>Ficha Trabajador</h2><div class='profile'><div class='avatar-big'>👤</div><div><input placeholder='Buscar trabajador' value='{nombre}'><p><b>Dirección:</b></p><p>✉ &nbsp;&nbsp; ☎ &nbsp;&nbsp; 📱</p><div style='background:#e9e9e9;padding:8px'><b>Fecha de Creación:</b> &nbsp;&nbsp; <b>Creado por:</b></div></div><div class='divider'><p><b>Gerencia:</b></p><p><b>Area:</b></p><p><b>Puesto:</b></p><p><b>Supervisor:</b></p><p><b>Planilla:</b></p><p><b>Condición:</b></p></div><div class='divider'><p><b>Estado:</b></p><p><b>Fecha de Ingreso:</b></p><p><b>Fecha de Cese:</b></p><p><b>Centro Costo:</b></p><p><b>Zona:</b></p><p><b>Cargo:</b></p><p><b>Sindicalizado:</b></p></div></div><div class='c-card'><div class='tabs'><div class='tab active'>Datos Laborales</div><div class='tab'>Documentos</div><div class='tab'>Contratos</div></div></div>")
+    elif sec=='plantillas':
+        content=wrap(f"<h2 class='c-title'>Plantillas</h2><div class='c-bar'><div class='c-form'><b>Nombre Plantilla:</b><input><b>Tipo Documento:</b><select>{opt_tipo}</select><b>Esquema:</b><select><option></option><option>Trabajador Contrato Laboral</option></select><b>Condición:</b><input></div><a class='c-btn'>+ Crear Plantilla</a></div><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th>Estado</th><th>Nombre Plantilla</th><th>Tipo Documento</th><th>Esquema</th><th>Descripción</th></tr>{tipos_rows}</table></div>")
+    elif sec=='nisira':
+        content=wrap("<h2 class='c-title'>Contratación NISIRA</h2><div class='c-card' style='padding:22px'><p class='muted2'>Sección preparada para importar contratos / altas desde NISIRA y cruzar por DNI.</p><button class='c-btn'>Sincronizar NISIRA</button></div>")
+    elif sec=='descargas':
+        content=wrap(f"<h2 class='c-title'>Descargas</h2><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th>Código</th><th>Apellidos y Nombres</th><th>Tipo Documento</th><th>Estado Doc</th><th>Fecha Envío</th></tr>{docs_rows or '<tr><td colspan=6>No hay archivos.</td></tr>'}</table></div>")
+    else:
+        content=wrap(f"<h2 class='c-title'>Archivos Trabajador</h2><div class='toolbar'>🔎 Filtros &nbsp; ⚙ Acción ▾ &nbsp; ⬇ Descargar ▾</div><form method='post' enctype='multipart/form-data' class='c-card c-form' style='padding:18px'><b>Trabajador</b><input name='dni' list='trabajadores_list' required><datalist id='trabajadores_list'>{opt_trab}</datalist><b>Etapa</b><select name='etapa'><option>Incorporación</option><option>Renovación</option><option>Cese</option></select><b>Tipo documento</b><select name='tipo_doc'>{opt_tipo}</select><b>Archivo</b><input type='file' name='archivo' required><span></span><button class='c-btn'>⬆ Subir Docs Individual</button></form><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th></th><th>Código</th><th>Apellidos y Nombres</th><th>Tipo Documento</th><th>Estado Doc</th><th>Fecha Envío</th></tr>{docs_rows or '<tr><td colspan=7>No hay archivos.</td></tr>'}</table></div>")
     return render_page(content, active='Gestion Contratacion')
 
 
