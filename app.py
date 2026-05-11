@@ -336,6 +336,50 @@ def db():
     return conn
 
 
+
+def sincronizar_jefes_vacaciones(con):
+    """Sincroniza JEFE INMEDIATO por DNI entre saldos, trabajadores y solicitudes."""
+    try:
+        for r in con.execute("SELECT id, jefe_dni FROM vacaciones_saldos WHERE COALESCE(jefe_dni,'')<>''").fetchall():
+            nd = normalizar_dni(r['jefe_dni'])
+            if nd and nd != (r['jefe_dni'] or ''):
+                con.execute("UPDATE vacaciones_saldos SET jefe_dni=? WHERE id=?", (nd, r['id']))
+    except Exception:
+        pass
+    try:
+        for r in con.execute("SELECT id, jefe_dni FROM vacaciones_solicitudes WHERE COALESCE(jefe_dni,'')<>''").fetchall():
+            nd = normalizar_dni(r['jefe_dni'])
+            if nd and nd != (r['jefe_dni'] or ''):
+                con.execute("UPDATE vacaciones_solicitudes SET jefe_dni=? WHERE id=?", (nd, r['id']))
+    except Exception:
+        pass
+    try:
+        con.execute("""
+            UPDATE trabajadores
+               SET jefe_dni = COALESCE((SELECT s.jefe_dni FROM vacaciones_saldos s
+                        WHERE s.dni = trabajadores.dni AND COALESCE(s.jefe_dni,'')<>''
+                        ORDER BY s.periodo_inicio DESC, s.periodo_fin DESC, s.id DESC LIMIT 1), jefe_dni),
+                   jefe_nombre = COALESCE((SELECT tj.nombre FROM vacaciones_saldos s
+                        LEFT JOIN trabajadores tj ON tj.dni = s.jefe_dni
+                        WHERE s.dni = trabajadores.dni AND COALESCE(s.jefe_dni,'')<>''
+                        ORDER BY s.periodo_inicio DESC, s.periodo_fin DESC, s.id DESC LIMIT 1), jefe_nombre)
+             WHERE EXISTS (SELECT 1 FROM vacaciones_saldos s WHERE s.dni = trabajadores.dni AND COALESCE(s.jefe_dni,'')<>'')
+        """)
+    except Exception:
+        pass
+    try:
+        con.execute("""
+            UPDATE vacaciones_solicitudes
+               SET jefe_dni = COALESCE((SELECT s.jefe_dni FROM vacaciones_saldos s
+                        WHERE s.dni = vacaciones_solicitudes.dni AND COALESCE(s.jefe_dni,'')<>''
+                        ORDER BY s.periodo_inicio DESC, s.periodo_fin DESC, s.id DESC LIMIT 1),
+                        (SELECT tr.jefe_dni FROM trabajadores tr
+                        WHERE tr.dni = vacaciones_solicitudes.dni AND COALESCE(tr.jefe_dni,'')<>'' LIMIT 1), jefe_dni)
+             WHERE estado IN ('Pendiente jefe','Pendiente Jefe','Pendiente') OR COALESCE(jefe_dni,'')=''
+        """)
+    except Exception:
+        pass
+
 def init_db():
     with db() as con:
         con.execute("""
@@ -571,12 +615,22 @@ def init_db():
                            AND estado NOT LIKE 'Anulado%'""", (hoy_txt,))
         except Exception:
             pass
+        try:
+            sincronizar_jefes_vacaciones(con)
+        except Exception:
+            pass
         con.commit()
 
 
 init_db()
 restaurar_trabajadores_desde_excel_si_db_vacia()
 restaurar_vacaciones_desde_excel_si_db_vacia()
+try:
+    with db() as con:
+        sincronizar_jefes_vacaciones(con)
+        con.commit()
+except Exception:
+    pass
 respaldar_exceles_locales()
 
 def get_config(clave, default=''):
@@ -1975,7 +2029,11 @@ def admin_vacaciones():
                         jefe_dni = jr['dni'] if jr else ''
                         jefe_nombre = jr['nombre'] if jr else jefe_raw
                     con.execute('INSERT INTO vacaciones_saldos(dni,trabajador,empresa,area,jefe,jefe_dni,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dni,periodo_inicio,periodo_fin) DO UPDATE SET trabajador=excluded.trabajador,empresa=excluded.empresa,area=excluded.area,jefe=excluded.jefe,jefe_dni=excluded.jefe_dni,fecha_ingreso=excluded.fecha_ingreso,dias_ganados=excluded.dias_ganados,dias_gozados=0,saldo=excluded.saldo,periodo=excluded.periodo,fecha_carga=excluded.fecha_carga,uploaded_by=excluded.uploaded_by', (dni,trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),jefe_nombre,jefe_dni,fecha_ing,p_ini,p_fin,gan,0,saldo,periodo,now_txt(),marca_carga(session.get('admin_user','admin'))))
+                    if jefe_dni:
+                        con.execute('UPDATE trabajadores SET jefe_dni=?, jefe_nombre=COALESCE(NULLIF(?,''), jefe_nombre) WHERE dni=?', (jefe_dni, jefe_nombre, dni))
+                        con.execute("UPDATE vacaciones_solicitudes SET jefe_dni=? WHERE dni=? AND (estado IN ('Pendiente jefe','Pendiente Jefe','Pendiente') OR COALESCE(jefe_dni,'')='')", (jefe_dni, dni))
                     ok+=1
+                sincronizar_jefes_vacaciones(con)
                 con.commit()
                 respaldar_exceles_locales()
         flash(f'Saldos vacacionales cargados/actualizados: {ok}. Respaldo Excel local actualizado.','ok')
@@ -1996,7 +2054,7 @@ def admin_vacaciones():
     sal=''.join([f"<tr><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['empresa'] or ''}</td><td>{r['area'] or ''}</td><td>{r['jefe_dni'] if 'jefe_dni' in r.keys() else ''}</td><td>{r['jefe'] or ''}</td><td>{r['periodo_inicio'] or ''}</td><td>{r['periodo_fin'] or ''}</td><td>{r['dias_ganados']}</td><td><b>{r['saldo']}</b></td></tr>" for r in saldos])
     sol=''.join([f"<tr><td>{r['id']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['jefe_dni'] if 'jefe_dni' in r.keys() else ''}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td>{r['periodo_detalle'] if 'periodo_detalle' in r.keys() and r['periodo_detalle'] else ''}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/jefe/aprobar'>Apr. jefe</a><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/gh/aprobar'>Apr. GTH</a><a class='btn-red mini-btn' href='/admin/vacaciones/{r['id']}/rechazar'>Rechazar</a></td></tr>" for r in solicitudes])
     content=f"""
-    <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Vacacional</span></h1><div class='subtitle'>Administrador carga saldos; usuario solicita goce; flujo: jefe inmediato → Gestión del Talento Humano.</div></div><a class='btn-green' href='/admin/vacaciones/plantilla'>Descargar plantilla</a></div></div>
+    <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Vacacional</span></h1><div class='subtitle'>Administrador carga saldos; usuario solicita goce; flujo: jefe inmediato → Gestión del Talento Humano.</div></div><a class='btn-green' href='/admin/vacaciones/plantilla'>Descargar plantilla</a><a class='btn-blue' href='/admin/vacaciones/sincronizar_jefes'>Sincronizar jefes</a></div></div>
     <section class='grid'><div id='aprobaciones' class='card mini'><div><h3>Pendientes de aprobación</h3><b>{len([r for r in solicitudes if 'Pendiente' in (r['estado'] or '')])}</b></div><div class='ico'>✅</div></div><div class='card mini'><div><h3>Saldos registrados</h3><b>{len(saldos)}</b></div><div class='ico'>🗓️</div></div><div class='card mini'><div><h3>Solicitudes totales</h3><b>{len(solicitudes)}</b></div><div class='ico'>📄</div></div><div id='cargar-saldos' class='card span-12'><h2>🏖️ Saldos Vacacionales</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel saldos</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-green'>Subir saldos</button></form><p class='muted'>Columnas: EMPRESA, DNI, TRABAJADOR, AREA, JEFE INMEDIATO (DNI), I_PERIODO, F_PERIODO, DIAS GANADOS, SALDO. No usar FECHA INGRESO ni PERIODO ni DÍAS GOZADOS.</p></div>
     <div id='solicitudes' class='card span-12'><h2>📄 Solicitudes de vacaciones</h2><form method='get' class='form-grid'><div class='field'><label>Buscar por DNI o apellidos</label><input name='q_sol' value='{q_sol}' placeholder='Ej: 473 o QUINTANA'></div><button class='btn-green'>Filtrar solicitudes</button><a class='btn' href='/admin/vacaciones#solicitudes'>Limpiar</a></form><div class='table-wrap'><table><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>DNI jefe</th><th>Rango</th><th>Días</th><th>Periodo usado</th><th>Estado</th><th>Acciones</th></tr>{sol or '<tr><td colspan=9>No hay solicitudes.</td></tr>'}</table></div></div>
     <div id='reportes' class='card span-12'><h2>📑 Reporte de saldos cargados</h2><form method='get' class='form-grid'><div class='field'><label>Buscar por DNI o apellidos</label><input name='q_sal' value='{q_sal}' placeholder='Ej: 473 o QUINTANA'></div><button class='btn-green'>Filtrar saldos</button><a class='btn' href='/admin/vacaciones#reportes'>Limpiar</a></form><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>DNI jefe</th><th>Jefe</th><th>I_Periodo</th><th>F_Periodo</th><th>Ganados</th><th>Saldo</th></tr>{sal or '<tr><td colspan=10>No hay saldos cargados.</td></tr>'}</table></div></div></section>"""
@@ -2031,6 +2089,17 @@ def admin_vacaciones_accion(sid, rol, accion):
     with db() as con:
         con.execute(f'UPDATE vacaciones_solicitudes SET estado=?, {col}=? WHERE id=?', (estado, now_txt(), sid)); con.commit(); respaldar_exceles_locales()
     flash('Solicitud actualizada.', 'ok'); return redirect(url_for('admin_vacaciones'))
+
+
+@app.route('/admin/vacaciones/sincronizar_jefes')
+@admin_required
+def admin_vacaciones_sincronizar_jefes():
+    with db() as con:
+        sincronizar_jefes_vacaciones(con)
+        con.commit()
+    respaldar_exceles_locales()
+    flash('Jefes inmediatos sincronizados: las solicitudes pendientes fueron migradas al DNI del jefe cargado en saldos/trabajadores.', 'ok')
+    return redirect(url_for('admin_vacaciones'))
 
 @app.route('/vacaciones/mi_solicitud', methods=['GET','POST'])
 @worker_required
