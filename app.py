@@ -1999,16 +1999,26 @@ def admin_vacaciones():
             wb=load_workbook(x, data_only=True); ws=wb.active
             headers=[str(c.value or '').strip().upper() for c in ws[1]]
             def val(row, names):
+                # Normaliza cabeceras: acepta tildes, espacios y dos puntos (ej. DIAS GANADO:)
+                hdr_norm=[re.sub(r'[^A-Z0-9ÑÁÉÍÓÚ]+',' ', h).strip().replace('Á','A').replace('É','E').replace('Í','I').replace('Ó','O').replace('Ú','U') for h in headers]
                 for n in names:
+                    n2=re.sub(r'[^A-Z0-9ÑÁÉÍÓÚ]+',' ', str(n).upper()).strip().replace('Á','A').replace('É','E').replace('Í','I').replace('Ó','O').replace('Ú','U')
                     if n in headers: return row[headers.index(n)].value
+                    if n2 in hdr_norm: return row[hdr_norm.index(n2)].value
                 return ''
+            def num(v, default=0):
+                try:
+                    if v is None or str(v).strip()=='': return default
+                    return float(str(v).replace(',', '.').strip())
+                except Exception:
+                    return default
             with db() as con:
                 for row in ws.iter_rows(min_row=2):
                     dni=normalizar_dni(val(row,['DNI','DOCUMENTO','CODIGO','CÓDIGO']))
                     if not dni: continue
                     trabajador=clean(val(row,['TRABAJADOR','NOMBRE','APELLIDOS Y NOMBRES']))
-                    gan=float(val(row,['DIAS GANADOS','DÍAS GANADOS','GANADOS']) or 0)
-                    saldo=float(val(row,['SALDO','SALDO VACACIONAL']) or gan)
+                    gan=num(val(row,['DIAS GANADOS','DÍAS GANADOS','DIAS GANADO','DÍAS GANADO','GANADOS']), 0)
+                    saldo=num(val(row,['SALDO','SALDO VACACIONAL']), gan)
                     trabajador_db = con.execute('SELECT * FROM trabajadores WHERE dni=?', (dni,)).fetchone()
                     if trabajador_db:
                         trabajador = trabajador or trabajador_db['nombre']
@@ -2028,9 +2038,20 @@ def admin_vacaciones():
                         jr=con.execute('SELECT dni,nombre FROM trabajadores WHERE UPPER(nombre)=UPPER(?)', (jefe_raw,)).fetchone()
                         jefe_dni = jr['dni'] if jr else ''
                         jefe_nombre = jr['nombre'] if jr else jefe_raw
-                    con.execute('INSERT INTO vacaciones_saldos(dni,trabajador,empresa,area,jefe,jefe_dni,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dni,periodo_inicio,periodo_fin) DO UPDATE SET trabajador=excluded.trabajador,empresa=excluded.empresa,area=excluded.area,jefe=excluded.jefe,jefe_dni=excluded.jefe_dni,fecha_ingreso=excluded.fecha_ingreso,dias_ganados=excluded.dias_ganados,dias_gozados=0,saldo=excluded.saldo,periodo=excluded.periodo,fecha_carga=excluded.fecha_carga,uploaded_by=excluded.uploaded_by', (dni,trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),jefe_nombre,jefe_dni,fecha_ing,p_ini,p_fin,gan,0,saldo,periodo,now_txt(),marca_carga(session.get('admin_user','admin'))))
+                    existente = con.execute('SELECT id FROM vacaciones_saldos WHERE dni=? AND COALESCE(periodo_inicio,'')=? AND COALESCE(periodo_fin,'')=? ORDER BY id LIMIT 1', (dni, p_ini, p_fin)).fetchone()
+                    data_saldo = (trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),jefe_nombre,jefe_dni,fecha_ing,p_ini,p_fin,gan,0,saldo,periodo,now_txt(),marca_carga(session.get('admin_user','admin')))
+                    if existente:
+                        con.execute('''UPDATE vacaciones_saldos
+                                          SET trabajador=?, empresa=?, area=?, jefe=?, jefe_dni=?, fecha_ingreso=?,
+                                              periodo_inicio=?, periodo_fin=?, dias_ganados=?, dias_gozados=?, saldo=?,
+                                              periodo=?, fecha_carga=?, uploaded_by=?
+                                        WHERE id=?''', data_saldo + (existente['id'],))
+                    else:
+                        con.execute('''INSERT INTO vacaciones_saldos
+                          (dni,trabajador,empresa,area,jefe,jefe_dni,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by)
+                          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', (dni,) + data_saldo)
                     if jefe_dni:
-                        con.execute('UPDATE trabajadores SET jefe_dni=?, jefe_nombre=COALESCE(NULLIF(?,''), jefe_nombre) WHERE dni=?', (jefe_dni, jefe_nombre, dni))
+                        con.execute("UPDATE trabajadores SET jefe_dni=?, jefe_nombre=COALESCE(NULLIF(?, ''), jefe_nombre) WHERE dni=?", (jefe_dni, jefe_nombre, dni))
                         con.execute("UPDATE vacaciones_solicitudes SET jefe_dni=? WHERE dni=? AND (estado IN ('Pendiente jefe','Pendiente Jefe','Pendiente') OR COALESCE(jefe_dni,'')='')", (jefe_dni, dni))
                     ok+=1
                 sincronizar_jefes_vacaciones(con)
