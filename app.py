@@ -178,8 +178,7 @@ def respaldar_exceles_locales():
         ('ID','id'),('DNI','dni'),('TRABAJADOR','trabajador'),('JEFE DNI','jefe_dni'),('FECHA INICIO','fecha_inicio'),('FECHA FIN','fecha_fin'),('DIAS','dias'),('MOTIVO','motivo'),('ESTADO','estado'),('FECHA SOLICITUD','fecha_solicitud'),('PERIODO DETALLE','periodo_detalle'),('PERIODO IDS','periodo_ids'),('COMENTARIO JEFE','comentario_jefe'),('COMENTARIO GH','comentario_gh')])
 
 
-def restaurar_trabajadores_desde_excel_si_db_vacia()
-restaurar_vacaciones_desde_excel_si_db_vacia():
+def restaurar_trabajadores_desde_excel_si_db_vacia():
     """Si Render/local reinicia con BD vacía, recupera trabajadores desde el Excel local."""
     path = EXCEL_LOCAL_DIR / '01_TRABAJADORES_LOCAL.xlsx'
     if not path.exists():
