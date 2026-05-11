@@ -178,7 +178,8 @@ def respaldar_exceles_locales():
         ('ID','id'),('DNI','dni'),('TRABAJADOR','trabajador'),('JEFE DNI','jefe_dni'),('FECHA INICIO','fecha_inicio'),('FECHA FIN','fecha_fin'),('DIAS','dias'),('MOTIVO','motivo'),('ESTADO','estado'),('FECHA SOLICITUD','fecha_solicitud'),('PERIODO DETALLE','periodo_detalle'),('PERIODO IDS','periodo_ids'),('COMENTARIO JEFE','comentario_jefe'),('COMENTARIO GH','comentario_gh')])
 
 
-def restaurar_trabajadores_desde_excel_si_db_vacia():
+def restaurar_trabajadores_desde_excel_si_db_vacia()
+restaurar_vacaciones_desde_excel_si_db_vacia():
     """Si Render/local reinicia con BD vacía, recupera trabajadores desde el Excel local."""
     path = EXCEL_LOCAL_DIR / '01_TRABAJADORES_LOCAL.xlsx'
     if not path.exists():
@@ -201,6 +202,83 @@ def restaurar_trabajadores_desde_excel_si_db_vacia():
             con.commit()
     except Exception as e:
         print('No se pudo restaurar trabajadores desde Excel local', e)
+
+
+def restaurar_vacaciones_desde_excel_si_db_vacia():
+    """Recupera saldos y solicitudes si la BD se reinicia o Render pierde memoria temporal."""
+    try:
+        with db() as con:
+            total_saldos = con.execute('SELECT COUNT(*) FROM vacaciones_saldos').fetchone()[0]
+            total_sol = con.execute('SELECT COUNT(*) FROM vacaciones_solicitudes').fetchone()[0]
+
+            saldos_path = EXCEL_LOCAL_DIR / '02_VACACIONES_SALDOS_LOCAL.xlsx'
+            if total_saldos == 0 and saldos_path.exists():
+                wb = load_workbook(saldos_path, data_only=True); ws = wb.active
+                headers=[clean(c.value).upper() for c in ws[1]]
+                def idx(n): return headers.index(n) if n in headers else -1
+
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    dni = normalizar_dni(row[idx('DNI')] if idx('DNI')>=0 else '')
+                    if not dni: 
+                        continue
+
+                    periodo_inicio = periodo_year_value(row[idx('I_PERIODO')] if idx('I_PERIODO')>=0 else '')
+                    periodo_fin = periodo_year_value(row[idx('F_PERIODO')] if idx('F_PERIODO')>=0 else '')
+                    trabajador = clean(row[idx('TRABAJADOR')] if idx('TRABAJADOR')>=0 else '')
+                    jefe_dni = normalizar_dni(row[idx('JEFE DNI')] if idx('JEFE DNI')>=0 else row[idx('JEFE')] if idx('JEFE')>=0 else '')
+
+                    con.execute("""INSERT OR REPLACE INTO vacaciones_saldos
+                    (dni,trabajador,empresa,area,jefe,jefe_dni,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
+                        dni,
+                        trabajador,
+                        clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else ''),
+                        clean(row[idx('AREA')] if idx('AREA')>=0 else ''),
+                        jefe_dni,
+                        jefe_dni,
+                        excel_cell_fecha(row[idx('FECHA INGRESO')] if idx('FECHA INGRESO')>=0 else ''),
+                        periodo_inicio,
+                        periodo_fin,
+                        float(row[idx('DIAS GANADOS')] if idx('DIAS GANADOS')>=0 and row[idx('DIAS GANADOS')] not in (None,'') else 0),
+                        float(row[idx('DIAS GOZADOS')] if idx('DIAS GOZADOS')>=0 and row[idx('DIAS GOZADOS')] not in (None,'') else 0),
+                        float(row[idx('SALDO')] if idx('SALDO')>=0 and row[idx('SALDO')] not in (None,'') else 0),
+                        f'{periodo_inicio}/{periodo_fin}',
+                        now_txt(),
+                        'AUTO-RESTORE'
+                    ))
+
+            solicitudes_path = EXCEL_LOCAL_DIR / '03_VACACIONES_SOLICITUDES_LOCAL.xlsx'
+            if total_sol == 0 and solicitudes_path.exists():
+                wb = load_workbook(solicitudes_path, data_only=True); ws = wb.active
+                headers=[clean(c.value).upper() for c in ws[1]]
+                def idx2(n): return headers.index(n) if n in headers else -1
+
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    dni = normalizar_dni(row[idx2('DNI')] if idx2('DNI')>=0 else '')
+                    if not dni:
+                        continue
+
+                    con.execute("""INSERT INTO vacaciones_solicitudes
+                    (dni,trabajador,jefe_dni,fecha_inicio,fecha_fin,dias,motivo,estado,fecha_solicitud,periodo_detalle,periodo_ids,comentario_jefe,comentario_gh)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
+                        dni,
+                        clean(row[idx2('TRABAJADOR')] if idx2('TRABAJADOR')>=0 else ''),
+                        normalizar_dni(row[idx2('JEFE DNI')] if idx2('JEFE DNI')>=0 else ''),
+                        clean(row[idx2('FECHA INICIO')] if idx2('FECHA INICIO')>=0 else ''),
+                        clean(row[idx2('FECHA FIN')] if idx2('FECHA FIN')>=0 else ''),
+                        float(row[idx2('DIAS')] if idx2('DIAS')>=0 and row[idx2('DIAS')] not in (None,'') else 0),
+                        clean(row[idx2('MOTIVO')] if idx2('MOTIVO')>=0 else ''),
+                        clean(row[idx2('ESTADO')] if idx2('ESTADO')>=0 else 'Pendiente jefe'),
+                        clean(row[idx2('FECHA SOLICITUD')] if idx2('FECHA SOLICITUD')>=0 else now_txt()),
+                        clean(row[idx2('PERIODO DETALLE')] if idx2('PERIODO DETALLE')>=0 else ''),
+                        clean(row[idx2('PERIODO IDS')] if idx2('PERIODO IDS')>=0 else ''),
+                        clean(row[idx2('COMENTARIO JEFE')] if idx2('COMENTARIO JEFE')>=0 else ''),
+                        clean(row[idx2('COMENTARIO GH')] if idx2('COMENTARIO GH')>=0 else '')
+                    ))
+            con.commit()
+    except Exception as e:
+        print('No se pudo restaurar vacaciones desde Excel local', e)
+
 
 def normalizar_dni(v):
     d = re.sub(r"\D", "", str(v or ""))
@@ -499,6 +577,7 @@ def init_db():
 
 init_db()
 restaurar_trabajadores_desde_excel_si_db_vacia()
+restaurar_vacaciones_desde_excel_si_db_vacia()
 respaldar_exceles_locales()
 
 def get_config(clave, default=''):
