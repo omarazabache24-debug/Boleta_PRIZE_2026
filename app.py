@@ -2038,7 +2038,7 @@ def admin_vacaciones():
                         jr=con.execute('SELECT dni,nombre FROM trabajadores WHERE UPPER(nombre)=UPPER(?)', (jefe_raw,)).fetchone()
                         jefe_dni = jr['dni'] if jr else ''
                         jefe_nombre = jr['nombre'] if jr else jefe_raw
-                    existente = con.execute('SELECT id FROM vacaciones_saldos WHERE dni=? AND COALESCE(periodo_inicio,'')=? AND COALESCE(periodo_fin,'')=? ORDER BY id LIMIT 1', (dni, p_ini, p_fin)).fetchone()
+                    existente = con.execute("SELECT id FROM vacaciones_saldos WHERE dni=? AND COALESCE(periodo_inicio,'')=? AND COALESCE(periodo_fin,'')=? ORDER BY id LIMIT 1", (dni, p_ini, p_fin)).fetchone()
                     data_saldo = (trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),jefe_nombre,jefe_dni,fecha_ing,p_ini,p_fin,gan,0,saldo,periodo,now_txt(),marca_carga(session.get('admin_user','admin')))
                     if existente:
                         con.execute('''UPDATE vacaciones_saldos
