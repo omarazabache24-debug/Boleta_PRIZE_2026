@@ -268,7 +268,8 @@ def init_db():
 
         con.execute('''
         CREATE TABLE IF NOT EXISTS vacaciones_saldos(
-            dni TEXT PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dni TEXT,
             trabajador TEXT,
             empresa TEXT,
             area TEXT,
@@ -284,6 +285,28 @@ def init_db():
             fecha_carga TEXT,
             uploaded_by TEXT
         )''')
+        try:
+            cols_info = con.execute("PRAGMA table_info(vacaciones_saldos)").fetchall()
+            has_id = any(c[1] == 'id' for c in cols_info)
+            dni_is_pk = any(c[1] == 'dni' and c[5] == 1 for c in cols_info)
+            if (not has_id) or dni_is_pk:
+                con.execute('ALTER TABLE vacaciones_saldos RENAME TO vacaciones_saldos_old')
+                con.execute('''CREATE TABLE vacaciones_saldos(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    dni TEXT, trabajador TEXT, empresa TEXT, area TEXT, jefe TEXT, jefe_dni TEXT,
+                    fecha_ingreso TEXT, periodo_inicio TEXT, periodo_fin TEXT,
+                    dias_ganados REAL DEFAULT 0, dias_gozados REAL DEFAULT 0, saldo REAL DEFAULT 0,
+                    periodo TEXT, fecha_carga TEXT, uploaded_by TEXT
+                )''')
+                con.execute('''INSERT INTO vacaciones_saldos(dni,trabajador,empresa,area,jefe,jefe_dni,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by)
+                    SELECT dni,trabajador,empresa,area,jefe,jefe_dni,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by FROM vacaciones_saldos_old''')
+                con.execute('DROP TABLE vacaciones_saldos_old')
+        except Exception:
+            pass
+        try:
+            con.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_vac_saldos_dni_periodo ON vacaciones_saldos(dni, periodo_inicio, periodo_fin)')
+        except Exception:
+            pass
         for col, ddl in [
             ('fecha_ingreso', 'ALTER TABLE vacaciones_saldos ADD COLUMN fecha_ingreso TEXT'),
             ('periodo_inicio', 'ALTER TABLE vacaciones_saldos ADD COLUMN periodo_inicio TEXT'),
@@ -312,6 +335,7 @@ def init_db():
         )''')
         for col, ddl in [
             ('jefe_dni', 'ALTER TABLE vacaciones_solicitudes ADD COLUMN jefe_dni TEXT'),
+            ('periodo_detalle', 'ALTER TABLE vacaciones_solicitudes ADD COLUMN periodo_detalle TEXT'),
         ]:
             try: con.execute(ddl)
             except Exception: pass
@@ -1657,21 +1681,31 @@ def admin_vacaciones():
                         jr=con.execute('SELECT dni,nombre FROM trabajadores WHERE UPPER(nombre)=UPPER(?)', (jefe_raw,)).fetchone()
                         jefe_dni = jr['dni'] if jr else ''
                         jefe_nombre = jr['nombre'] if jr else jefe_raw
-                    con.execute('INSERT INTO vacaciones_saldos(dni,trabajador,empresa,area,jefe,jefe_dni,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dni) DO UPDATE SET trabajador=excluded.trabajador,empresa=excluded.empresa,area=excluded.area,jefe=excluded.jefe,jefe_dni=excluded.jefe_dni,fecha_ingreso=excluded.fecha_ingreso,periodo_inicio=excluded.periodo_inicio,periodo_fin=excluded.periodo_fin,dias_ganados=excluded.dias_ganados,dias_gozados=0,saldo=excluded.saldo,periodo=excluded.periodo,fecha_carga=excluded.fecha_carga,uploaded_by=excluded.uploaded_by', (dni,trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),jefe_nombre,jefe_dni,fecha_ing,p_ini,p_fin,gan,0,saldo,periodo,now_txt(),marca_carga(session.get('admin_user','admin'))))
+                    con.execute('INSERT INTO vacaciones_saldos(dni,trabajador,empresa,area,jefe,jefe_dni,fecha_ingreso,periodo_inicio,periodo_fin,dias_ganados,dias_gozados,saldo,periodo,fecha_carga,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dni,periodo_inicio,periodo_fin) DO UPDATE SET trabajador=excluded.trabajador,empresa=excluded.empresa,area=excluded.area,jefe=excluded.jefe,jefe_dni=excluded.jefe_dni,fecha_ingreso=excluded.fecha_ingreso,dias_ganados=excluded.dias_ganados,dias_gozados=0,saldo=excluded.saldo,periodo=excluded.periodo,fecha_carga=excluded.fecha_carga,uploaded_by=excluded.uploaded_by', (dni,trabajador,clean(val(row,['EMPRESA'])),clean(val(row,['AREA','ÁREA'])),jefe_nombre,jefe_dni,fecha_ing,p_ini,p_fin,gan,0,saldo,periodo,now_txt(),marca_carga(session.get('admin_user','admin'))))
                     ok+=1
                 con.commit()
         flash(f'Saldos vacacionales cargados/actualizados: {ok}.','ok')
         return redirect(url_for('admin_vacaciones'))
+    q_sol=clean(request.args.get('q_sol'))
+    q_sal=clean(request.args.get('q_sal'))
     with db() as con:
-        saldos=con.execute('SELECT * FROM vacaciones_saldos ORDER BY trabajador LIMIT 300').fetchall()
-        solicitudes=con.execute('SELECT * FROM vacaciones_solicitudes ORDER BY id DESC LIMIT 300').fetchall()
+        params=[]; where=''
+        if q_sal:
+            where='WHERE dni LIKE ? OR UPPER(trabajador) LIKE UPPER(?)'
+            params=[q_sal+'%', '%'+q_sal+'%']
+        saldos=con.execute(f'SELECT * FROM vacaciones_saldos {where} ORDER BY trabajador, periodo_inicio LIMIT 500', params).fetchall()
+        params=[]; where=''
+        if q_sol:
+            where='WHERE dni LIKE ? OR UPPER(trabajador) LIKE UPPER(?)'
+            params=[q_sol+'%', '%'+q_sol+'%']
+        solicitudes=con.execute(f'SELECT * FROM vacaciones_solicitudes {where} ORDER BY id DESC LIMIT 500', params).fetchall()
     sal=''.join([f"<tr><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['empresa'] or ''}</td><td>{r['area'] or ''}</td><td>{r['jefe_dni'] if 'jefe_dni' in r.keys() else ''}</td><td>{r['jefe'] or ''}</td><td>{r['periodo_inicio'] or ''}</td><td>{r['periodo_fin'] or ''}</td><td>{r['dias_ganados']}</td><td><b>{r['saldo']}</b></td></tr>" for r in saldos])
-    sol=''.join([f"<tr><td>{r['id']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/jefe/aprobar'>Apr. jefe</a><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/gh/aprobar'>Apr. GTH</a><a class='btn-red mini-btn' href='/admin/vacaciones/{r['id']}/rechazar'>Rechazar</a></td></tr>" for r in solicitudes])
+    sol=''.join([f"<tr><td>{r['id']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td>{r['periodo_detalle'] if 'periodo_detalle' in r.keys() and r['periodo_detalle'] else ''}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/jefe/aprobar'>Apr. jefe</a><a class='btn-green mini-btn' href='/admin/vacaciones/{r['id']}/gh/aprobar'>Apr. GTH</a><a class='btn-red mini-btn' href='/admin/vacaciones/{r['id']}/rechazar'>Rechazar</a></td></tr>" for r in solicitudes])
     content=f"""
     <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Vacacional</span></h1><div class='subtitle'>Administrador carga saldos; usuario solicita goce; flujo: jefe inmediato → Gestión del Talento Humano.</div></div><a class='btn-green' href='/admin/vacaciones/plantilla'>Descargar plantilla</a></div></div>
     <section class='grid'><div id='aprobaciones' class='card mini'><div><h3>Pendientes de aprobación</h3><b>{len([r for r in solicitudes if 'Pendiente' in (r['estado'] or '')])}</b></div><div class='ico'>✅</div></div><div class='card mini'><div><h3>Saldos registrados</h3><b>{len(saldos)}</b></div><div class='ico'>🗓️</div></div><div class='card mini'><div><h3>Solicitudes totales</h3><b>{len(solicitudes)}</b></div><div class='ico'>📄</div></div><div id='cargar-saldos' class='card span-12'><h2>🏖️ Saldos Vacacionales</h2><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel saldos</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-green'>Subir saldos</button></form><p class='muted'>Columnas: EMPRESA, DNI, TRABAJADOR, AREA, JEFE INMEDIATO (DNI), I_PERIODO, F_PERIODO, DIAS GANADOS, SALDO. No usar FECHA INGRESO ni PERIODO ni DÍAS GOZADOS.</p></div>
-    <div id='solicitudes' class='card span-12'><h2>📄 Solicitudes de vacaciones</h2><div class='table-wrap'><table><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Rango</th><th>Días</th><th>Estado</th><th>Acciones</th></tr>{sol or '<tr><td colspan=7>No hay solicitudes.</td></tr>'}</table></div></div>
-    <div id='reportes' class='card span-12'><h2>📑 Reporte de saldos cargados</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>DNI jefe</th><th>Jefe</th><th>I_Periodo</th><th>F_Periodo</th><th>Ganados</th><th>Saldo</th></tr>{sal or '<tr><td colspan=10>No hay saldos cargados.</td></tr>'}</table></div></div></section>"""
+    <div id='solicitudes' class='card span-12'><h2>📄 Solicitudes de vacaciones</h2><form method='get' class='form-grid'><div class='field'><label>Buscar por DNI o apellidos</label><input name='q_sol' value='{q_sol}' placeholder='Ej: 473 o QUINTANA'></div><button class='btn-green'>Filtrar solicitudes</button><a class='btn' href='/admin/vacaciones#solicitudes'>Limpiar</a></form><div class='table-wrap'><table><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Rango</th><th>Días</th><th>Periodo usado</th><th>Estado</th><th>Acciones</th></tr>{sol or '<tr><td colspan=8>No hay solicitudes.</td></tr>'}</table></div></div>
+    <div id='reportes' class='card span-12'><h2>📑 Reporte de saldos cargados</h2><form method='get' class='form-grid'><div class='field'><label>Buscar por DNI o apellidos</label><input name='q_sal' value='{q_sal}' placeholder='Ej: 473 o QUINTANA'></div><button class='btn-green'>Filtrar saldos</button><a class='btn' href='/admin/vacaciones#reportes'>Limpiar</a></form><div class='table-wrap'><table><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>DNI jefe</th><th>Jefe</th><th>I_Periodo</th><th>F_Periodo</th><th>Ganados</th><th>Saldo</th></tr>{sal or '<tr><td colspan=10>No hay saldos cargados.</td></tr>'}</table></div></div></section>"""
     return render_page(content, active='Gestion Vacacional')
 
 @app.route('/admin/vacaciones/plantilla')
@@ -1709,7 +1743,8 @@ def admin_vacaciones_accion(sid, rol, accion):
 def trabajador_vacaciones():
     dni=session['dni']; t=get_trabajador(dni)
     with db() as con:
-        saldo=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=?',(dni,)).fetchone()
+        saldos_usuario=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=? ORDER BY periodo_inicio, periodo_fin',(dni,)).fetchall()
+        saldo=saldos_usuario[0] if saldos_usuario else None
     if request.method=='POST':
         fi=clean(request.form.get('fecha_inicio')); ff=clean(request.form.get('fecha_fin')); dias=dias_entre_texto(fi,ff)
         hoy_iso = datetime.now(APP_TZ).date().isoformat()
@@ -1720,38 +1755,48 @@ def trabajador_vacaciones():
             flash('No se registró la solicitud: la fecha fin no puede ser menor que la fecha inicio.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
         adelanto = '1' if request.form.get('adelanto') else ''
-        saldo_disponible = float(saldo['saldo'] if saldo and saldo['saldo'] is not None else 0)
+        periodo_ids = [int(x) for x in request.form.getlist('periodos') if str(x).isdigit()]
+        if not periodo_ids:
+            flash('Seleccione con check el periodo que usará para gozar vacaciones.', 'err')
+            return redirect(url_for('trabajador_vacaciones'))
+        with db() as con:
+            marks=','.join(['?']*len(periodo_ids))
+            saldos_sel=con.execute(f'SELECT * FROM vacaciones_saldos WHERE dni=? AND id IN ({marks}) ORDER BY periodo_inicio, periodo_fin', [dni]+periodo_ids).fetchall()
+        saldo_disponible = sum(float(r['saldo'] or 0) for r in saldos_sel)
         if dias <= 0:
             flash('Rango de fechas inválido. Revisa inicio y fin.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
         if saldo_disponible <= 0:
-            flash('No se registró la solicitud: no tiene saldo vacacional disponible.', 'err')
+            flash('No se registró la solicitud: el/los periodo(s) seleccionado(s) no tienen saldo disponible.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
         if dias > saldo_disponible:
-            flash(f'No se registró la solicitud: solicita {dias} día(s), pero su saldo disponible es {saldo_disponible}.', 'err')
+            flash(f'No se registró la solicitud: solicita {dias} día(s), pero el saldo seleccionado disponible es {saldo_disponible}.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
         estado = 'Pendiente jefe'
         motivo_base = clean(request.form.get('motivo'))
+        periodo_detalle = ' | '.join([f"{r['periodo_inicio']}-{r['periodo_fin']} (saldo {r['saldo']})" for r in saldos_sel])
         if adelanto:
             motivo_base = (motivo_base + ' | ' if motivo_base else '') + 'Solicitud marcada como comentario especial; validada dentro del saldo disponible.'
         with db() as con:
-            jefe_dni = saldo['jefe_dni'] if saldo and 'jefe_dni' in saldo.keys() else ''
-            con.execute('INSERT INTO vacaciones_solicitudes(dni,trabajador,jefe_dni,fecha_inicio,fecha_fin,dias,motivo,estado,fecha_solicitud) VALUES(?,?,?,?,?,?,?,?,?)',(dni,t['nombre'] if t else '',jefe_dni,fi,ff,dias,motivo_base,estado,now_txt())); con.commit()
+            jefe_dni = saldos_sel[0]['jefe_dni'] if saldos_sel and 'jefe_dni' in saldos_sel[0].keys() else ''
+            con.execute('INSERT INTO vacaciones_solicitudes(dni,trabajador,jefe_dni,fecha_inicio,fecha_fin,dias,motivo,estado,fecha_solicitud,periodo_detalle) VALUES(?,?,?,?,?,?,?,?,?,?)',(dni,t['nombre'] if t else '',jefe_dni,fi,ff,dias,motivo_base,estado,now_txt(),periodo_detalle)); con.commit()
         flash('Solicitud registrada. Pasará por jefe inmediato y Gestión del Talento Humano.','ok')
         return redirect(url_for('trabajador_vacaciones'))
     with db() as con:
-        saldo=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=?',(dni,)).fetchone()
+        saldos_usuario=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=? ORDER BY periodo_inicio, periodo_fin',(dni,)).fetchall()
+        saldo=saldos_usuario[0] if saldos_usuario else None
         solicitudes=con.execute('SELECT * FROM vacaciones_solicitudes WHERE dni=? ORDER BY id DESC',(dni,)).fetchall()
         por_aprobar=con.execute("SELECT * FROM vacaciones_solicitudes WHERE jefe_dni=? AND estado='Pendiente jefe' ORDER BY id DESC",(dni,)).fetchall()
-    sol=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td>{r['motivo'] or ''}</td></tr>" for r in solicitudes])
+    sol=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td>{r['periodo_detalle'] if 'periodo_detalle' in r.keys() and r['periodo_detalle'] else ''}</td><td><span class='status-pill'>{r['estado']}</span></td><td>{r['motivo'] or ''}</td></tr>" for r in solicitudes])
     sol_aprobar=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/vacaciones/aprobar_jefe/{r['id']}'>Aprobar</a><a class='btn-red mini-btn' href='/vacaciones/rechazar_jefe/{r['id']}'>Rechazar</a></td></tr>" for r in por_aprobar])
-    saldo_val = float(saldo['saldo'] if saldo and saldo['saldo'] is not None else 0)
+    saldo_val = sum(float(r['saldo'] or 0) for r in saldos_usuario)
+    periodos_html = ''.join([f"<label class='checkline period-card'><input type='checkbox' name='periodos' value='{r['id']}' {'disabled' if float(r['saldo'] or 0) <= 0 else ''}> <b>{r['periodo_inicio'] or ''} - {r['periodo_fin'] or ''}</b> &nbsp; Ganados: {r['dias_ganados']} &nbsp; Saldo: <b>{r['saldo']}</b></label>" for r in saldos_usuario]) or '<p class=\'muted\'>No tiene periodos vacacionales cargados.</p>'
     content=f"""
     <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Vacacional</span></h1><div class='subtitle'>Consulta tu saldo, valida días disponibles y registra solicitudes.</div></div></div></div>
-    <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo_val}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{saldo['dias_ganados'] if saldo else 0}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Periodo</h3><b>{((saldo['periodo_inicio'] or '') + ' al ' + (saldo['periodo_fin'] or '')).strip(' al ') if saldo else '-'}</b></div><div class='ico'>📅</div></div><div class='card mini'><div><h3>Fecha ingreso</h3><b>{(t['fecha_ingreso'] if t and 'fecha_ingreso' in t.keys() else '') or '-'}</b></div><div class='ico'>🗓️</div></div>
+    <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo_val}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{sum(float(r['dias_ganados'] or 0) for r in saldos_usuario)}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Periodos</h3><b>{len(saldos_usuario)}</b></div><div class='ico'>📅</div></div><div class='card mini'><div><h3>Fecha ingreso</h3><b>{(t['fecha_ingreso'] if t and 'fecha_ingreso' in t.keys() else '') or '-'}</b></div><div class='ico'>🗓️</div></div>
     <div class='card span-12' style='{"display:block" if sol_aprobar else "display:none"}'><h2>✅ Solicitudes pendientes por aprobar como jefe inmediato</h2><p class='muted'>Te aparecen aquí solo los trabajadores que tienen tu DNI como jefe inmediato en la plantilla de saldos.</p><div class='table-wrap'><table><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Rango</th><th>Días</th><th>Estado</th><th>Acciones</th></tr>{sol_aprobar or '<tr><td colspan=7>No tienes solicitudes pendientes por aprobar.</td></tr>'}</table></div></div>
-    <div id='solicitar' class='card span-12'><h2>Nueva solicitud</h2><p class='muted'>El sistema valida el saldo antes de registrar. Si no tiene saldo disponible, la solicitud no se registra.</p><form method='post' class='form-grid'><div class='field'><label>Inicio</label><input type='date' name='fecha_inicio' min='{datetime.now(APP_TZ).date().isoformat()}' required></div><div class='field'><label>Fin</label><input type='date' name='fecha_fin' min='{datetime.now(APP_TZ).date().isoformat()}' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div><div class='field'><label>Comentario especial</label><label class='checkline'><input type='checkbox' name='adelanto' value='1'> Requiere revisión especial</label></div><button class='btn-green'>Registrar solicitud</button></form></div>
-    <div class='card span-12'><h2>Mis solicitudes</h2><div class='table-wrap'><table><tr><th>Fecha</th><th>Rango</th><th>Días</th><th>Estado</th><th>Comentario</th></tr>{sol or '<tr><td colspan=5>No hay solicitudes.</td></tr>'}</table></div></div></section>"""
+    <div id='solicitar' class='card span-12'><h2>Nueva solicitud</h2><p class='muted'>Seleccione con check el periodo que se va a gozar. Puede marcar más de uno si el descanso consume saldos acumulados.</p><form method='post' class='form-grid'><div class='field span-12'><label>Periodos disponibles</label><div class='period-list'>{periodos_html}</div></div><div class='field'><label>Inicio</label><input type='date' name='fecha_inicio' min='{datetime.now(APP_TZ).date().isoformat()}' required></div><div class='field'><label>Fin</label><input type='date' name='fecha_fin' min='{datetime.now(APP_TZ).date().isoformat()}' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div><div class='field'><label>Comentario especial</label><label class='checkline'><input type='checkbox' name='adelanto' value='1'> Requiere revisión especial</label></div><button class='btn-green'>Registrar solicitud</button></form></div>
+    <div class='card span-12'><h2>Mis solicitudes</h2><div class='table-wrap'><table><tr><th>Fecha</th><th>Rango</th><th>Días</th><th>Periodo usado</th><th>Estado</th><th>Comentario</th></tr>{sol or '<tr><td colspan=6>No hay solicitudes.</td></tr>'}</table></div></div></section>"""
     return render_page(content, active='Gestion Vacacional')
 
 
