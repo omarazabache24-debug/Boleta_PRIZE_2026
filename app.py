@@ -465,6 +465,35 @@ def init_db():
             con.execute("UPDATE trabajadores SET empresa='AQUANQA' WHERE UPPER(COALESCE(empresa,''))='PRIZE SUPERFRUITS'")
         except Exception:
             pass
+        # Repara solicitudes antiguas que quedaron sin jefe_dni: toma el jefe desde saldos o ficha trabajadores.
+        try:
+            con.execute("""
+                UPDATE vacaciones_solicitudes
+                   SET jefe_dni = COALESCE(
+                       (SELECT s.jefe_dni FROM vacaciones_saldos s
+                         WHERE s.dni = vacaciones_solicitudes.dni
+                           AND COALESCE(s.jefe_dni,'')<>''
+                         ORDER BY s.periodo_inicio, s.periodo_fin LIMIT 1),
+                       (SELECT tr.jefe_dni FROM trabajadores tr
+                         WHERE tr.dni = vacaciones_solicitudes.dni
+                           AND COALESCE(tr.jefe_dni,'')<>'' LIMIT 1),
+                       jefe_dni
+                   )
+                 WHERE COALESCE(jefe_dni,'')=''
+            """)
+        except Exception:
+            pass
+        # Seguridad: cualquier solicitud registrada con inicio anterior a hoy queda anulada para no consumir saldo.
+        try:
+            hoy_txt = hoy_lima().isoformat()
+            con.execute("""UPDATE vacaciones_solicitudes
+                           SET estado='Anulado - fecha anterior a hoy',
+                               comentario_gh=COALESCE(comentario_gh,'') || ' | Anulado automáticamente por fecha anterior a hoy.'
+                         WHERE date(fecha_inicio) < date(?)
+                           AND estado NOT LIKE 'Rechazado%'
+                           AND estado NOT LIKE 'Anulado%'""", (hoy_txt,))
+        except Exception:
+            pass
         con.commit()
 
 
@@ -619,6 +648,14 @@ def parse_fecha_any(v):
         except Exception:
             pass
     return None
+
+def hoy_lima():
+    """Fecha actual en Perú para validar vacaciones sin depender del navegador."""
+    return datetime.now(APP_TZ).date()
+
+def fecha_iso_segura(v):
+    d = parse_fecha_any(v)
+    return d.isoformat() if d else ''
 
 def periodos_desde_ingreso(dni=None, tipo=None, max_meses=72):
     """Devuelve periodos desde la fecha de ingreso del trabajador hasta hoy."""
@@ -1758,6 +1795,53 @@ def dias_reservados_periodos(con, dni, excluir_id=None):
 def saldo_disponible_real(row, usados_por_periodo):
     return max(float(row['saldo'] or 0) - float(usados_por_periodo.get(int(row['id']), 0)), 0)
 
+def obtener_jefe_dni_trabajador(con, trabajador_dni, periodo_ids=None):
+    """Obtiene el DNI del jefe inmediato de forma robusta.
+    Prioridad: periodo seleccionado en saldos -> cualquier saldo del trabajador -> ficha trabajadores.
+    Esto evita que una solicitud quede sin aprobador cuando el jefe viene de la plantilla de saldos.
+    """
+    trabajador_dni = normalizar_dni(trabajador_dni)
+    periodo_ids = [int(x) for x in (periodo_ids or []) if str(x).isdigit()]
+    if periodo_ids:
+        marks = ','.join(['?'] * len(periodo_ids))
+        row = con.execute(f"""
+            SELECT jefe_dni FROM vacaciones_saldos
+            WHERE dni=? AND id IN ({marks}) AND COALESCE(jefe_dni,'')<>''
+            ORDER BY periodo_inicio, periodo_fin LIMIT 1
+        """, [trabajador_dni] + periodo_ids).fetchone()
+        if row:
+            jd = normalizar_dni(row['jefe_dni'])
+            if jd: return jd
+    row = con.execute("""
+        SELECT jefe_dni FROM vacaciones_saldos
+        WHERE dni=? AND COALESCE(jefe_dni,'')<>''
+        ORDER BY periodo_inicio, periodo_fin LIMIT 1
+    """, (trabajador_dni,)).fetchone()
+    if row:
+        jd = normalizar_dni(row['jefe_dni'])
+        if jd: return jd
+    row = con.execute("SELECT jefe_dni FROM trabajadores WHERE dni=?", (trabajador_dni,)).fetchone()
+    if row and 'jefe_dni' in row.keys():
+        jd = normalizar_dni(row['jefe_dni'])
+        if jd: return jd
+    return ''
+
+def sql_solicitudes_jefe(extra_where=''):
+    return f"""
+        SELECT vs.* FROM vacaciones_solicitudes vs
+        LEFT JOIN trabajadores tr ON tr.dni = vs.dni
+        WHERE (
+            normalizar_dni_sql(COALESCE(vs.jefe_dni,'')) = ?
+            OR normalizar_dni_sql(COALESCE(tr.jefe_dni,'')) = ?
+            OR EXISTS (
+                SELECT 1 FROM vacaciones_saldos s
+                WHERE s.dni = vs.dni
+                  AND normalizar_dni_sql(COALESCE(s.jefe_dni,'')) = ?
+            )
+        )
+        {extra_where}
+    """
+
 @app.route('/admin/modulo/documentos')
 @admin_required
 def admin_modulo_documentos():
@@ -1878,17 +1962,24 @@ def trabajador_vacaciones():
         saldos_usuario=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=? ORDER BY periodo_inicio, periodo_fin',(dni,)).fetchall()
         saldo=saldos_usuario[0] if saldos_usuario else None
     if request.method=='POST':
-        fi=clean(request.form.get('fecha_inicio')); ff=clean(request.form.get('fecha_fin')); dias=dias_entre_texto(fi,ff)
-        hoy_iso = datetime.now(APP_TZ).date().isoformat()
-        if not fi or not ff:
-            flash('Debe seleccionar fecha de inicio y fecha fin.', 'err')
+        fi_raw=clean(request.form.get('fecha_inicio')); ff_raw=clean(request.form.get('fecha_fin'))
+        fi_date=parse_fecha_any(fi_raw); ff_date=parse_fecha_any(ff_raw)
+        hoy=hoy_lima()
+        hoy_iso=hoy.isoformat()
+        if not fi_raw or not ff_raw or not fi_date or not ff_date:
+            flash('No se registró la solicitud: debe seleccionar fechas válidas.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
-        if parse_fecha_any(fi) and parse_fecha_any(fi) < datetime.now(APP_TZ).date():
-            flash('No se registró la solicitud: la fecha de inicio no puede ser menor a la fecha de hoy.', 'err')
+        # BLOQUEO DEFINITIVO EN SERVIDOR: aunque manipulen el HTML o escriban la fecha manualmente.
+        if fi_date < hoy:
+            flash(f'No se registró la solicitud: la fecha de inicio {fi_date.strftime("%d/%m/%Y")} es anterior a hoy {hoy.strftime("%d/%m/%Y")}.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
-        if parse_fecha_any(ff) and parse_fecha_any(fi) and parse_fecha_any(ff) < parse_fecha_any(fi):
+        if ff_date < hoy:
+            flash(f'No se registró la solicitud: la fecha fin {ff_date.strftime("%d/%m/%Y")} es anterior a hoy {hoy.strftime("%d/%m/%Y")}.', 'err')
+            return redirect(url_for('trabajador_vacaciones'))
+        if ff_date < fi_date:
             flash('No se registró la solicitud: la fecha fin no puede ser menor que la fecha inicio.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
+        fi=fi_date.isoformat(); ff=ff_date.isoformat(); dias=dias_entre_texto(fi,ff)
         adelanto = '1' if request.form.get('adelanto') else ''
         periodo_ids = [int(x) for x in request.form.getlist('periodos') if str(x).isdigit()]
         if not periodo_ids:
@@ -1915,16 +2006,13 @@ def trabajador_vacaciones():
         if adelanto:
             motivo_base = (motivo_base + ' | ' if motivo_base else '') + 'Solicitud marcada como comentario especial; validada dentro del saldo disponible.'
         with db() as con:
-            jefe_dni = ''
-            for _s in saldos_sel:
-                if 'jefe_dni' in _s.keys() and _s['jefe_dni']:
-                    jefe_dni = normalizar_dni(_s['jefe_dni'])
-                    break
-            if not jefe_dni:
-                tr_jefe = con.execute('SELECT jefe_dni FROM trabajadores WHERE dni=?', (dni,)).fetchone()
-                jefe_dni = normalizar_dni(tr_jefe['jefe_dni'] if tr_jefe and 'jefe_dni' in tr_jefe.keys() else '')
+            jefe_dni = obtener_jefe_dni_trabajador(con, dni, periodo_ids)
             if not jefe_dni:
                 flash('No se registró la solicitud: este trabajador no tiene DNI de jefe inmediato. Cargue la plantilla de trabajadores o saldos con JEFE INMEDIATO = DNI del jefe.', 'err')
+                return redirect(url_for('trabajador_vacaciones'))
+            # Segundo candado justo antes de grabar: evita registrar fechas pasadas aunque el formulario haya sido alterado.
+            if parse_fecha_any(fi) < hoy_lima() or parse_fecha_any(ff) < hoy_lima():
+                flash('No se registró la solicitud: las fechas no pueden ser anteriores a hoy.', 'err')
                 return redirect(url_for('trabajador_vacaciones'))
             con.execute('INSERT INTO vacaciones_solicitudes(dni,trabajador,jefe_dni,fecha_inicio,fecha_fin,dias,motivo,estado,fecha_solicitud,periodo_detalle,periodo_ids) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(dni,t['nombre'] if t else '',jefe_dni,fi,ff,dias,motivo_base,estado,now_txt(),periodo_detalle,periodo_ids_txt)); con.commit(); respaldar_exceles_locales()
         flash('Solicitud registrada. Pasará por jefe inmediato y Gestión del Talento Humano.','ok')
@@ -1933,7 +2021,7 @@ def trabajador_vacaciones():
         saldos_usuario=con.execute('SELECT * FROM vacaciones_saldos WHERE dni=? ORDER BY periodo_inicio, periodo_fin',(dni,)).fetchall()
         saldo=saldos_usuario[0] if saldos_usuario else None
         solicitudes=con.execute('SELECT * FROM vacaciones_solicitudes WHERE dni=? ORDER BY id DESC',(dni,)).fetchall()
-        por_aprobar=con.execute("SELECT vs.* FROM vacaciones_solicitudes vs LEFT JOIN trabajadores tr ON tr.dni=vs.dni WHERE vs.estado='Pendiente jefe' AND (normalizar_dni_sql(COALESCE(vs.jefe_dni,''))=? OR normalizar_dni_sql(COALESCE(tr.jefe_dni,''))=?) ORDER BY vs.id DESC",(dni,dni)).fetchall()
+        por_aprobar=con.execute(sql_solicitudes_jefe("AND vs.estado='Pendiente jefe' ORDER BY vs.id DESC"),(dni,dni,dni)).fetchall()
     sol=''.join([f"<div class='sol-card'><div data-label='Fecha'><b>{r['fecha_solicitud']}</b></div><div data-label='Rango'><b>{r['fecha_inicio']} al {r['fecha_fin']}</b></div><div data-label='Días' class='dias'><b>{r['dias']}</b></div><div data-label='Periodo usado'><b>{r['periodo_detalle'] if 'periodo_detalle' in r.keys() and r['periodo_detalle'] else '-'}</b></div><div data-label='Estado'><span class='status-pill'>{r['estado']}</span></div><div data-label='Comentario' class='coment'>{r['motivo'] or '-'}</div></div>" for r in solicitudes])
     sol_aprobar=''.join([f"<tr><td>{r['fecha_solicitud']}</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['fecha_inicio']} al {r['fecha_fin']}</td><td>{r['dias']}</td><td><span class='status-pill'>{r['estado']}</span></td><td class='actions'><a class='btn-green mini-btn' href='/vacaciones/aprobar_jefe/{r['id']}'>Aprobar</a><a class='btn-red mini-btn' href='/vacaciones/rechazar_jefe/{r['id']}'>Rechazar</a></td></tr>" for r in por_aprobar])
     with db() as con:
@@ -1944,7 +2032,23 @@ def trabajador_vacaciones():
     <div class='hero'><div class='topbar'><div><h1>Gestión <span class='accent'>Vacacional</span></h1><div class='subtitle'>Consulta tu saldo, valida días disponibles y registra solicitudes.</div></div></div></div>
     <section class='grid'><div class='card mini'><div><h3>Saldo disponible</h3><b>{saldo_val}</b></div><div class='ico'>🏖️</div></div><div class='card mini'><div><h3>Días ganados</h3><b>{sum(float(r['dias_ganados'] or 0) for r in saldos_usuario)}</b></div><div class='ico'>📈</div></div><div class='card mini'><div><h3>Periodos</h3><b>{len(saldos_usuario)}</b></div><div class='ico'>📅</div></div><div class='card mini'><div><h3>Fecha ingreso</h3><b>{fecha_sin_hora(t['fecha_ingreso'] if t and 'fecha_ingreso' in t.keys() else '') or '-'}</b></div><div class='ico'>🗓️</div></div>
     <div class='card span-12' style='{"display:block" if sol_aprobar else "display:none"}'><h2>✅ Solicitudes pendientes por aprobar como jefe inmediato</h2><p class='muted'>Te aparecen aquí solo los trabajadores que tienen tu DNI como jefe inmediato en la plantilla de saldos.</p><div class='table-wrap'><table><tr><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Rango</th><th>Días</th><th>Estado</th><th>Acciones</th></tr>{sol_aprobar or '<tr><td colspan=7>No tienes solicitudes pendientes por aprobar.</td></tr>'}</table></div></div>
-    <div id='solicitar' class='card span-12 vac-request-card'><div class='vac-head'><div><h2>🗓️ Nueva solicitud</h2><p class='vac-help'>Marca el periodo que vas a utilizar. Puedes seleccionar más de uno cuando el descanso consuma saldos acumulados.</p></div></div><form method='post'><div class='field'><label>Periodos disponibles</label><div class='period-list'>{periodos_html}</div></div><div class='vac-form-row'><div class='field'><label>Inicio</label><input type='date' name='fecha_inicio' min='{datetime.now(APP_TZ).date().isoformat()}' required></div><div class='field'><label>Fin</label><input type='date' name='fecha_fin' min='{datetime.now(APP_TZ).date().isoformat()}' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div></div><div class='vac-submit-row'><label class='check-card'><input type='checkbox' name='adelanto' value='1'> Requiere revisión especial</label><button class='btn-green'>Registrar solicitud</button></div></form></div>
+    <div id='solicitar' class='card span-12 vac-request-card'><div class='vac-head'><div><h2>🗓️ Nueva solicitud</h2><p class='vac-help'>Marca el periodo que vas a utilizar. Puedes seleccionar más de uno cuando el descanso consuma saldos acumulados.</p></div></div><form method='post' id='formSolicitudVacaciones'><div class='field'><label>Periodos disponibles</label><div class='period-list'>{periodos_html}</div></div><div class='vac-form-row'><div class='field'><label>Inicio</label><input type='date' id='fecha_inicio_vac' name='fecha_inicio' min='{hoy_lima().isoformat()}' required></div><div class='field'><label>Fin</label><input type='date' id='fecha_fin_vac' name='fecha_fin' min='{hoy_lima().isoformat()}' required></div><div class='field'><label>Motivo / comentario</label><input name='motivo' placeholder='Goce vacacional'></div></div><div class='vac-submit-row'><label class='check-card'><input type='checkbox' name='adelanto' value='1'> Requiere revisión especial</label><button class='btn-green'>Registrar solicitud</button></div></form><script>
+(function(){{
+  const hoy = '{hoy_lima().isoformat()}';
+  const f = document.getElementById('formSolicitudVacaciones');
+  const ini = document.getElementById('fecha_inicio_vac');
+  const fin = document.getElementById('fecha_fin_vac');
+  [ini, fin].forEach(x => {{ if(x){{ x.min = hoy; x.addEventListener('change', () => {{ if(x.value && x.value < hoy){{ alert('No se permite registrar vacaciones con fecha anterior a hoy: ' + hoy); x.value=''; }} }}); }} }});
+  if(f){{ f.addEventListener('submit', function(e){{
+    if((ini && ini.value && ini.value < hoy) || (fin && fin.value && fin.value < hoy)){{
+      e.preventDefault(); alert('No se registró: la fecha de inicio y fin no pueden ser anteriores a hoy (' + hoy + ').'); return false;
+    }}
+    if(ini && fin && ini.value && fin.value && fin.value < ini.value){{
+      e.preventDefault(); alert('La fecha fin no puede ser menor que inicio.'); return false;
+    }}
+  }});}}
+}})();
+</script></div>
     <div class='card span-12'><h2>Mis solicitudes</h2><div class='sol-cards'><div class='sol-card head'><div>Fecha</div><div>Rango</div><div>Días</div><div>Periodo usado</div><div>Estado</div><div>Comentario</div></div>{sol or "<div class='sol-empty'>No hay solicitudes registradas.</div>"}</div></div></section>"""
     return render_page(content, active='Gestion Vacacional')
 
@@ -1955,9 +2059,8 @@ def vacaciones_aprobar_jefe(sid):
     dni=session['dni']
     with db() as con:
         r=con.execute("SELECT * FROM vacaciones_solicitudes WHERE id=?", (sid,)).fetchone()
-        tr=con.execute('SELECT jefe_dni FROM trabajadores WHERE dni=?', (r['dni'],)).fetchone() if r else None
-        jefe_solicitud = normalizar_dni(r['jefe_dni'] if r and 'jefe_dni' in r.keys() else '')
-        jefe_trabajador = normalizar_dni(tr['jefe_dni'] if tr and 'jefe_dni' in tr.keys() else '')
+        jefe_solicitud = normalizar_dni(r['jefe_dni'] if r and 'jefe_dni' in r.keys() else '') if r else ''
+        jefe_trabajador = obtener_jefe_dni_trabajador(con, r['dni']) if r else ''
         if not r or (jefe_solicitud != dni and jefe_trabajador != dni):
             flash('No autorizado: esta solicitud no corresponde a tu aprobación como jefe inmediato.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
@@ -1972,9 +2075,8 @@ def vacaciones_rechazar_jefe(sid):
     dni=session['dni']
     with db() as con:
         r=con.execute("SELECT * FROM vacaciones_solicitudes WHERE id=?", (sid,)).fetchone()
-        tr=con.execute('SELECT jefe_dni FROM trabajadores WHERE dni=?', (r['dni'],)).fetchone() if r else None
-        jefe_solicitud = normalizar_dni(r['jefe_dni'] if r and 'jefe_dni' in r.keys() else '')
-        jefe_trabajador = normalizar_dni(tr['jefe_dni'] if tr and 'jefe_dni' in tr.keys() else '')
+        jefe_solicitud = normalizar_dni(r['jefe_dni'] if r and 'jefe_dni' in r.keys() else '') if r else ''
+        jefe_trabajador = obtener_jefe_dni_trabajador(con, r['dni']) if r else ''
         if not r or (jefe_solicitud != dni and jefe_trabajador != dni):
             flash('No autorizado: esta solicitud no corresponde a tu aprobación como jefe inmediato.', 'err')
             return redirect(url_for('trabajador_vacaciones'))
@@ -1989,12 +2091,7 @@ def vacaciones_rechazar_jefe(sid):
 def vacaciones_aprobaciones_jefe():
     dni=session['dni']; t=get_trabajador(dni)
     with db() as con:
-        rows=con.execute("""
-            SELECT vs.* FROM vacaciones_solicitudes vs
-            LEFT JOIN trabajadores tr ON tr.dni = vs.dni
-            WHERE normalizar_dni_sql(COALESCE(vs.jefe_dni,''))=? OR normalizar_dni_sql(COALESCE(tr.jefe_dni,''))=?
-            ORDER BY CASE WHEN vs.estado='Pendiente jefe' THEN 0 ELSE 1 END, vs.id DESC
-        """, (dni,dni)).fetchall()
+        rows=con.execute(sql_solicitudes_jefe("ORDER BY CASE WHEN vs.estado='Pendiente jefe' THEN 0 ELSE 1 END, vs.id DESC"), (dni,dni,dni)).fetchall()
     pendientes=sum(1 for r in rows if (r['estado'] or '') == 'Pendiente jefe')
     aprobadas=sum(1 for r in rows if 'GTH' in (r['estado'] or '') or 'Aprobado' in (r['estado'] or ''))
     rechazadas=sum(1 for r in rows if 'Rechazado' in (r['estado'] or ''))
