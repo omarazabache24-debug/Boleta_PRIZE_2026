@@ -2450,6 +2450,7 @@ def ver_contratacion(cid):
     return send_file(path, as_attachment=False, download_name=r['archivo_nombre'])
 
 
+
 @app.route('/admin/contratacion/plantilla/<int:pid>')
 @admin_required
 def contratacion_plantilla_detalle(pid):
@@ -2459,23 +2460,86 @@ def contratacion_plantilla_detalle(pid):
         campos=con.execute('SELECT * FROM contratacion_plantilla_campos WHERE plantilla_id=? ORDER BY id',(pid,)).fetchall()
     if not pl: abort(404)
     estado = 'Activo' if pl['activo'] else 'Inactivo'
-    tabs=f"""<div class='c-card'><div class='tabs'><a class='tab {'active' if tab=='contenido' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='contenido')}'>Contenido</a><a class='tab {'active' if tab=='campos' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='campos')}'>Campos</a></div></div>"""
+    estado_cls = 'ok' if pl['activo'] else 'bad'
+    edit_url=url_for('contratacion_plantilla_editar',pid=pid)
+    tabs=f"""
+    <div class='tpl-tabs'>
+      <a class='tpl-tab {'active' if tab=='contenido' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='contenido')}'>Contenido</a>
+      <a class='tpl-tab {'active' if tab=='campos' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='campos')}'>Campos</a>
+    </div>"""
     if tab=='campos':
-        rows=''.join([f"<tr><td><span class='state'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{c['descripcion'] or ''}</td><td>{c['tipo_campo']}</td><td>{c['nombre_campo']}</td><td>{c['campo_origen']}</td><td>{c['tipo_dato']}</td><td>{c['requerido']}</td></tr>" for c in campos])
-        body=f"""<div class='toolbar'>↻ Refrescar</div><div class='c-card table-wrap'><table class='c-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows}</table></div>"""
+        rows=''.join([f"<tr><td><span class='state-pill {'ok' if c['activo'] else 'bad'}'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{html.escape(c['descripcion'] or '')}</td><td>{html.escape(c['tipo_campo'] or '')}</td><td>{html.escape(c['nombre_campo'] or '')}</td><td>{html.escape(c['campo_origen'] or '')}</td><td>{html.escape(c['tipo_dato'] or '')}</td><td>{html.escape(c['requerido'] or '')}</td></tr>" for c in campos])
+        body=f"""<div class='tpl-toolbar'>↻ Refrescar</div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="7">Sin campos registrados.</td></tr>'}</table></div>"""
     else:
         if pl['ruta_archivo'] and Path(pl['ruta_archivo']).exists() and str(pl['archivo_nombre']).lower().endswith('.pdf'):
             preview=f"<iframe class='pdf-frame' src='{url_for('contratacion_plantilla_archivo',pid=pid)}'></iframe>"
         elif pl['ruta_archivo'] and Path(pl['ruta_archivo']).exists():
-            preview=f"<div class='preview-empty'><b>Archivo cargado:</b> {pl['archivo_nombre']}<br><br><a class='c-btn' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>Descargar / abrir archivo</a><p class='muted2'>La previsualización directa funciona mejor con PDF. Para Word, descárgalo y ábrelo en Word.</p></div>"
+            preview=f"<div class='preview-empty'><b>Archivo cargado:</b> {html.escape(pl['archivo_nombre'] or '')}<br><br><a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar / abrir archivo</a><p>La vista previa directa funciona mejor con PDF. Para Word, descarga el archivo y ábrelo en Word.</p></div>"
         else:
-            preview="<div class='preview-empty'><b>Sin archivo cargado.</b><br>Usa el lapicito para subir PDF/DOCX de la plantilla.</div>"
-        body=f"""<div class='preview-tools'><input placeholder='Código de Trabajador'><button class='c-btn green'>Previsualizar</button></div><div class='toolbar'>↻ Refrescar</div>{preview}"""
-    edit_url=url_for('contratacion_plantilla_editar',pid=pid)
-    file_btn = f"<a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar Archivo</a>" if pl['ruta_archivo'] else "<span class='c-btn gray'>Sin archivo</span>"
+            preview=f"<div class='preview-empty'><b>Sin archivo cargado.</b><br>Haz clic en el lápiz ✎ para editar y cargar la plantilla PDF/DOC/DOCX.</div>"
+        body=f"""<div class='preview-tools'><input placeholder='Código de Trabajador'><button class='c-btn green'>Previsualizar</button></div><div class='tpl-toolbar'>↻ Refrescar</div>{preview}"""
+    file_btn = f"<a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar Archivo</a>" if pl['ruta_archivo'] else "<span class='c-btn gray disabled'>Sin archivo</span>"
     content=f"""
-    <style>.template-head{{background:#fff;border:1px solid #dde2e7;border-radius:10px;padding:22px;display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:12px}}.template-head h1{{margin:0 0 12px;font-size:30px}}.tpl-line{{margin:13px 0;color:#6b7280}}.tpl-line b{{color:#1f2937;margin-right:10px}}.green-dot{{display:inline-block;width:11px;height:11px;border-radius:50%;background:#4dcc69;margin-right:9px}}.preview-tools{{display:flex;gap:14px;margin:8px 0 16px}}.preview-tools input{{max-width:450px;background:#fff!important;color:#111!important;border:1px solid #d1d5db;border-radius:8px;padding:11px}}.pdf-frame{{width:100%;height:720px;border:1px solid #d1d5db;background:#eee}}.preview-empty{{background:#fff;border:1px dashed #cbd5e1;border-radius:12px;padding:28px;margin-top:12px}}</style>
-    <div class='template-head'><div><h1>{pl['nombre_plantilla']} <a class='icon-btn' href='{edit_url}'>✎</a></h1><div class='tpl-line'><b>Descripción:</b>{pl['descripcion']}</div><div class='tpl-line'><b>Nombre Archivo:</b>{pl['archivo_nombre'] or 'SIN ARCHIVO'} <a class='icon-btn' href='{edit_url}'>⌕</a></div>{file_btn}<div style='margin-top:14px;background:#eee;padding:8px'><b>Fecha de Creación:</b> {pl['fecha_creacion'] or ''} &nbsp;&nbsp; <b>Creado por:</b> {pl['creado_por'] or ''}</div></div><div style='border-left:2px dashed #d1d5db;padding-left:24px'><div class='tpl-line'><b>Versión:</b>{pl['version']}</div><div class='tpl-line'><b>Condición:</b>{pl['condicion']}</div><div class='tpl-line'><b>Esquema:</b>{pl['esquema']}</div><div class='tpl-line'><b>Tipo Documento:</b>{pl['tipo_documento']}</div><div class='tpl-line'><b>Estado:</b><span class='green-dot'></span>{estado}</div></div></div>{tabs}{body}<br><a class='c-btn' href='/admin/contratacion?sec=plantillas'>← Atrás</a>
+    <style>
+      .contract-detail-wrap{{color:#111827!important;background:#f4f6f8;margin:-8px -10px 0;padding:10px 0 28px}}
+      .contract-detail-wrap *{{box-sizing:border-box}}
+      .detail-title{{font-size:22px;font-weight:900;margin:0 0 12px 0;color:#111827}}
+      .template-head{{background:#fff;border:1px solid #dbe1e8;border-radius:8px;padding:22px 26px;display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-bottom:10px;box-shadow:0 1px 3px rgba(15,23,42,.08)}}
+      .template-head h1{{margin:0 0 14px;font-size:30px;line-height:1.15;color:#1f2937;font-weight:900;display:flex;align-items:center;gap:10px;flex-wrap:wrap}}
+      .tpl-line{{margin:15px 0;color:#6b7280;font-size:16px;font-weight:700}}
+      .tpl-line b{{color:#111827;margin-right:10px;font-weight:900}}
+      .icon-btn{{display:inline-flex!important;align-items:center;justify-content:center;min-width:38px;height:38px;border-radius:9px;background:#e5e9ef!important;color:#111827!important;border:0;text-decoration:none;font-size:22px;font-weight:900;box-shadow:0 1px 2px rgba(0,0,0,.08)}}
+      .icon-btn:hover{{background:#d7dde6!important;transform:translateY(-1px)}}
+      .green-dot{{display:inline-block;width:12px;height:12px;border-radius:50%;background:#4dcc69;margin-right:9px}}
+      .red-dot{{display:inline-block;width:12px;height:12px;border-radius:50%;background:#ef4444;margin-right:9px}}
+      .meta-box{{margin-top:14px;background:#e5e7eb;color:#6b7280;padding:10px 12px;font-weight:800;font-size:13px;display:flex;gap:35px;flex-wrap:wrap}}
+      .tpl-side{{border-left:2px dashed #cbd5e1;padding-left:28px}}
+      .tpl-tabs{{display:flex;background:#fff;border:1px solid #dbe1e8;border-radius:6px;margin:10px 0 0;overflow:hidden}}
+      .tpl-tab{{padding:14px 22px;color:#6b7280!important;text-decoration:none;font-weight:800;border-bottom:2px solid transparent;min-width:180px}}
+      .tpl-tab.active{{color:#111827!important;border-bottom-color:#fb923c}}
+      .preview-tools{{display:flex;gap:14px;margin:10px 0 16px;padding:10px 14px;background:#fff;border-left:1px solid #dbe1e8;border-right:1px solid #dbe1e8}}
+      .preview-tools input{{max-width:450px;background:#fff!important;color:#111!important;border:1px solid #d1d5db;border-radius:8px;padding:12px 14px;font-weight:700}}
+      .c-btn{{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;padding:10px 14px;background:#ff963b;color:#fff!important;font-weight:900;text-decoration:none;cursor:pointer}}
+      .c-btn.gray{{background:#e5e9ef;color:#111827!important}}
+      .c-btn.green{{background:#49c85f;color:#fff!important}}
+      .c-btn.disabled{{opacity:.7;cursor:not-allowed}}
+      .tpl-toolbar{{color:#808890;font-weight:800;padding:12px 20px;background:#fff}}
+      .pdf-frame{{width:100%;height:720px;border:1px solid #d1d5db;background:#eee}}
+      .preview-empty{{background:#fff!important;color:#111827!important;border:1px dashed #cbd5e1;border-radius:12px;padding:28px;margin:12px 20px;font-size:16px}}
+      .preview-empty p{{color:#6b7280!important}}
+      .tpl-table-wrap{{overflow:auto;background:#fff;border:1px solid #dbe1e8;max-height:560px}}
+      .tpl-table{{width:100%;border-collapse:collapse;color:#111827!important;background:#fff!important}}
+      .tpl-table th{{background:#f8fafc!important;color:#111827!important;text-align:left;font-size:14px;border:1px solid #dde2e7;padding:12px}}
+      .tpl-table td{{border:1px solid #dde2e7;padding:13px;color:#111827!important;background:#fff!important}}
+      .tpl-table tr:nth-child(even) td{{background:#e9e9e9!important}}
+      .state-pill{{display:inline-flex;align-items:center;border:1px solid #d1d5db;border-radius:20px;padding:6px 12px;background:#fff;font-weight:800;color:#111827}}
+      .state-pill.ok:before{{content:'';width:10px;height:10px;border-radius:50%;background:#22c55e;margin-right:7px}}
+      .state-pill.bad:before{{content:'';width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:7px}}
+      .back-top{{display:flex;justify-content:flex-end;margin:0 0 10px}}
+      @media(max-width:900px){{.template-head{{grid-template-columns:1fr}}.tpl-side{{border-left:0;border-top:2px dashed #cbd5e1;padding-left:0;padding-top:18px}}}}
+    </style>
+    <div class='contract-detail-wrap'>
+      <div class='back-top'><a class='c-btn' href='/admin/contratacion?sec=plantillas'>← Atrás</a></div>
+      <h2 class='detail-title'>Detalle Plantilla Legajo</h2>
+      <div class='template-head'>
+        <div>
+          <h1>{html.escape(pl['nombre_plantilla'] or '')} <a class='icon-btn' title='Editar plantilla' href='{edit_url}'>✎</a></h1>
+          <div class='tpl-line'><b>Descripción:</b>{html.escape(pl['descripcion'] or '')}</div>
+          <div class='tpl-line'><b>Nombre Archivo:</b>{html.escape(pl['archivo_nombre'] or 'SIN ARCHIVO')} <a class='icon-btn' title='Cargar o cambiar plantilla' href='{edit_url}'>⌕</a></div>
+          {file_btn}
+          <div class='meta-box'><span><b>Fecha de Creación:</b> {html.escape(pl['fecha_creacion'] or '')}</span><span><b>Creado por:</b> {html.escape(pl['creado_por'] or '')}</span></div>
+        </div>
+        <div class='tpl-side'>
+          <div class='tpl-line'><b>Versión:</b>{html.escape(pl['version'] or 'Version 01')}</div>
+          <div class='tpl-line'><b>Condición:</b>{html.escape(pl['condicion'] or 'SIN CONDICIONES')}</div>
+          <div class='tpl-line'><b>Esquema:</b>{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')}</div>
+          <div class='tpl-line'><b>Tipo Documento:</b>{html.escape(pl['tipo_documento'] or '')}</div>
+          <div class='tpl-line'><b>Estado:</b><span class='{'green-dot' if pl['activo'] else 'red-dot'}'></span>{estado}</div>
+        </div>
+      </div>
+      {tabs}{body}
+      <br><a class='c-btn gray' href='/admin/contratacion?sec=plantillas'>← Atrás</a>
+    </div>
     """
     return render_page(content, active='Gestion Contratacion:plantillas')
 
@@ -2493,12 +2557,49 @@ def contratacion_plantilla_editar(pid):
     with db() as con:
         pl=con.execute('SELECT * FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
     if not pl: abort(404)
+    tipos_opts = ['CONTRATO TRABAJADOR','CONTRATO TRABAJADOR(RENOVACIÓN)','ACUERDO PREFERENCIAL','AUTODECLARACION BUENAS PRACTICAS','CARGO ENTREGA RENOVACION','ELECCIÓN DE BENEFICIOS SOCIALES','NOTA DE CARGO','CARTA DE COMPROMISO','CARGO DE ENTREGA']
+    tipo_options=''.join([f"<option value='{html.escape(x)}' {'selected' if (pl['tipo_documento'] or '')==x else ''}>{html.escape(x)}</option>" for x in tipos_opts])
     content=f"""
-    <style>.modal-page{{max-width:760px;margin:25px auto;background:#fff;border-radius:12px;border:1px solid #dbe1e8;box-shadow:0 16px 35px #0001;padding:26px}}.modal-page h1{{margin-top:0}}.edit-grid{{display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:center}}.edit-grid input,.edit-grid select,.edit-grid textarea{{background:#fff!important;color:#111!important;border:1px solid #cfd6df;border-radius:8px;padding:10px;width:100%}}</style>
-    <div class='modal-page'><div style='display:flex;justify-content:space-between;align-items:center'><h1>Editar Plantilla</h1><a class='icon-btn' href='{url_for('contratacion_plantilla_detalle',pid=pid)}'>×</a></div><form method='post' action='/admin/contratacion?sec=plantillas' enctype='multipart/form-data' class='edit-grid'><input type='hidden' name='accion' value='plantilla'><input type='hidden' name='plantilla_id' value='{pid}'><label>Tipo Documento</label><input name='tipo_documento' value='{pl['tipo_documento'] or ''}' list='edit_tipos_doc'><datalist id='edit_tipos_doc'><option>CONTRATO TRABAJADOR</option><option>CONTRATO TRABAJADOR(RENOVACIÓN)</option><option>ACUERDO PREFERENCIAL</option><option>AUTODECLARACION BUENAS PRACTICAS</option><option>CARGO ENTREGA RENOVACION</option><option>ELECCIÓN DE BENEFICIOS SOCIALES</option><option>NOTA DE CARGO</option><option>CARTA DE COMPROMISO</option><option>CARGO DE ENTREGA</option></datalist><label>Esquema</label><input name='esquema' value='{pl['esquema'] or 'Trabajador Contrato Laboral'}'><label>Nombre Plantilla</label><input name='nombre_plantilla' value='{pl['nombre_plantilla'] or ''}'><label>Descripción</label><textarea name='descripcion'>{pl['descripcion'] or ''}</textarea><label>Versión</label><input name='version' value='{pl['version'] or 'Version 01'}'><label>Condición</label><select name='condicion'><option value='CONDICIONES' {'selected' if (pl['condicion'] or '').upper()=='CONDICIONES' else ''}>CONDICIONES</option><option value='SIN CONDICIONES' {'selected' if (pl['condicion'] or '').upper()!='CONDICIONES' else ''}>SIN CONDICIONES</option></select><label>Estado</label><select name='activo'><option value='1' {'selected' if pl['activo'] else ''}>Activo</option><option value='0' {'selected' if not pl['activo'] else ''}>Inactivo</option></select><label>Plantilla</label><div class='upload-box'><div class='warn'><b>Advertencia!</b> Tipo de archivo permitido .doc y .docx</div><input type='file' name='archivo' accept='.doc,.docx'><small>Actual: {pl['archivo_nombre'] or 'Sin archivo cargado'}</small></div><span></span><div><button class='c-btn'>Actualizar</button> <a class='c-btn gray' href='{url_for('contratacion_plantilla_detalle',pid=pid)}'>Cerrar</a></div></form></div>
+    <style>
+      .edit-overlay{{min-height:calc(100vh - 40px);display:flex;align-items:flex-start;justify-content:center;padding:18px;background:rgba(0,0,0,.52);margin:-20px -24px -40px}}
+      .modal-page{{width:min(760px,96vw);background:#fff;color:#111827!important;border-radius:8px;border:1px solid #dbe1e8;box-shadow:0 22px 65px rgba(0,0,0,.35);overflow:hidden}}
+      .modal-head{{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #dbe1e8}}
+      .modal-head h1{{margin:0;font-size:24px;font-weight:900;color:#111827}}
+      .close-x{{width:36px;height:36px;border-radius:8px;background:#fff;color:#8b9097!important;border:2px solid #e5e7eb;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:26px;font-weight:900}}
+      .edit-grid{{display:grid;grid-template-columns:175px 1fr;gap:10px 14px;align-items:center;padding:26px 36px}}
+      .edit-grid label{{color:#6b7280;font-size:19px;text-align:right;font-weight:700}}
+      .edit-grid input,.edit-grid select,.edit-grid textarea{{background:#fff!important;color:#111827!important;border:1px solid #cfd6df;border-radius:7px;padding:10px 12px;width:100%;font-size:17px;font-weight:600;min-height:38px}}
+      .edit-grid textarea{{min-height:62px;resize:vertical}}
+      .upload-box{{background:#eef1f5;border-radius:7px;padding:0;color:#111827;overflow:hidden}}
+      .upload-row{{display:flex;align-items:center;gap:10px;padding:10px 12px;white-space:nowrap;overflow:auto}}
+      .upload-row input[type=file]{{border:0!important;padding:0!important;background:transparent!important;min-height:auto;font-size:15px}}
+      .warn{{background:#fff3cd;border:1px solid #ffe08a;color:#7a5400;border-radius:6px;margin:10px 0;padding:12px;text-align:center;font-size:15px}}
+      .modal-actions{{display:flex;justify-content:flex-end;gap:10px;padding:16px 36px 28px}}
+      .c-btn{{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;padding:10px 16px;background:#ff963b;color:#fff!important;font-weight:900;text-decoration:none;cursor:pointer;font-size:16px}}
+      .c-btn.gray{{background:#e5e9ef;color:#111827!important}}
+      @media(max-width:720px){{.edit-grid{{grid-template-columns:1fr;padding:20px}}.edit-grid label{{text-align:left}}.modal-actions{{padding:16px 20px 24px}}}}
+    </style>
+    <div class='edit-overlay'>
+      <div class='modal-page'>
+        <div class='modal-head'><h1>Editar Plantilla</h1><a class='close-x' href='{url_for('contratacion_plantilla_detalle',pid=pid)}'>×</a></div>
+        <form method='post' action='/admin/contratacion?sec=plantillas' enctype='multipart/form-data'>
+          <div class='edit-grid'>
+            <input type='hidden' name='accion' value='plantilla'><input type='hidden' name='plantilla_id' value='{pid}'>
+            <label>Tipo Documento</label><select name='tipo_documento'>{tipo_options}</select>
+            <label>Esquema</label><input name='esquema' value='{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')}'>
+            <label>Nombre Plantilla</label><input name='nombre_plantilla' value='{html.escape(pl['nombre_plantilla'] or '')}'>
+            <label>Descripción</label><textarea name='descripcion'>{html.escape(pl['descripcion'] or '')}</textarea>
+            <label>Condición</label><select name='condicion'><option value='CONDICIONES' {'selected' if (pl['condicion'] or '').upper()=='CONDICIONES' else ''}>CONDICIONES</option><option value='SIN CONDICIONES' {'selected' if (pl['condicion'] or '').upper()!='CONDICIONES' else ''}>SIN CONDICIONES</option></select>
+            <label>Estado</label><select name='activo'><option value='1' {'selected' if pl['activo'] else ''}>Activo</option><option value='0' {'selected' if not pl['activo'] else ''}>Inactivo</option></select>
+            <label>Versión</label><input name='version' value='{html.escape(pl['version'] or 'Version 01')}'>
+            <label>Plantilla</label><div><div class='warn'><b>Advertencia!</b> Tipo de archivo permitido .pdf, .doc y .docx</div><div class='upload-box'><div class='upload-row'>⬆ <input type='file' name='archivo' accept='.pdf,.doc,.docx'></div></div><small>Actual: {html.escape(pl['archivo_nombre'] or 'Sin archivo cargado')}</small></div>
+          </div>
+          <div class='modal-actions'><button class='c-btn'>Actualizar</button><a class='c-btn gray' href='{url_for('contratacion_plantilla_detalle',pid=pid)}'>Cerrar</a></div>
+        </form>
+      </div>
+    </div>
     """
     return render_page(content, active='Gestion Contratacion:plantillas')
-
 
 @app.route('/admin/contratacion/plantilla/<int:pid>/eliminar', methods=['POST'])
 @admin_required
