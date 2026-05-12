@@ -16,6 +16,7 @@ Variables Render opcionales:
 import os
 import re
 import sqlite3
+import html
 from datetime import datetime
 from pathlib import Path
 from copy import copy
@@ -2461,6 +2462,22 @@ def contratacion_plantilla_editar(pid):
     """
     return render_page(content, active='Gestion Contratacion:plantillas')
 
+
+@app.route('/admin/contratacion/plantilla/<int:pid>/eliminar', methods=['POST'])
+@admin_required
+def contratacion_plantilla_eliminar(pid):
+    """Elimina una plantilla de contrato y sus campos sin tocar contratos/documentos ya generados."""
+    with db() as con:
+        pl = con.execute('SELECT * FROM contratacion_plantillas WHERE id=?', (pid,)).fetchone()
+        if not pl:
+            flash('La plantilla no existe o ya fue eliminada.', 'error')
+            return redirect(url_for('admin_contratacion', sec='plantillas'))
+        con.execute('DELETE FROM contratacion_plantilla_campos WHERE plantilla_id=?', (pid,))
+        con.execute('DELETE FROM contratacion_plantillas WHERE id=?', (pid,))
+        con.commit()
+    flash('Plantilla eliminada correctamente. Los documentos/contratos históricos no se borran.', 'ok')
+    return redirect(url_for('admin_contratacion', sec='plantillas'))
+
 @app.route('/admin/contratacion', methods=['GET','POST'])
 @admin_required
 def admin_contratacion():
@@ -2532,14 +2549,49 @@ def admin_contratacion():
         tipos=con.execute('SELECT * FROM contratacion_tipos ORDER BY etapa, descripcion').fetchall()
         docs=con.execute('SELECT * FROM contratacion_docs ORDER BY id DESC LIMIT 300').fetchall()
         trabajadores=con.execute('SELECT dni,nombre,empresa,cargo,area,correo,activo,fecha_registro FROM trabajadores ORDER BY nombre LIMIT 700').fetchall()
-        plantillas=con.execute('SELECT * FROM contratacion_plantillas ORDER BY id DESC').fetchall()
+        # Filtros reales de Plantilla Documentos
+        f_nombre = clean(request.args.get('f_nombre'))
+        f_tipo = clean(request.args.get('f_tipo'))
+        f_esquema = clean(request.args.get('f_esquema'))
+        f_condicion = clean(request.args.get('f_condicion'))
+        where_pl, params_pl = [], []
+        if f_nombre:
+            where_pl.append('(nombre_plantilla LIKE ? OR descripcion LIKE ? OR archivo_nombre LIKE ?)')
+            params_pl += [f'%{f_nombre}%', f'%{f_nombre}%', f'%{f_nombre}%']
+        if f_tipo:
+            where_pl.append('tipo_documento LIKE ?')
+            params_pl.append(f'%{f_tipo}%')
+        if f_esquema:
+            where_pl.append('esquema LIKE ?')
+            params_pl.append(f'%{f_esquema}%')
+        if f_condicion:
+            where_pl.append('condicion LIKE ?')
+            params_pl.append(f'%{f_condicion}%')
+        sql_pl = 'SELECT * FROM contratacion_plantillas'
+        if where_pl:
+            sql_pl += ' WHERE ' + ' AND '.join(where_pl)
+        sql_pl += ' ORDER BY id DESC'
+        plantillas=con.execute(sql_pl, params_pl).fetchall()
     opt_tipo=''.join([f"<option value='{r['descripcion']}'>{r['descripcion']}</option>" for r in tipos])
     opt_trab=''.join([f"<option value='{r['dni']}'>{r['dni']} - {r['nombre']}</option>" for r in trabajadores])
     sample_trab = trabajadores[0] if trabajadores else None
     docs_rows=''.join([f"<tr><td><input type='checkbox'></td><td>🔍 📄</td><td>{r['dni']}</td><td>{r['trabajador']}</td><td>{r['tipo_doc']}</td><td><span class='c-badge cyan'>{r['estado'][:1] or 'F'}</span></td><td>{r['fecha_registro']}</td></tr>" for r in docs])
     renov_rows=''.join([f"<tr><td><input type='checkbox'></td><td>{t['dni']}</td><td>{t['nombre']}</td><td>INICIO</td><td>{fecha_sin_hora(t['fecha_registro'])}</td><td></td><td>30/06/2026</td><td><span class='c-badge green'>✓</span></td><td><span class='c-badge green'>✓</span></td><td>0</td></tr>" for t in trabajadores[:12]])
     tipos_rows=''.join([f"<tr><td>✎ 🗑</td><td><span class='state'>Activo</span></td><td>{r['codigo']}</td><td>{r['descripcion']}</td><td>{r['etapa']}</td><td>Trabajador Contrato Laboral</td><td>Documento requerido</td></tr>" for r in tipos])
-    plantillas_rows=''.join([f"<tr><td><a class='icon-btn' title='Editar' href='/admin/contratacion/plantilla/{r['id']}/editar'>✎</a> <a class='icon-btn' title='Ver detalle' href='/admin/contratacion/plantilla/{r['id']}'>⌕</a></td><td><span class='state'>{'Activo' if r['activo'] else 'Inactivo'}</span></td><td><a href='/admin/contratacion/plantilla/{r['id']}'>{r['nombre_plantilla']}</a></td><td>{r['tipo_documento']}</td><td>{r['esquema']}</td><td>{r['descripcion']}</td><td>{r['version']}</td><td>{r['condicion']}</td><td>{r['archivo_nombre'] or ''}</td></tr>" for r in plantillas])
+    def h(v):
+        return html.escape(str(v or ''))
+    plantillas_rows=''.join([
+        f"""<tr>
+          <td class='tpl-actions'>
+            <a class='icon-btn action-edit' title='Abrir detalle / editar' href='{url_for('contratacion_plantilla_detalle', pid=r['id'])}'>✎</a>
+            <form method='post' action='{url_for('contratacion_plantilla_eliminar', pid=r['id'])}' style='display:inline' onsubmit="return confirm('¿Eliminar esta plantilla? No se borrarán contratos/documentos históricos.');">
+              <button class='icon-btn action-delete' title='Eliminar plantilla' type='submit'>🗑</button>
+            </form>
+          </td>
+          <td><span class='state {'inactive' if not r['activo'] else ''}'>{'Activo' if r['activo'] else 'Inactivo'}</span></td>
+          <td><a class='tpl-link' href='{url_for('contratacion_plantilla_detalle', pid=r['id'])}'>{h(r['nombre_plantilla'])}</a></td>
+          <td>{h(r['tipo_documento'])}</td><td>{h(r['esquema'])}</td><td>{h(r['descripcion'])}</td><td>{h(r['version'])}</td><td>{h(r['condicion'])}</td><td>{h(r['archivo_nombre'])}</td>
+        </tr>""" for r in plantillas])
     obs_rows=''.join([f"<tr><td><input type='checkbox'></td><td>🔗 ✎ 🗑</td><td><span class='state'>Activo</span></td><td>DNI</td><td>{t['dni']}</td><td>{t['nombre']}</td><td>SINDICALISTA</td><td>NIVEL 3</td></tr>" for t in trabajadores[:10]])
     report_rows="<tr><td>✎ ⬇</td><td>RHTR01</td><td>Reporte Datos Trabajador</td><td>Reporte Datos Trabajador</td><td>TR_REPORT_1</td><td>Admin</td></tr>"
     trabajadores_estado_rows=''.join([f"<tr><td>{t['dni']}</td><td>{t['nombre']}</td><td>{t['empresa']}</td><td>{t['cargo'] or ''}</td><td><span class='state'>{'ACTIVO' if t['activo'] else 'CESADO/INACTIVO'}</span></td><td><form method='post' style='display:flex;gap:8px'><input type='hidden' name='accion' value='estado_trabajador'><input type='hidden' name='dni' value='{t['dni']}'><button class='c-btn {'gray' if t['activo'] else ''}' name='nuevo_estado' value='0'>Cesar</button><button class='c-btn green' name='nuevo_estado' value='1'>Reactivar</button></form></td></tr>" for t in trabajadores])
@@ -2547,7 +2599,7 @@ def admin_contratacion():
     # Todo se maneja desde el panel principal oscuro, con una sola pestaña activa por vez.
     css="""
     <style>
-    .main{background:#f4f6f8!important;color:#111827!important}.c-title{font-size:24px;margin:0 0 20px;font-weight:950;color:#111827}.c-bar{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}.c-filter{display:grid;grid-template-columns:180px minmax(260px,420px) 160px minmax(260px,420px);gap:10px 24px;align-items:center;margin-bottom:22px}.c-filter input,.c-filter select,.c-form input,.c-form select{background:#fff!important;color:#111827!important;border:1px solid #cfd6df!important;border-radius:8px!important;padding:10px!important}.c-btn{background:#ff8d35;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:950;display:inline-flex;gap:8px;align-items:center;text-decoration:none}.c-btn.gray{background:#66707c}.c-card{background:#fff;border:1px solid #dde2e7;border-radius:12px;box-shadow:0 6px 18px #0000000d;margin-bottom:18px}.tabs{display:flex;border-bottom:1px solid #dde2e7}.tab{padding:14px 24px;font-weight:900;color:#7a7f87;border-bottom:3px solid transparent}.tab.active{color:#1f2937;border-bottom-color:#ff8d35}.c-table{width:100%;border-collapse:collapse;background:#fff;font-size:15px}.c-table th{font-weight:900;text-align:left;background:#f7f8fa;border:1px solid #dde2e7;padding:12px}.c-table td{border:1px solid #e1e5ea;padding:11px;vertical-align:middle}.c-table tr:nth-child(even) td{background:#eeeeee}.c-table tr.selected td{background:#bcd7fb!important}.c-badge{display:inline-grid;place-items:center;min-width:70px;border-radius:7px;padding:6px 10px;color:#fff;font-weight:950}.c-badge.green{background:#55ad11}.c-badge.cyan{background:#51c2d4}.state{border:1px solid #d1d5db;border-radius:99px;padding:7px 12px;background:white;color:#16a34a;font-weight:900}.tile-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:30px;max-width:1100px;margin:45px auto}.c-tile{background:#fff;border:1px solid #dde2e7;border-radius:14px;min-height:185px;padding:28px;display:flex;gap:18px;align-items:flex-start;position:relative;box-shadow:0 6px 18px #0000000d}.tile-icon{width:74px;height:74px;border-radius:50%;background:#ffe5cc;color:#ff8d35;display:grid;place-items:center;font-size:34px}.download-corner{position:absolute;right:18px;bottom:14px;font-size:24px}.toolbar{display:flex;justify-content:flex-end;gap:18px;color:#7b8088;margin:12px 0}.c-form{display:grid;grid-template-columns:180px minmax(260px,430px) 180px minmax(260px,430px);gap:12px 22px;align-items:center}.profile{display:grid;grid-template-columns:150px 1fr 1fr 1fr;gap:24px;align-items:start}.avatar-big{width:135px;height:135px;border-radius:50%;background:#f7c26d;display:grid;place-items:center;font-size:80px}.divider{border-left:2px dashed #c8c8c8;padding-left:20px}.muted2{color:#667085}.anuncio-upload{background:#fff;padding:22px;border-radius:12px;border:1px dashed #ff8d35;max-width:900px}.anuncio-upload input[type=file]{background:#fff!important;color:#111!important;border:1px solid #ddd!important;padding:10px!important;border-radius:8px!important}.video-box{margin-top:16px;background:#111827;color:#fff;padding:18px;border-radius:10px}.video-box video{width:100%;max-height:260px;background:#000;border-radius:8px}.table-wrap{overflow:auto}@media(max-width:1000px){.c-filter,.c-form,.profile{grid-template-columns:1fr}.tile-grid{grid-template-columns:1fr;margin:20px 0}.c-table{min-width:1000px}}
+    .main{background:#f4f6f8!important;color:#111827!important}.c-title{font-size:24px;margin:0 0 20px;font-weight:950;color:#111827}.c-bar{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}.c-filter{display:grid;grid-template-columns:180px minmax(260px,420px) 160px minmax(260px,420px);gap:10px 24px;align-items:center;margin-bottom:22px}.c-filter input,.c-filter select,.c-form input,.c-form select{background:#fff!important;color:#111827!important;border:1px solid #cfd6df!important;border-radius:8px!important;padding:10px!important}.c-btn{background:#ff8d35;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:950;display:inline-flex;gap:8px;align-items:center;text-decoration:none}.c-btn.gray{background:#66707c}.c-card{background:#fff;border:1px solid #dde2e7;border-radius:12px;box-shadow:0 6px 18px #0000000d;margin-bottom:18px}.tabs{display:flex;border-bottom:1px solid #dde2e7}.tab{padding:14px 24px;font-weight:900;color:#7a7f87;border-bottom:3px solid transparent}.tab.active{color:#1f2937;border-bottom-color:#ff8d35}.c-table{width:100%;border-collapse:collapse;background:#fff;font-size:15px}.c-table th{font-weight:900;text-align:left;background:#f7f8fa;border:1px solid #dde2e7;padding:12px}.c-table td{border:1px solid #e1e5ea;padding:11px;vertical-align:middle}.c-table tr:nth-child(even) td{background:#eeeeee}.c-table tr.selected td{background:#bcd7fb!important}.c-badge{display:inline-grid;place-items:center;min-width:70px;border-radius:7px;padding:6px 10px;color:#fff;font-weight:950}.c-badge.green{background:#55ad11}.c-badge.cyan{background:#51c2d4}.state{border:1px solid #d1d5db;border-radius:99px;padding:7px 12px;background:white;color:#16a34a;font-weight:900}.tile-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:30px;max-width:1100px;margin:45px auto}.c-tile{background:#fff;border:1px solid #dde2e7;border-radius:14px;min-height:185px;padding:28px;display:flex;gap:18px;align-items:flex-start;position:relative;box-shadow:0 6px 18px #0000000d}.tile-icon{width:74px;height:74px;border-radius:50%;background:#ffe5cc;color:#ff8d35;display:grid;place-items:center;font-size:34px}.download-corner{position:absolute;right:18px;bottom:14px;font-size:24px}.toolbar{display:flex;justify-content:flex-end;gap:18px;color:#7b8088;margin:12px 0}.c-form{display:grid;grid-template-columns:180px minmax(260px,430px) 180px minmax(260px,430px);gap:12px 22px;align-items:center}.profile{display:grid;grid-template-columns:150px 1fr 1fr 1fr;gap:24px;align-items:start}.avatar-big{width:135px;height:135px;border-radius:50%;background:#f7c26d;display:grid;place-items:center;font-size:80px}.divider{border-left:2px dashed #c8c8c8;padding-left:20px}.muted2{color:#667085}.anuncio-upload{background:#fff;padding:22px;border-radius:12px;border:1px dashed #ff8d35;max-width:900px}.anuncio-upload input[type=file]{background:#fff!important;color:#111!important;border:1px solid #ddd!important;padding:10px!important;border-radius:8px!important}.video-box{margin-top:16px;background:#111827;color:#fff;padding:18px;border-radius:10px}.video-box video{width:100%;max-height:260px;background:#000;border-radius:8px}.table-wrap{overflow:auto}.plantilla-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.crear-btn{border-radius:22px}.plantilla-filter{display:grid;grid-template-columns:190px minmax(280px,438px) 190px minmax(280px,438px);gap:8px 28px;align-items:center}.filter-card{margin-bottom:18px}.create-card{display:none}.create-card:target{display:block}.tpl-actions{white-space:nowrap;text-align:center}.icon-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;background:transparent;color:#111827!important;font-size:20px;font-weight:950;text-decoration:none;cursor:pointer}.icon-btn:hover{background:#eef2f7;border-radius:8px}.action-delete{color:#111827!important}.state.inactive{color:#6b7280;background:#f3f4f6}.tpl-link{font-weight:900;color:#0f172a!important}.plantilla-table th:first-child,.plantilla-table td:first-child{min-width:92px;text-align:center}@media(max-width:1000px){.c-filter,.c-form,.profile{grid-template-columns:1fr}.tile-grid{grid-template-columns:1fr;margin:20px 0}.c-table{min-width:1000px}}
     </style>"""
     def wrap(inner):
         return css + inner
@@ -2570,9 +2622,27 @@ def admin_contratacion():
         nombre=sample_trab['nombre'] if sample_trab else ''
         content=wrap(f"<h2 class='c-title'>Ficha Trabajador</h2><div class='profile'><div class='avatar-big'>👤</div><div><input placeholder='Buscar trabajador' value='{nombre}'><p><b>Dirección:</b></p><p>✉ &nbsp;&nbsp; ☎ &nbsp;&nbsp; 📱</p><div style='background:#e9e9e9;padding:8px'><b>Fecha de Creación:</b> &nbsp;&nbsp; <b>Creado por:</b></div></div><div class='divider'><p><b>Gerencia:</b></p><p><b>Area:</b></p><p><b>Puesto:</b></p><p><b>Supervisor:</b></p><p><b>Planilla:</b></p><p><b>Condición:</b></p></div><div class='divider'><p><b>Estado:</b></p><p><b>Fecha de Ingreso:</b></p><p><b>Fecha de Cese:</b></p><p><b>Centro Costo:</b></p><p><b>Zona:</b></p><p><b>Cargo:</b></p><p><b>Sindicalizado:</b></p></div></div><div class='c-card'><div class='tabs'><div class='tab active'>Datos Laborales</div><div class='tab'>Documentos</div><div class='tab'>Contratos</div></div></div>")
     elif sec=='plantillas':
+        f_nombre_v = html.escape(clean(request.args.get('f_nombre')))
+        f_tipo_v = html.escape(clean(request.args.get('f_tipo')))
+        f_esquema_v = html.escape(clean(request.args.get('f_esquema')))
+        f_cond_v = html.escape(clean(request.args.get('f_condicion')))
         content=wrap(f"""
-        <h2 class='c-title'>Plantilla Documentos</h2>
-        <div class='c-card' style='padding:18px'>
+        <div class='plantilla-top'>
+          <h2 class='c-title'>Plantillas</h2>
+          <a class='c-btn crear-btn' href='#crearPlantilla'>+ Crear Plantilla</a>
+        </div>
+        <div class='c-card filter-card' style='padding:18px'>
+          <form method='get' action='/admin/contratacion' class='plantilla-filter'>
+            <input type='hidden' name='sec' value='plantillas'>
+            <b>Nombre Plantilla:</b><input name='f_nombre' value='{f_nombre_v}'>
+            <b>Tipo Documento:</b><input name='f_tipo' value='{f_tipo_v}' list='tipos_doc_list_filter'><datalist id='tipos_doc_list_filter'>{opt_tipo}</datalist>
+            <b>Esquema:</b><select name='f_esquema'><option value=''></option><option {'selected' if f_esquema_v=='Trabajador Contrato Laboral' else ''}>Trabajador Contrato Laboral</option></select>
+            <b>Condición:</b><select name='f_condicion'><option value=''></option><option {'selected' if f_cond_v=='SIN CONDICIONES' else ''}>SIN CONDICIONES</option><option {'selected' if f_cond_v=='CON CONDICIONES' else ''}>CON CONDICIONES</option></select>
+            <span></span><span><button class='c-btn'>⌕ Buscar</button> <a class='c-btn gray' href='/admin/contratacion?sec=plantillas'>Limpiar</a></span>
+          </form>
+        </div>
+        <div id='crearPlantilla' class='c-card create-card' style='padding:18px'>
+          <h3 style='margin-top:0'>Crear / cargar nueva plantilla</h3>
           <form method='post' enctype='multipart/form-data' class='c-form'>
             <input type='hidden' name='accion' value='plantilla'>
             <b>Nombre Plantilla:</b><input name='nombre_plantilla' required>
@@ -2582,11 +2652,10 @@ def admin_contratacion():
             <b>Versión:</b><input name='version' value='Version 01'>
             <b>Archivo plantilla:</b><input type='file' name='archivo' accept='.pdf,.doc,.docx'>
             <b>Descripción:</b><textarea name='descripcion' placeholder='Descripción de la plantilla'></textarea>
-            <span></span><button class='c-btn'>+ Crear / Cargar Plantilla</button>
+            <span></span><button class='c-btn'>+ Guardar Plantilla</button>
           </form>
         </div>
-        <div class='c-bar'><div><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button></div><div class='muted2'>Flujo: cargar plantilla → revisar Contenido → configurar Campos → editar/actualizar con lapicito.</div></div>
-        <div class='c-card table-wrap'><table class='c-table'><tr><th>Acción</th><th>Estado</th><th>Nombre Plantilla</th><th>Tipo Documento</th><th>Esquema</th><th>Descripción</th><th>Versión</th><th>Condición</th><th>Nombre Archivo</th></tr>{plantillas_rows or '<tr><td colspan=9>No hay plantillas registradas.</td></tr>'}</table></div>
+        <div class='c-card table-wrap'><table class='c-table plantilla-table'><tr><th>Proceso</th><th>Estado</th><th>Nombre Plantilla</th><th>Tipo Documento</th><th>Esquema</th><th>Descripción</th><th>Versión</th><th>Condición</th><th>Nombre Archivo</th></tr>{plantillas_rows or '<tr><td colspan=9>No hay plantillas registradas.</td></tr>'}</table></div>
         """)
     elif sec=='nisira':
         content=wrap("<h2 class='c-title'>Contratación NISIRA</h2><div class='c-card' style='padding:22px'><p class='muted2'>Sección preparada para importar contratos / altas desde NISIRA y cruzar por DNI.</p><button class='c-btn'>Sincronizar NISIRA</button></div>")
