@@ -78,6 +78,71 @@ ALL_TIPOS = {k: (label, icon, "pago") for k, label, icon in TIPOS_PAGO}
 ALL_TIPOS.update({k: (label, icon, "empresa") for k, label, icon in TIPOS_EMPRESA})
 ALL_TIPOS.update({k: (label, icon, "personal") for k, label, icon in TIPOS_PERSONALES})
 EXT_ALLOWED = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx", ".xls", ".xlsx"}
+
+
+# Campos disponibles para correspondencia de contratos (plantillas Word/PDF).
+# El texto de "nombre" es el que verá el usuario; "origen" sirve como llave para anexar al documento.
+CONTRATACION_CAMPOS_CORRESPONDENCIA = [
+    ('Indeterminado','Indeterminado','Text'),
+    ('Centro Costo','CentroCosto','Text'),
+    ('Tipo Contrato','TipoContrato','Text'),
+    ('Fecha Fin Contrato','FechaFinContrato','DateTime'),
+    ('Fecha Inicio Contrato','FechaInicioContrato','DateTime'),
+    ('Dirección Simple','DireccionActual','Text'),
+    ('Dni','Dni','Text'),
+    ('Nombre Trabajador','NombreCompletoTrabajador','Text'),
+    ('Nombre Moneda','NombreMoneda','Text'),
+    ('Remuneración Básica','RemuneracionBasica','Number'),
+    ('Estado','Estado','Text'),
+    ('Comentario','Comentario','Text'),
+    ('Nivel Jerárquico','NivelJerarquico','Text'),
+    ('Distrito','Distrito','Text'),
+    ('Provincia','Provincia','Text'),
+    ('Departamento','Departamento','Text'),
+    ('Area','Area','Text'),
+    ('Puesto','Puesto','Text'),
+    ('Número Celular','NroTelefonoMovil','Text'),
+    ('Email','Email','Text'),
+    ('Símbolo Moneda','SimboloMoneda','Text'),
+    ('Situacion Especial','SituacionEspecial','Text'),
+    ('Planilla','Planilla','Text'),
+    ('Condición','Condicion','Text'),
+    ('Gerencia','Gerencia','Text'),
+    ('Cargo','Cargo','Text'),
+    ('Ocupación','Ocupacion','Text'),
+    ('Tipo Trabajador','TipoTrabajador','Text'),
+    ('Zona','Zona','Text'),
+    ('Categoría Ocupacional','CategoriaOcupacional','Text'),
+    ('Grupo Impresión','GrupoImpresion','Text'),
+    ('Nivel Educativo','NivelEducativo','Text'),
+    ('Sede','Sede','Text'),
+    ('Producto','Producto','Text'),
+    ('Actividad','Actividad','Text'),
+    ('Remuneración Letra','RemuneracionLetra','Text'),
+    ('Fecha Inicio Prueba','FechaInicioPrueba','DateTime'),
+    ('Fecha Fin Prueba','FechaFinPrueba','DateTime'),
+    ('Meses Renovación','MesesRenovacion','Number'),
+    ('Fecha Firma','FechaFirma','DateTime'),
+    ('Fecha Inicio Contrato Origen','FechaInicioContratoOrigen','DateTime'),
+    ('Fecha Fin Contrato Origen','FechaFinContratoOrigen','DateTime'),
+    ('Fecha de Nacimiento ISO','FechaNacimientoISO','DateTime'),
+    ('Fecha de Nacimiento Guion','FechaNacimientoGuion','DateTime'),
+    ('Fecha de Nacimiento Barra','FechaNacimientoBarra','DateTime'),
+    ('Fecha de Nacimiento Mayuscula','FechaNacimientoMayuscula','DateTime'),
+    ('Fecha de Nacimiento Minuscula','FechaNacimientoMinuscula','DateTime'),
+    ('Fecha Fin Contrato ISO','FechaFinContratoISO','DateTime'),
+    ('Fecha Fin Contrato Guion','FechaFinContratoGuion','DateTime'),
+    ('Fecha Fin Contrato Barra','FechaFinContratoBarra','DateTime'),
+]
+CONDICION_OPERADORES = ['=', '<>', 'CONTIENE', 'NO CONTIENE', '>', '<', '>=', '<=']
+VALORES_CONDICION = {
+    'Planilla': ['EMPLEADOS RÉGIMEN GENERAL','EMPLEADOS RÉGIMEN AGRÍCOLA','OBREROS RÉGIMEN AGRÍCOLA','OBREROS REGIMEN GENERAL','OBREROS REGIMEN PACKING','PRACTICANTES'],
+    'Tipo Contrato': ['INTERMITENTE OBRERO','INTERMITENTE EMPLEADO','INDETERMINADO','TEMPORAL','RENOVACIÓN'],
+    'Condición': ['ACTIVO','INACTIVO'],
+    'Estado': ['ACTIVO','INACTIVO'],
+    'Tipo Trabajador': ['OBRERO','EMPLEADO','PRACTICANTE'],
+    'Zona': ['PLANTA','CAMPO','PACKING','OFICINA'],
+}
 # Carpeta documental LOCAL y dinámica:
 # Por defecto se crea al costado de app.py, en la misma carpeta donde tienes tus archivos.
 # Ejemplo Windows: si app.py está en D:\MiSistema\, se crea D:\MiSistema\DOCUMENTOS_PRIZE_AUTO\
@@ -602,6 +667,17 @@ def init_db():
             requerido TEXT DEFAULT 'SI',
             activo INTEGER DEFAULT 1
         )''')
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS contratacion_plantilla_condiciones(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plantilla_id INTEGER,
+            nombre_campo TEXT,
+            condicion TEXT DEFAULT '=',
+            valor TEXT,
+            activo INTEGER DEFAULT 1,
+            fecha_registro TEXT,
+            creado_por TEXT
+        )''')
         if not con.execute("SELECT 1 FROM contratacion_plantillas LIMIT 1").fetchone():
             semillas=[
                 ('ACUERDO PREFERENCIAL','ACUERDO PREFERENCIAL','ACUERDO PREFERENCIAL','CONTRATACION PREFERENCIAL AQUII'),
@@ -613,7 +689,7 @@ def init_db():
                 ('CARGO DE ENTREGA','CARGO DE ENTREGA','CARGO DE ENTREGA','CARGO DE ENTREGA AQII')]
             for nom, desc, tipo, arch in semillas:
                 con.execute("INSERT INTO contratacion_plantillas(nombre_plantilla,descripcion,tipo_documento,archivo_nombre,fecha_creacion,fecha_actualizacion,creado_por) VALUES(?,?,?,?,?,?,?)", (nom,desc,tipo,arch,now_txt(),now_txt(),'Admin_AQUA'))
-            campos=[('Fecha Ini Contrato Minúscula','FechaIniContratoTextoMinuscula','DateTime'),('Zona','Zona','Text'),('Número Celular','NroTelefonoMovil','Text'),('Email','Email','Text'),('Dirección Simple','DireccionActual','Text'),('Fecha de Nacimiento Barra','FechaNacimientoBarra','DateTime'),('Dni','Dni','Text'),('Nombre Trabajador','NombreCompletoTrabajador','Text')]
+            campos=CONTRATACION_CAMPOS_CORRESPONDENCIA
             for pid in [r['id'] for r in con.execute('SELECT id FROM contratacion_plantillas').fetchall()]:
                 for nom, origen, td in campos:
                     con.execute("INSERT INTO contratacion_plantilla_campos(plantilla_id,descripcion,nombre_campo,campo_origen,tipo_dato) VALUES(?,?,?,?,?)", (pid,'',nom,origen,td))
@@ -682,7 +758,7 @@ def asegurar_plantillas_contratacion_base():
         ('CARTA DE COMPROMISO', 'CARTA DE COMPROMISO', 'CARTA DE COMPROMISO', 'SIN CONDICIONES', 'CARTA DE COMPROMISO - AQ I'),
         ('CARGO DE ENTREGA', 'CARGO DE ENTREGA', 'CARGO DE ENTREGA', 'SIN CONDICIONES', 'CARGO DE ENTREGA AQI'),
     ]
-    campos_base=[('Fecha Ini Contrato Minúscula','FechaIniContratoTextoMinuscula','DateTime'),('Zona','Zona','Text'),('Número Celular','NroTelefonoMovil','Text'),('Email','Email','Text'),('Dirección Simple','DireccionActual','Text'),('Fecha de Nacimiento Barra','FechaNacimientoBarra','DateTime'),('Dni','Dni','Text'),('Nombre Trabajador','NombreCompletoTrabajador','Text')]
+    campos_base=CONTRATACION_CAMPOS_CORRESPONDENCIA
     with db() as con:
         for nombre, desc, tipo_doc, condicion, archivo in plantillas_base:
             row = con.execute('SELECT id FROM contratacion_plantillas WHERE UPPER(nombre_plantilla)=UPPER(?) LIMIT 1', (nombre,)).fetchone()
@@ -696,6 +772,11 @@ def asegurar_plantillas_contratacion_base():
                 existe = con.execute('SELECT 1 FROM contratacion_plantilla_campos WHERE plantilla_id=? AND nombre_campo=?', (pid, nom)).fetchone()
                 if not existe:
                     con.execute("INSERT INTO contratacion_plantilla_campos(plantilla_id,descripcion,nombre_campo,campo_origen,tipo_dato,activo,requerido) VALUES(?,?,?,?,?,1,'SI')", (pid, '', nom, origen, td))
+            if condicion == 'CONDICIONES':
+                cond_count = con.execute('SELECT COUNT(*) FROM contratacion_plantilla_condiciones WHERE plantilla_id=?', (pid,)).fetchone()[0]
+                if cond_count == 0:
+                    con.execute("INSERT INTO contratacion_plantilla_condiciones(plantilla_id,nombre_campo,condicion,valor,activo,fecha_registro,creado_por) VALUES(?,?,?,?,?,?,?)", (pid,'Planilla','=','OBREROS RÉGIMEN AGRÍCOLA',1,now_txt(),'Admin_AQUA'))
+                    con.execute("INSERT INTO contratacion_plantilla_condiciones(plantilla_id,nombre_campo,condicion,valor,activo,fecha_registro,creado_por) VALUES(?,?,?,?,?,?,?)", (pid,'Tipo Contrato','=','INTERMITENTE OBRERO',1,now_txt(),'Admin_AQUA'))
         tipos_doc = sorted({x[2] for x in plantillas_base})
         for tipo_doc in tipos_doc:
             if not con.execute('SELECT 1 FROM contratacion_tipos WHERE UPPER(descripcion)=UPPER(?) LIMIT 1', (tipo_doc,)).fetchone():
@@ -2458,18 +2539,31 @@ def contratacion_plantilla_detalle(pid):
     with db() as con:
         pl=con.execute('SELECT * FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
         campos=con.execute('SELECT * FROM contratacion_plantilla_campos WHERE plantilla_id=? ORDER BY id',(pid,)).fetchall()
+        condiciones=con.execute('SELECT * FROM contratacion_plantilla_condiciones WHERE plantilla_id=? ORDER BY id',(pid,)).fetchall()
     if not pl: abort(404)
     estado = 'Activo' if pl['activo'] else 'Inactivo'
-    estado_cls = 'ok' if pl['activo'] else 'bad'
+    condicion_habilitada = (pl['condicion'] or '').upper() == 'CONDICIONES'
     edit_url=url_for('contratacion_plantilla_editar',pid=pid)
     tabs=f"""
     <div class='tpl-tabs'>
       <a class='tpl-tab {'active' if tab=='contenido' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='contenido')}'>Contenido</a>
       <a class='tpl-tab {'active' if tab=='campos' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='campos')}'>Campos</a>
+      <a class='tpl-tab {'active' if tab=='condiciones' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='condiciones')}'>Condiciones</a>
     </div>"""
     if tab=='campos':
-        rows=''.join([f"<tr><td><span class='state-pill {'ok' if c['activo'] else 'bad'}'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{html.escape(c['descripcion'] or '')}</td><td>{html.escape(c['tipo_campo'] or '')}</td><td>{html.escape(c['nombre_campo'] or '')}</td><td>{html.escape(c['campo_origen'] or '')}</td><td>{html.escape(c['tipo_dato'] or '')}</td><td>{html.escape(c['requerido'] or '')}</td></tr>" for c in campos])
-        body=f"""<div class='tpl-toolbar'>↻ Refrescar</div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="7">Sin campos registrados.</td></tr>'}</table></div>"""
+        rows=''.join([f"<tr><td><span class='state-pill {'ok' if c['activo'] else 'bad'}'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{html.escape(c['descripcion'] or '')}</td><td>{html.escape(c['tipo_campo'] or '')}</td><td>{html.escape(c['nombre_campo'] or '')}</td><td><code>{{{{{html.escape(c['campo_origen'] or '')}}}}}</code></td><td>{html.escape(c['tipo_dato'] or '')}</td><td>{html.escape(c['requerido'] or '')}</td></tr>" for c in campos])
+        body=f"""<div class='tpl-toolbar'>Campos de correspondencia para usar en Word como <b>{{{{CampoOrigen}}}}</b>.</div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="7">Sin campos registrados.</td></tr>'}</table></div>"""
+    elif tab=='condiciones':
+        crear_btn = f"<a class='c-btn' href='{url_for('contratacion_condicion_editar',pid=pid)}'>⊕ Crear Condición</a>" if condicion_habilitada else "<span class='c-btn gray disabled'>Condiciones deshabilitadas</span>"
+        info = "" if condicion_habilitada else "<div class='notice'>Para crear o editar condiciones primero entra al lápiz de <b>Editar Plantilla</b> y cambia el campo <b>Condición</b> a <b>CONDICIONES</b>.</div>"
+        rows=''.join([f"""
+          <tr>
+            <td class='actions'><a class='icon-btn small' href='{url_for('contratacion_condicion_editar',pid=pid,cid=c['id'])}'>✎</a>
+              <form method='post' action='{url_for('contratacion_condicion_eliminar',pid=pid,cid=c['id'])}' onsubmit="return confirm('¿Eliminar condición?')"><button class='trash'>🗑</button></form></td>
+            <td><span class='state-pill {'ok' if c['activo'] else 'bad'}'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td>
+            <td>{html.escape(c['nombre_campo'] or '')}</td><td>{html.escape(c['condicion'] or '=')}</td><td>{html.escape(c['valor'] or '')}</td>
+          </tr>""" for c in condiciones])
+        body=f"""<div class='cond-head'><div>{crear_btn}</div></div>{info}<div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Proceso</th><th>Estado</th><th>Label</th><th>Condición</th><th>Valor</th></tr>{rows or '<tr><td colspan="5">Sin condiciones registradas.</td></tr>'}</table></div>"""
     else:
         if pl['ruta_archivo'] and Path(pl['ruta_archivo']).exists() and str(pl['archivo_nombre']).lower().endswith('.pdf'):
             preview=f"<iframe class='pdf-frame' src='{url_for('contratacion_plantilla_archivo',pid=pid)}'></iframe>"
@@ -2477,50 +2571,50 @@ def contratacion_plantilla_detalle(pid):
             preview=f"<div class='preview-empty'><b>Archivo cargado:</b> {html.escape(pl['archivo_nombre'] or '')}<br><br><a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar / abrir archivo</a><p>La vista previa directa funciona mejor con PDF. Para Word, descarga el archivo y ábrelo en Word.</p></div>"
         else:
             preview=f"<div class='preview-empty'><b>Sin archivo cargado.</b><br>Haz clic en el lápiz ✎ para editar y cargar la plantilla PDF/DOC/DOCX.</div>"
-        body=f"""<div class='preview-tools'><input placeholder='Código de Trabajador'><button class='c-btn green'>Previsualizar</button></div><div class='tpl-toolbar'>↻ Refrescar</div>{preview}"""
+        body=f"""<div class='preview-tools'><input placeholder='Código de Trabajador'><button class='c-btn green'>Previsualizar</button></div><div class='tpl-toolbar'>Contenido de plantilla y archivo base.</div>{preview}"""
     file_btn = f"<a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar Archivo</a>" if pl['ruta_archivo'] else "<span class='c-btn gray disabled'>Sin archivo</span>"
     content=f"""
     <style>
-      .contract-detail-wrap{{color:#111827!important;background:#f4f6f8;margin:-8px -10px 0;padding:10px 0 28px}}
+      .contract-detail-wrap{{color:#162033!important;background:#f5f7fb;margin:-8px -10px 0;padding:14px 18px 32px;min-height:calc(100vh - 80px)}}
       .contract-detail-wrap *{{box-sizing:border-box}}
-      .detail-title{{font-size:22px;font-weight:900;margin:0 0 12px 0;color:#111827}}
-      .template-head{{background:#fff;border:1px solid #dbe1e8;border-radius:8px;padding:22px 26px;display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-bottom:10px;box-shadow:0 1px 3px rgba(15,23,42,.08)}}
-      .template-head h1{{margin:0 0 14px;font-size:30px;line-height:1.15;color:#1f2937;font-weight:900;display:flex;align-items:center;gap:10px;flex-wrap:wrap}}
-      .tpl-line{{margin:15px 0;color:#6b7280;font-size:16px;font-weight:700}}
-      .tpl-line b{{color:#111827;margin-right:10px;font-weight:900}}
-      .icon-btn{{display:inline-flex!important;align-items:center;justify-content:center;min-width:38px;height:38px;border-radius:9px;background:#e5e9ef!important;color:#111827!important;border:0;text-decoration:none;font-size:22px;font-weight:900;box-shadow:0 1px 2px rgba(0,0,0,.08)}}
-      .icon-btn:hover{{background:#d7dde6!important;transform:translateY(-1px)}}
-      .green-dot{{display:inline-block;width:12px;height:12px;border-radius:50%;background:#4dcc69;margin-right:9px}}
-      .red-dot{{display:inline-block;width:12px;height:12px;border-radius:50%;background:#ef4444;margin-right:9px}}
-      .meta-box{{margin-top:14px;background:#e5e7eb;color:#6b7280;padding:10px 12px;font-weight:800;font-size:13px;display:flex;gap:35px;flex-wrap:wrap}}
-      .tpl-side{{border-left:2px dashed #cbd5e1;padding-left:28px}}
-      .tpl-tabs{{display:flex;background:#fff;border:1px solid #dbe1e8;border-radius:6px;margin:10px 0 0;overflow:hidden}}
-      .tpl-tab{{padding:14px 22px;color:#6b7280!important;text-decoration:none;font-weight:800;border-bottom:2px solid transparent;min-width:180px}}
-      .tpl-tab.active{{color:#111827!important;border-bottom-color:#fb923c}}
-      .preview-tools{{display:flex;gap:14px;margin:10px 0 16px;padding:10px 14px;background:#fff;border-left:1px solid #dbe1e8;border-right:1px solid #dbe1e8}}
-      .preview-tools input{{max-width:450px;background:#fff!important;color:#111!important;border:1px solid #d1d5db;border-radius:8px;padding:12px 14px;font-weight:700}}
-      .c-btn{{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;padding:10px 14px;background:#ff963b;color:#fff!important;font-weight:900;text-decoration:none;cursor:pointer}}
-      .c-btn.gray{{background:#e5e9ef;color:#111827!important}}
-      .c-btn.green{{background:#49c85f;color:#fff!important}}
-      .c-btn.disabled{{opacity:.7;cursor:not-allowed}}
-      .tpl-toolbar{{color:#808890;font-weight:800;padding:12px 20px;background:#fff}}
-      .pdf-frame{{width:100%;height:720px;border:1px solid #d1d5db;background:#eee}}
-      .preview-empty{{background:#fff!important;color:#111827!important;border:1px dashed #cbd5e1;border-radius:12px;padding:28px;margin:12px 20px;font-size:16px}}
-      .preview-empty p{{color:#6b7280!important}}
-      .tpl-table-wrap{{overflow:auto;background:#fff;border:1px solid #dbe1e8;max-height:560px}}
+      .detail-title{{font-size:24px;font-weight:950;margin:0 0 14px;color:#101827;letter-spacing:-.4px}}
+      .template-head{{background:linear-gradient(135deg,#fff,#f9fbff);border:1px solid #dce4ef;border-radius:18px;padding:24px 28px;display:grid;grid-template-columns:1.15fr .85fr;gap:28px;margin-bottom:12px;box-shadow:0 16px 35px rgba(15,23,42,.08)}}
+      .template-head h1{{margin:0 0 16px;font-size:30px;line-height:1.15;color:#162033;font-weight:950;display:flex;align-items:center;gap:10px;flex-wrap:wrap}}
+      .tpl-line{{margin:14px 0;color:#697487;font-size:15px;font-weight:800;display:flex;gap:10px;align-items:center;flex-wrap:wrap}}
+      .tpl-line b{{color:#162033;font-weight:950;min-width:122px}}
+      .icon-btn{{display:inline-flex!important;align-items:center;justify-content:center;min-width:36px;height:36px;border-radius:11px;background:#e9edf4!important;color:#111827!important;border:1px solid #d8dee8;text-decoration:none;font-size:20px;font-weight:950;box-shadow:0 6px 16px rgba(15,23,42,.08)}}
+      .icon-btn.small{{min-width:32px;height:32px;font-size:17px}}
+      .icon-btn:hover{{background:#dfe6f0!important;transform:translateY(-1px)}}
+      .green-dot,.red-dot{{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px}}.green-dot{{background:#22c55e}}.red-dot{{background:#ef4444}}
+      .meta-box{{margin-top:16px;background:#eef2f7;color:#647084;padding:10px 12px;font-weight:850;font-size:13px;display:flex;gap:30px;flex-wrap:wrap;border-radius:12px}}
+      .tpl-side{{border-left:2px dashed #ccd6e3;padding-left:26px}}
+      .tpl-tabs{{display:flex;background:#fff;border:1px solid #dce4ef;border-radius:14px;margin:12px 0 0;overflow:hidden;box-shadow:0 10px 24px rgba(15,23,42,.06)}}
+      .tpl-tab{{padding:16px 22px;color:#697487!important;text-decoration:none;font-weight:900;border-bottom:3px solid transparent;min-width:190px;text-align:center}}
+      .tpl-tab.active{{color:#0f172a!important;border-bottom-color:#ff963b;background:#fff7ed}}
+      .preview-tools{{display:flex;gap:14px;margin:12px 0 0;padding:14px;background:#fff;border:1px solid #dce4ef;border-radius:14px 14px 0 0}}
+      .preview-tools input{{max-width:450px;background:#fff!important;color:#111!important;border:1px solid #d1d5db;border-radius:10px;padding:12px 14px;font-weight:800}}
+      .c-btn{{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:12px;padding:11px 16px;background:linear-gradient(135deg,#ff963b,#ff7a1a);color:#fff!important;font-weight:950;text-decoration:none;cursor:pointer;box-shadow:0 10px 22px rgba(255,122,26,.22)}}
+      .c-btn.gray{{background:#e7ebf2;color:#111827!important;box-shadow:none}}.c-btn.green{{background:#22c55e;color:#fff!important}}.c-btn.disabled{{opacity:.62;cursor:not-allowed}}
+      .tpl-toolbar{{color:#647084;font-weight:850;padding:13px 18px;background:#fff;border-left:1px solid #dce4ef;border-right:1px solid #dce4ef}}
+      .pdf-frame{{width:100%;height:720px;border:1px solid #d1d5db;background:#eee;border-radius:0 0 14px 14px}}
+      .preview-empty{{background:#fff!important;color:#111827!important;border:1px dashed #cbd5e1;border-radius:14px;padding:30px;margin:12px 0;font-size:16px}}.preview-empty p{{color:#6b7280!important}}
+      .cond-head{{display:flex;justify-content:flex-end;background:#fff;border:1px solid #dce4ef;border-top:0;padding:14px 18px}}
+      .notice{{margin:12px 0;padding:14px 16px;border-radius:14px;background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12;font-weight:850}}
+      .tpl-table-wrap{{overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:0 0 14px 14px;max-height:620px}}
       .tpl-table{{width:100%;border-collapse:collapse;color:#111827!important;background:#fff!important}}
-      .tpl-table th{{background:#f8fafc!important;color:#111827!important;text-align:left;font-size:14px;border:1px solid #dde2e7;padding:12px}}
-      .tpl-table td{{border:1px solid #dde2e7;padding:13px;color:#111827!important;background:#fff!important}}
-      .tpl-table tr:nth-child(even) td{{background:#e9e9e9!important}}
-      .state-pill{{display:inline-flex;align-items:center;border:1px solid #d1d5db;border-radius:20px;padding:6px 12px;background:#fff;font-weight:800;color:#111827}}
-      .state-pill.ok:before{{content:'';width:10px;height:10px;border-radius:50%;background:#22c55e;margin-right:7px}}
-      .state-pill.bad:before{{content:'';width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:7px}}
+      .tpl-table th{{background:#f8fafc!important;color:#111827!important;text-align:left;font-size:14px;border:1px solid #e1e7ef;padding:13px;font-weight:950}}
+      .tpl-table td{{border:1px solid #e1e7ef;padding:13px;color:#111827!important;background:#fff!important;font-weight:750}}
+      .tpl-table tr:nth-child(even) td{{background:#f5f6f8!important}}
+      .state-pill{{display:inline-flex;align-items:center;border:1px solid #d1d5db;border-radius:20px;padding:6px 12px;background:#fff;font-weight:900;color:#111827}}
+      .state-pill.ok:before{{content:'';width:10px;height:10px;border-radius:50%;background:#22c55e;margin-right:7px}}.state-pill.bad:before{{content:'';width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:7px}}
+      .actions{{display:flex;gap:8px;align-items:center}}.actions form{{margin:0}}.trash{{height:32px;border:0;background:#fee2e2;border-radius:10px;cursor:pointer}}
       .back-top{{display:flex;justify-content:flex-end;margin:0 0 10px}}
-      @media(max-width:900px){{.template-head{{grid-template-columns:1fr}}.tpl-side{{border-left:0;border-top:2px dashed #cbd5e1;padding-left:0;padding-top:18px}}}}
+      code{{background:#eef2ff;border:1px solid #dbeafe;border-radius:8px;padding:4px 7px;color:#1e3a8a}}
+      @media(max-width:900px){{.template-head{{grid-template-columns:1fr}}.tpl-side{{border-left:0;border-top:2px dashed #cbd5e1;padding-left:0;padding-top:18px}}.tpl-tabs{{overflow:auto}}}}
     </style>
     <div class='contract-detail-wrap'>
       <div class='back-top'><a class='c-btn' href='/admin/contratacion?sec=plantillas'>← Atrás</a></div>
-      <h2 class='detail-title'>Detalle Plantilla Legajo</h2>
+      <h2 class='detail-title'>Detalle Plantilla</h2>
       <div class='template-head'>
         <div>
           <h1>{html.escape(pl['nombre_plantilla'] or '')} <a class='icon-btn' title='Editar plantilla' href='{edit_url}'>✎</a></h1>
@@ -2531,17 +2625,114 @@ def contratacion_plantilla_detalle(pid):
         </div>
         <div class='tpl-side'>
           <div class='tpl-line'><b>Versión:</b>{html.escape(pl['version'] or 'Version 01')}</div>
-          <div class='tpl-line'><b>Condición:</b>{html.escape(pl['condicion'] or 'SIN CONDICIONES')}</div>
+          <div class='tpl-line'><b>Modo selección:</b>{'Usar criterios de selección que cumplan los datos del trabajador' if condicion_habilitada else 'Sin criterios / plantilla general'}</div>
           <div class='tpl-line'><b>Esquema:</b>{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')}</div>
           <div class='tpl-line'><b>Tipo Documento:</b>{html.escape(pl['tipo_documento'] or '')}</div>
           <div class='tpl-line'><b>Estado:</b><span class='{'green-dot' if pl['activo'] else 'red-dot'}'></span>{estado}</div>
         </div>
       </div>
       {tabs}{body}
-      <br><a class='c-btn gray' href='/admin/contratacion?sec=plantillas'>← Atrás</a>
     </div>
     """
     return render_page(content, active='Gestion Contratacion:plantillas')
+
+
+@app.route('/admin/contratacion/plantilla/<int:pid>/condicion', defaults={'cid': None}, methods=['GET','POST'])
+@app.route('/admin/contratacion/plantilla/<int:pid>/condicion/<int:cid>', methods=['GET','POST'])
+@admin_required
+def contratacion_condicion_editar(pid, cid=None):
+    with db() as con:
+        pl=con.execute('SELECT * FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
+        cond=con.execute('SELECT * FROM contratacion_plantilla_condiciones WHERE id=? AND plantilla_id=?',(cid,pid)).fetchone() if cid else None
+    if not pl: abort(404)
+    condicion_habilitada = (pl['condicion'] or '').upper() == 'CONDICIONES'
+    if request.method == 'POST':
+        if not condicion_habilitada:
+            flash('Primero habilita CONDICIONES en Editar Plantilla.', 'error')
+            return redirect(url_for('contratacion_plantilla_detalle', pid=pid, tab='condiciones'))
+        nombre_campo=clean(request.form.get('nombre_campo')) or 'Planilla'
+        operador=clean(request.form.get('condicion')) or '='
+        valor=clean(request.form.get('valor'))
+        activo=1 if request.form.get('activo','1') == '1' else 0
+        if operador not in CONDICION_OPERADORES:
+            operador='='
+        with db() as con:
+            if cid:
+                con.execute('UPDATE contratacion_plantilla_condiciones SET nombre_campo=?, condicion=?, valor=?, activo=? WHERE id=? AND plantilla_id=?', (nombre_campo,operador,valor,activo,cid,pid))
+                flash('Condición actualizada correctamente.', 'ok')
+            else:
+                con.execute('INSERT INTO contratacion_plantilla_condiciones(plantilla_id,nombre_campo,condicion,valor,activo,fecha_registro,creado_por) VALUES(?,?,?,?,?,?,?)', (pid,nombre_campo,operador,valor,activo,now_txt(),marca_carga(session.get('admin_user','admin'))))
+                flash('Condición creada correctamente.', 'ok')
+            con.commit()
+        return redirect(url_for('contratacion_plantilla_detalle', pid=pid, tab='condiciones'))
+    campo_actual = cond['nombre_campo'] if cond else 'Planilla'
+    operador_actual = cond['condicion'] if cond else '='
+    valor_actual = cond['valor'] if cond else ''
+    activo_actual = int(cond['activo']) if cond else 1
+    campo_options=''.join([f"<option value='{html.escape(n)}' {'selected' if n==campo_actual else ''}>{html.escape(n)}</option>" for n,ori,td in CONTRATACION_CAMPOS_CORRESPONDENCIA])
+    op_options=''.join([f"<option value='{html.escape(o)}' {'selected' if o==operador_actual else ''}>{html.escape(o)}</option>" for o in CONDICION_OPERADORES])
+    valores=[]
+    for arr in VALORES_CONDICION.values():
+        valores += arr
+    valores=sorted(set(valores))
+    data_values=''.join([f"<option value='{html.escape(v)}'></option>" for v in valores])
+    valores_js = {k:v for k,v in VALORES_CONDICION.items()}
+    import json
+    valores_json = json.dumps(valores_js, ensure_ascii=False)
+    disabled_attr = '' if condicion_habilitada else 'disabled'
+    content=f"""
+    <style>
+      .cond-overlay{{min-height:calc(100vh - 40px);display:flex;align-items:flex-start;justify-content:center;padding:22px;background:rgba(15,23,42,.62);margin:-20px -24px -40px}}
+      .cond-modal{{width:min(780px,96vw);background:#fff;color:#111827;border-radius:18px;border:1px solid #dbe3ee;box-shadow:0 32px 90px rgba(0,0,0,.40);overflow:hidden}}
+      .cond-head2{{display:flex;justify-content:space-between;align-items:center;padding:22px 26px;border-bottom:1px solid #e5eaf1;background:linear-gradient(135deg,#fff,#f8fafc)}}
+      .cond-head2 h1{{margin:0;font-size:27px;font-weight:950;color:#0f172a}}
+      .close-x{{width:38px;height:38px;border-radius:12px;background:#f1f5f9;color:#6b7280!important;border:1px solid #dbe3ee;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:26px;font-weight:950}}
+      .cond-form{{padding:28px 42px 32px;display:grid;grid-template-columns:160px 1fr;gap:14px 16px;align-items:center}}
+      .cond-form label{{text-align:right;font-size:18px;color:#374151;font-weight:850}}
+      .cond-form select,.cond-form input{{height:48px;background:#fff!important;color:#111827!important;border:1px solid #cbd5e1;border-radius:12px;padding:10px 13px;font-size:17px;font-weight:750;outline:none}}
+      .cond-form select:focus,.cond-form input:focus{{border-color:#60a5fa;box-shadow:0 0 0 4px rgba(96,165,250,.22)}}
+      .cond-form select:disabled{{background:#e5e7eb!important;color:#6b7280!important;cursor:not-allowed}}
+      .hint{{grid-column:2/3;background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12;border-radius:12px;padding:12px 14px;font-weight:850}}
+      .cond-actions{{grid-column:2/3;display:flex;gap:12px;justify-content:flex-end;margin-top:10px}}
+      .c-btn{{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:12px;padding:12px 18px;background:linear-gradient(135deg,#ff963b,#ff7a1a);color:#fff!important;font-weight:950;text-decoration:none;cursor:pointer;font-size:16px}}
+      .c-btn.gray{{background:#e7ebf2;color:#111827!important}}
+      @media(max-width:700px){{.cond-form{{grid-template-columns:1fr;padding:22px}}.cond-form label{{text-align:left}}.hint,.cond-actions{{grid-column:1/2}}}}
+    </style>
+    <div class='cond-overlay'><div class='cond-modal'>
+      <div class='cond-head2'><h1>{'Editar' if cid else 'Crear'} Condición</h1><a class='close-x' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='condiciones')}'>×</a></div>
+      <form method='post' class='cond-form'>
+        <label>Nombre Campo:</label><select name='nombre_campo' id='nombre_campo' {disabled_attr}>{campo_options}</select>
+        <label>Condición:</label><select name='condicion' {disabled_attr}>{op_options}</select>
+        <label>Valor:</label><input name='valor' id='valor_condicion' list='valores_condicion' value='{html.escape(valor_actual)}' {disabled_attr} placeholder='Selecciona o escribe el valor'>
+        <datalist id='valores_condicion'>{data_values}</datalist>
+        <label>Estado:</label><select name='activo'><option value='1' {'selected' if activo_actual else ''}>Activo</option><option value='0' {'selected' if not activo_actual else ''}>Inactivo</option></select>
+        {'' if condicion_habilitada else '<div class="hint">El campo condición está bloqueado porque la plantilla está en SIN CONDICIONES. Activa CONDICIONES en Editar Plantilla.</div>'}
+        <div class='cond-actions'><button class='c-btn' {'disabled' if not condicion_habilitada else ''}>Guardar</button><a class='c-btn gray' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='condiciones')}'>Cerrar</a></div>
+      </form>
+      <script>
+        const valoresPorCampo = {valores_json};
+        const campo = document.getElementById('nombre_campo');
+        const dl = document.getElementById('valores_condicion');
+        function cargarValores(){{
+          if(!campo || !dl) return;
+          const vals = valoresPorCampo[campo.value] || [];
+          if(vals.length) dl.innerHTML = vals.map(v => `<option value="${{v}}"></option>`).join('');
+        }}
+        if(campo) campo.addEventListener('change', cargarValores);
+        cargarValores();
+      </script>
+    </div></div>
+    """
+    return render_page(content, active='Gestion Contratacion:plantillas')
+
+@app.route('/admin/contratacion/plantilla/<int:pid>/condicion/<int:cid>/eliminar', methods=['POST'])
+@admin_required
+def contratacion_condicion_eliminar(pid, cid):
+    with db() as con:
+        con.execute('DELETE FROM contratacion_plantilla_condiciones WHERE id=? AND plantilla_id=?', (cid,pid))
+        con.commit()
+    flash('Condición eliminada correctamente.', 'ok')
+    return redirect(url_for('contratacion_plantilla_detalle', pid=pid, tab='condiciones'))
 
 @app.route('/admin/contratacion/plantilla/<int:pid>/archivo')
 @admin_required
@@ -2675,8 +2866,11 @@ def admin_contratacion():
                 else:
                     cur=con.execute('''INSERT INTO contratacion_plantillas(nombre_plantilla,descripcion,tipo_documento,esquema,condicion,version,activo,archivo_nombre,ruta_archivo,fecha_creacion,fecha_actualizacion,creado_por) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''', (nombre,descripcion,tipo_doc,esquema,condicion,version,activo,archivo_nombre,ruta,now_txt(),now_txt(),marca_carga(session.get('admin_user','admin'))))
                     nuevo_id=cur.lastrowid
-                    for nom,origen,td in [('Fecha Ini Contrato Minúscula','FechaIniContratoTextoMinuscula','DateTime'),('Zona','Zona','Text'),('Número Celular','NroTelefonoMovil','Text'),('Email','Email','Text'),('Dirección Simple','DireccionActual','Text'),('Fecha de Nacimiento Barra','FechaNacimientoBarra','DateTime'),('Dni','Dni','Text'),('Nombre Trabajador','NombreCompletoTrabajador','Text')]:
+                    for nom,origen,td in CONTRATACION_CAMPOS_CORRESPONDENCIA:
                         con.execute('INSERT INTO contratacion_plantilla_campos(plantilla_id,nombre_campo,campo_origen,tipo_dato) VALUES(?,?,?,?)',(nuevo_id,nom,origen,td))
+                    if condicion == 'CONDICIONES':
+                        con.execute('INSERT INTO contratacion_plantilla_condiciones(plantilla_id,nombre_campo,condicion,valor,activo,fecha_registro,creado_por) VALUES(?,?,?,?,?,?,?)',(nuevo_id,'Planilla','=','OBREROS RÉGIMEN AGRÍCOLA',1,now_txt(),marca_carga(session.get('admin_user','admin'))))
+                        con.execute('INSERT INTO contratacion_plantilla_condiciones(plantilla_id,nombre_campo,condicion,valor,activo,fecha_registro,creado_por) VALUES(?,?,?,?,?,?,?)',(nuevo_id,'Tipo Contrato','=','INTERMITENTE OBRERO',1,now_txt(),marca_carga(session.get('admin_user','admin'))))
                     flash('Plantilla creada correctamente.', 'ok')
                     redir = url_for('contratacion_plantilla_detalle', pid=nuevo_id, tab='contenido')
                 con.commit()
