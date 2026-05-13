@@ -29,6 +29,10 @@ from werkzeug.utils import secure_filename
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 try:
+    from docx import Document
+except Exception:
+    Document = None
+try:
     from pypdf import PdfReader
 except Exception:
     PdfReader = None
@@ -3005,10 +3009,43 @@ def contratacion_campos_esquema_excel(pid):
 @app.route('/admin/contratacion/plantilla/<int:pid>/archivo')
 @admin_required
 def contratacion_plantilla_archivo(pid):
+    """Descarga la plantilla. Si el archivo cargado no es Word, genera una copia Word editable con campos."""
     with db() as con:
-        pl=con.execute('SELECT archivo_nombre,ruta_archivo FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
-    if not pl or not pl['ruta_archivo'] or not Path(pl['ruta_archivo']).exists(): abort(404)
-    return send_file(Path(pl['ruta_archivo']), as_attachment=False, download_name=pl['archivo_nombre'] or 'plantilla')
+        pl=con.execute('SELECT * FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
+        campos=con.execute('SELECT * FROM contratacion_plantilla_campos WHERE plantilla_id=? ORDER BY id',(pid,)).fetchall()
+    if not pl:
+        abort(404)
+    ruta = Path(pl['ruta_archivo']) if pl['ruta_archivo'] else None
+    nombre = pl['archivo_nombre'] or f"{pl['nombre_plantilla'] or 'plantilla'}.docx"
+    # Si el archivo original ya es Word, descargarlo directamente en modo adjunto.
+    if ruta and ruta.exists() and ruta.suffix.lower() in ('.doc', '.docx'):
+        return send_file(ruta, as_attachment=True, download_name=nombre)
+    # Si no hay Word cargado, se genera un DOCX base editable con los campos de correspondencia.
+    if Document is None:
+        if ruta and ruta.exists():
+            return send_file(ruta, as_attachment=True, download_name=nombre)
+        abort(404)
+    doc = Document()
+    doc.add_heading(pl['nombre_plantilla'] or 'Plantilla de contrato', level=1)
+    doc.add_paragraph(f"Tipo Documento: {pl['tipo_documento'] or ''}")
+    doc.add_paragraph(f"Esquema: {pl['esquema'] or 'Trabajador Contrato Laboral'}")
+    doc.add_paragraph(f"Versión: {pl['version'] or 'Version 01'}")
+    doc.add_paragraph('')
+    doc.add_paragraph('CAMPOS DE CORRESPONDENCIA DISPONIBLES PARA WORD:')
+    table = doc.add_table(rows=1, cols=3)
+    hdr = table.rows[0].cells
+    hdr[0].text = 'Nombre Campo'
+    hdr[1].text = 'Campo Origen'
+    hdr[2].text = 'Uso en plantilla'
+    for c in campos:
+        row = table.add_row().cells
+        row[0].text = str(c['nombre_campo'] or '')
+        row[1].text = str(c['campo_origen'] or '')
+        row[2].text = '{{' + str(c['campo_origen'] or '') + '}}'
+    safe_name = re.sub(r'[^A-Za-z0-9_ -]+', '', pl['nombre_plantilla'] or 'plantilla').strip() or 'plantilla'
+    out = PERSIST_DIR / f"{safe_name}_{pid}_{now_file()}.docx"
+    doc.save(out)
+    return send_file(out, as_attachment=True, download_name=f"{safe_name}.docx")
 
 @app.route('/admin/contratacion/plantilla/<int:pid>/editar')
 @admin_required
@@ -3018,25 +3055,32 @@ def contratacion_plantilla_editar(pid):
     if not pl: abort(404)
     tipos_opts = ['CONTRATO TRABAJADOR','CONTRATO TRABAJADOR(RENOVACIÓN)','ACUERDO PREFERENCIAL','AUTODECLARACION BUENAS PRACTICAS','CARGO ENTREGA RENOVACION','ELECCIÓN DE BENEFICIOS SOCIALES','NOTA DE CARGO','CARTA DE COMPROMISO','CARGO DE ENTREGA']
     tipo_options=''.join([f"<option value='{html.escape(x)}' {'selected' if (pl['tipo_documento'] or '')==x else ''}>{html.escape(x)}</option>" for x in tipos_opts])
+    modo_actual = 'criterios' if (pl['condicion'] or '').upper() == 'CONDICIONES' else 'todos'
+    archivo_actual = html.escape(pl['archivo_nombre'] or 'Sin archivo cargado')
     content=f"""
     <style>
-      .edit-overlay{{min-height:calc(100vh - 40px);display:flex;align-items:flex-start;justify-content:center;padding:18px;background:rgba(0,0,0,.52);margin:-20px -24px -40px}}
-      .modal-page{{width:min(760px,96vw);background:#fff;color:#111827!important;border-radius:8px;border:1px solid #dbe1e8;box-shadow:0 22px 65px rgba(0,0,0,.35);overflow:hidden}}
-      .modal-head{{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #dbe1e8}}
-      .modal-head h1{{margin:0;font-size:24px;font-weight:900;color:#111827}}
-      .close-x{{width:36px;height:36px;border-radius:8px;background:#fff;color:#8b9097!important;border:2px solid #e5e7eb;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:26px;font-weight:900}}
-      .edit-grid{{display:grid;grid-template-columns:175px 1fr;gap:10px 14px;align-items:center;padding:26px 36px}}
-      .edit-grid label{{color:#6b7280;font-size:19px;text-align:right;font-weight:700}}
-      .edit-grid input,.edit-grid select,.edit-grid textarea{{background:#fff!important;color:#111827!important;border:1px solid #cfd6df;border-radius:7px;padding:10px 12px;width:100%;font-size:17px;font-weight:600;min-height:38px}}
+      .edit-overlay{{min-height:calc(100vh - 70px);display:flex;align-items:flex-start;justify-content:center;padding:18px 10px;background:rgba(17,24,39,.55);margin:-20px -24px -40px;overflow:auto}}
+      .modal-page{{width:min(760px,96vw);max-height:calc(100vh - 36px);overflow:auto;background:#fff;color:#111827!important;border-radius:8px;border:1px solid #dbe1e8;box-shadow:0 22px 65px rgba(0,0,0,.35)}}
+      .modal-page *{{box-sizing:border-box}}
+      .modal-head{{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid #dbe1e8;background:#fff}}
+      .modal-head h1{{margin:0;font-size:25px;font-weight:950;color:#111827!important;letter-spacing:-.2px}}
+      .close-x{{width:38px;height:38px;border-radius:8px;background:#fff;color:#8b9097!important;border:2px solid #e5e7eb;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:28px;font-weight:900}}
+      .edit-grid{{display:grid;grid-template-columns:180px minmax(0,1fr);gap:11px 14px;align-items:center;padding:22px 34px}}
+      .edit-grid label{{color:#374151!important;font-size:18px;text-align:right;font-weight:800;line-height:1.25}}
+      .edit-grid input,.edit-grid select,.edit-grid textarea{{background:#fff!important;color:#111827!important;border:1px solid #cfd6df;border-radius:8px;padding:10px 12px;width:100%;font-size:16px;font-weight:750;min-height:38px;box-shadow:none!important}}
       .edit-grid textarea{{min-height:62px;resize:vertical}}
+      .locked-field{{background:#eef1f5!important;color:#6b7280!important;cursor:not-allowed;border-color:#d8dee8!important}}
+      .schema-line{{display:grid;grid-template-columns:1fr 42px;gap:8px}}
+      .schema-line .icon-btn{{height:38px;min-width:42px;border-radius:8px;background:#e9edf4;color:#111827!important;border:1px solid #d8dee8;text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:950}}
       .upload-box{{background:#eef1f5;border-radius:7px;padding:0;color:#111827;overflow:hidden}}
       .upload-row{{display:flex;align-items:center;gap:10px;padding:10px 12px;white-space:nowrap;overflow:auto}}
       .upload-row input[type=file]{{border:0!important;padding:0!important;background:transparent!important;min-height:auto;font-size:15px}}
-      .warn{{background:#fff3cd;border:1px solid #ffe08a;color:#7a5400;border-radius:6px;margin:10px 0;padding:12px;text-align:center;font-size:15px}}
-      .modal-actions{{display:flex;justify-content:flex-end;gap:10px;padding:16px 36px 28px}}
-      .c-btn{{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;padding:10px 16px;background:#ff963b;color:#fff!important;font-weight:900;text-decoration:none;cursor:pointer;font-size:16px}}
+      .warn{{background:#fff3cd;border:1px solid #ffe08a;color:#7a5400;border-radius:6px;margin:0 0 10px;padding:12px;text-align:center;font-size:15px;font-weight:900}}
+      .actual-file{{display:block;margin-top:8px;color:#111827!important;font-weight:900}}
+      .modal-actions{{position:sticky;bottom:0;background:#fff;display:flex;justify-content:flex-end;gap:10px;padding:14px 34px 22px;border-top:1px solid #eef2f7}}
+      .c-btn{{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;padding:11px 18px;background:#ff963b;color:#fff!important;font-weight:950;text-decoration:none;cursor:pointer;font-size:16px}}
       .c-btn.gray{{background:#e5e9ef;color:#111827!important}}
-      @media(max-width:720px){{.edit-grid{{grid-template-columns:1fr;padding:20px}}.edit-grid label{{text-align:left}}.modal-actions{{padding:16px 20px 24px}}}}
+      @media(max-width:720px){{.edit-overlay{{padding:8px}}.modal-page{{width:100%;max-height:calc(100vh - 16px)}}.edit-grid{{grid-template-columns:1fr;padding:18px}}.edit-grid label{{text-align:left;font-size:15px}}.modal-actions{{padding:14px 18px 20px}}}}
     </style>
     <div class='edit-overlay'>
       <div class='modal-page'>
@@ -3044,14 +3088,21 @@ def contratacion_plantilla_editar(pid):
         <form method='post' action='/admin/contratacion?sec=plantillas' enctype='multipart/form-data'>
           <div class='edit-grid'>
             <input type='hidden' name='accion' value='plantilla'><input type='hidden' name='plantilla_id' value='{pid}'>
-            <label>Tipo Documento</label><select name='tipo_documento'>{tipo_options}</select>
-            <label>Esquema</label><input name='esquema' value='{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')}'>
-            <label>Nombre Plantilla</label><input name='nombre_plantilla' value='{html.escape(pl['nombre_plantilla'] or '')}'>
+            <input type='hidden' name='tipo_documento' value='{html.escape(pl['tipo_documento'] or '')}'>
+            <input type='hidden' name='esquema' value='{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')}'>
+            <input type='hidden' name='nombre_plantilla' value='{html.escape(pl['nombre_plantilla'] or '')}'>
+
+            <label>Tipo Documento</label><input class='locked-field' value='{html.escape(pl['tipo_documento'] or '')}' readonly>
+            <label>Esquema</label><div class='schema-line'><input class='locked-field' value='{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')}' readonly><a class='icon-btn' title='Campos de esquema' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕</a></div>
+            <label>Nombre Plantilla</label><input class='locked-field' value='{html.escape(pl['nombre_plantilla'] or '')}' readonly>
             <label>Descripción</label><textarea name='descripcion'>{html.escape(pl['descripcion'] or '')}</textarea>
-            <label>Condición</label><select name='condicion'><option value='CONDICIONES' {'selected' if (pl['condicion'] or '').upper()=='CONDICIONES' else ''}>CONDICIONES</option><option value='SIN CONDICIONES' {'selected' if (pl['condicion'] or '').upper()!='CONDICIONES' else ''}>SIN CONDICIONES</option></select>
+            <label>Modo de selección de la plantilla</label><select name='condicion'>
+              <option value='SIN CONDICIONES' {'selected' if modo_actual=='todos' else ''}>Utilizar para todos los trabajadores</option>
+              <option value='CONDICIONES' {'selected' if modo_actual=='criterios' else ''}>Usar criterios de selección que cumplan con los datos del trabajador</option>
+            </select>
             <label>Estado</label><select name='activo'><option value='1' {'selected' if pl['activo'] else ''}>Activo</option><option value='0' {'selected' if not pl['activo'] else ''}>Inactivo</option></select>
             <label>Versión</label><input name='version' value='{html.escape(pl['version'] or 'Version 01')}'>
-            <label>Plantilla</label><div><div class='warn'><b>Advertencia!</b> Tipo de archivo permitido .pdf, .doc y .docx</div><div class='upload-box'><div class='upload-row'>⬆ <input type='file' name='archivo' accept='.pdf,.doc,.docx'></div></div><small>Actual: {html.escape(pl['archivo_nombre'] or 'Sin archivo cargado')}</small></div>
+            <label>Plantilla contrato</label><div><div class='warn'><b>Advertencia!</b> Tipo de archivo permitido .doc y .docx para Word. También acepta .pdf.</div><div class='upload-box'><div class='upload-row'>⬆ <input type='file' name='archivo' accept='.doc,.docx,.pdf'></div></div><small class='actual-file'>Actual: {archivo_actual}</small></div>
           </div>
           <div class='modal-actions'><button class='c-btn'>Actualizar</button><a class='c-btn gray' href='{url_for('contratacion_plantilla_detalle',pid=pid)}'>Cerrar</a></div>
         </form>
