@@ -2769,7 +2769,7 @@ def contratacion_plantilla_detalle(pid):
         else:
             preview=f"<div class='preview-empty'><b>Sin archivo cargado.</b><br>Haz clic en el lápiz ✎ para editar y cargar la plantilla PDF/DOC/DOCX.</div>"
         body=f"""<div class='preview-tools'><input placeholder='Código de Trabajador'><button class='c-btn green'>Previsualizar</button></div><div class='tpl-toolbar'>Contenido de plantilla y archivo base.</div>{preview}"""
-    file_btn = f"<a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar Archivo</a>" if pl['ruta_archivo'] else "<span class='c-btn gray disabled'>Sin archivo</span>"
+    file_btn = f"<a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar Archivo</a>"
     content=f"""
     <style>
       .contract-detail-wrap{{color:#162033!important;background:#f5f7fb;margin:-8px -10px 0;padding:14px 18px 32px;min-height:calc(100vh - 80px)}}
@@ -3047,6 +3047,63 @@ def contratacion_plantilla_archivo(pid):
     doc.save(out)
     return send_file(out, as_attachment=True, download_name=f"{safe_name}.docx")
 
+@app.route('/admin/contratacion/plantilla/<int:pid>/historial')
+@admin_required
+def contratacion_plantilla_historial(pid):
+    """Ventana tipo lupita: historial real de cargas de plantillas de contrato."""
+    with db() as con:
+        pl = con.execute('SELECT * FROM contratacion_plantillas WHERE id=?', (pid,)).fetchone()
+        historial = con.execute("""
+            SELECT id, fecha_creacion, fecha_actualizacion, creado_por, nombre_plantilla,
+                   tipo_documento, esquema, condicion, version, archivo_nombre, ruta_archivo, activo
+              FROM contratacion_plantillas
+             WHERE UPPER(COALESCE(tipo_documento,'')) = UPPER(COALESCE((SELECT tipo_documento FROM contratacion_plantillas WHERE id=?),''))
+                OR UPPER(COALESCE(nombre_plantilla,'')) LIKE '%' || UPPER(COALESCE((SELECT nombre_plantilla FROM contratacion_plantillas WHERE id=?),'')) || '%'
+             ORDER BY id DESC
+             LIMIT 250
+        """, (pid, pid)).fetchall()
+    if not pl:
+        abort(404)
+    def h(v):
+        return html.escape(str(v or ''))
+    rows = ''.join([f"""
+      <tr>
+        <td>{h(r['fecha_actualizacion'] or r['fecha_creacion'])}</td>
+        <td>{h(r['creado_por'] or 'Admin_AQ...')}</td>
+        <td>{h(r['nombre_plantilla'])}</td>
+        <td>{h(r['tipo_documento'])}</td>
+        <td>{h(r['archivo_nombre'] or (r['nombre_plantilla'] + '.docx'))}</td>
+        <td><span class='state {'ok' if r['activo'] else 'bad'}'>{'ACTIVO' if r['activo'] else 'INACTIVO'}</span></td>
+        <td><a class='mini-download' href='{url_for('contratacion_plantilla_archivo', pid=r['id'])}'>⬇ Word</a></td>
+      </tr>""" for r in historial])
+    content = f"""
+    <style>
+      .hist-overlay{{min-height:calc(100vh - 70px);display:flex;align-items:flex-start;justify-content:center;padding:18px 10px;background:rgba(17,24,39,.55);margin:-20px -24px -40px;overflow:auto}}
+      .hist-modal{{width:min(1120px,97vw);max-height:calc(100vh - 38px);background:#fff;color:#111827!important;border-radius:8px;border:1px solid #dbe1e8;box-shadow:0 22px 65px rgba(0,0,0,.35);overflow:hidden}}
+      .hist-head{{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid #dbe1e8;background:#fff}}
+      .hist-head h1{{margin:0;font-size:25px;font-weight:950;color:#111827!important}}
+      .close-x{{width:38px;height:38px;border-radius:8px;background:#fff;color:#8b9097!important;border:2px solid #e5e7eb;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:28px;font-weight:900}}
+      .hist-info{{padding:12px 22px;background:#f8fafc;color:#475569;font-weight:850;border-bottom:1px solid #e5e7eb}}
+      .hist-table-wrap{{height:min(650px,72vh);overflow:auto;background:#fff}}
+      .hist-table{{width:100%;min-width:1050px;border-collapse:collapse;background:#fff;color:#111827!important}}
+      .hist-table th{{position:sticky;top:0;background:#f8fafc;color:#111827!important;border:1px solid #e5e7eb;padding:13px;text-align:left;font-size:16px;font-weight:950}}
+      .hist-table td{{border:1px solid #e5e7eb;padding:13px;color:#111827!important;background:#fff;font-size:16px;font-weight:760;vertical-align:middle}}
+      .hist-table tr:nth-child(even) td{{background:#f3f4f6}}
+      .state{{border:1px solid #d1d5db;border-radius:999px;padding:6px 10px;font-weight:950;background:#fff;color:#16a34a}}
+      .state.bad{{color:#e11d48;background:#fff1f2}}
+      .mini-download{{display:inline-flex;align-items:center;gap:6px;background:#e5e9ef;color:#111827!important;text-decoration:none;border-radius:8px;padding:8px 12px;font-weight:950;white-space:nowrap}}
+    </style>
+    <div class='hist-overlay'><div class='hist-modal'>
+      <div class='hist-head'><h1>Editar Plantilla</h1><a class='close-x' href='{url_for('contratacion_plantilla_editar', pid=pid)}'>×</a></div>
+      <div class='hist-info'>Historial de cargas de contratos relacionado con: <b>{h(pl['nombre_plantilla'])}</b>. Desde esta ventana puedes descargar cada plantilla en Word.</div>
+      <div class='hist-table-wrap'><table class='hist-table'>
+        <tr><th>Fecha Registro</th><th>Creado por</th><th>Nombre Archivo</th><th>Tipo Documento</th><th>Identificador</th><th>Estado</th><th>Descarga</th></tr>
+        {rows or '<tr><td colspan="7">No hay historial de cargas.</td></tr>'}
+      </table></div>
+    </div></div>
+    """
+    return render_page(content, active='Gestion Contratacion:plantillas')
+
 @app.route('/admin/contratacion/plantilla/<int:pid>/editar')
 @admin_required
 def contratacion_plantilla_editar(pid):
@@ -3070,7 +3127,7 @@ def contratacion_plantilla_editar(pid):
       .edit-grid input,.edit-grid select,.edit-grid textarea{{background:#fff!important;color:#111827!important;border:1px solid #cfd6df;border-radius:8px;padding:10px 12px;width:100%;font-size:16px;font-weight:750;min-height:38px;box-shadow:none!important}}
       .edit-grid textarea{{min-height:62px;resize:vertical}}
       .locked-field{{background:#eef1f5!important;color:#6b7280!important;cursor:not-allowed;border-color:#d8dee8!important}}
-      .schema-line{{display:grid;grid-template-columns:1fr 42px;gap:8px}}
+      .schema-line{{display:grid;grid-template-columns:1fr 42px 42px;gap:8px}}
       .schema-line .icon-btn{{height:38px;min-width:42px;border-radius:8px;background:#e9edf4;color:#111827!important;border:1px solid #d8dee8;text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:950}}
       .upload-box{{background:#eef1f5;border-radius:7px;padding:0;color:#111827;overflow:hidden}}
       .upload-row{{display:flex;align-items:center;gap:10px;padding:10px 12px;white-space:nowrap;overflow:auto}}
@@ -3093,7 +3150,7 @@ def contratacion_plantilla_editar(pid):
             <input type='hidden' name='nombre_plantilla' value='{html.escape(pl['nombre_plantilla'] or '')}'>
 
             <label>Tipo Documento</label><input class='locked-field' value='{html.escape(pl['tipo_documento'] or '')}' readonly>
-            <label>Esquema</label><div class='schema-line'><input class='locked-field' value='{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')}' readonly><a class='icon-btn' title='Campos de esquema' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕</a></div>
+            <label>Esquema</label><div class='schema-line'><input class='locked-field' value='{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')}' readonly><a class='icon-btn' title='Campos de esquema' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕</a><a class='icon-btn' title='Historial de cargas' href='{url_for('contratacion_plantilla_historial',pid=pid)}'>🔍</a></div>
             <label>Nombre Plantilla</label><input class='locked-field' value='{html.escape(pl['nombre_plantilla'] or '')}' readonly>
             <label>Descripción</label><textarea name='descripcion'>{html.escape(pl['descripcion'] or '')}</textarea>
             <label>Modo de selección de la plantilla</label><select name='condicion'>
@@ -3102,7 +3159,7 @@ def contratacion_plantilla_editar(pid):
             </select>
             <label>Estado</label><select name='activo'><option value='1' {'selected' if pl['activo'] else ''}>Activo</option><option value='0' {'selected' if not pl['activo'] else ''}>Inactivo</option></select>
             <label>Versión</label><input name='version' value='{html.escape(pl['version'] or 'Version 01')}'>
-            <label>Plantilla contrato</label><div><div class='warn'><b>Advertencia!</b> Tipo de archivo permitido .doc y .docx para Word. También acepta .pdf.</div><div class='upload-box'><div class='upload-row'>⬆ <input type='file' name='archivo' accept='.doc,.docx,.pdf'></div></div><small class='actual-file'>Actual: {archivo_actual}</small></div>
+            <label>Plantilla contrato</label><div><div class='warn'><b>Advertencia!</b> Tipo de archivo permitido .doc y .docx para Word. También acepta .pdf.</div><div class='upload-box'><div class='upload-row'>⬆ <input type='file' name='archivo' accept='.doc,.docx,.pdf'></div></div><small class='actual-file'>Actual: {archivo_actual}</small><div style='margin-top:10px;display:flex;gap:8px;flex-wrap:wrap'><a class='c-btn gray' href='{url_for('contratacion_plantilla_historial',pid=pid)}'>🔍 Ver historial de cargas</a><a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar Archivo Word</a></div></div>
           </div>
           <div class='modal-actions'><button class='c-btn'>Actualizar</button><a class='c-btn gray' href='{url_for('contratacion_plantilla_detalle',pid=pid)}'>Cerrar</a></div>
         </form>
@@ -3249,7 +3306,7 @@ def admin_contratacion():
     plantillas_rows=''.join([
         f"""<tr>
           <td class='tpl-actions'>
-            <a class='icon-btn action-edit' title='Abrir detalle / editar' href='{url_for('contratacion_plantilla_detalle', pid=r['id'])}'>✎</a>
+            <a class='icon-btn action-edit' title='Abrir detalle / editar' href='{url_for('contratacion_plantilla_detalle', pid=r['id'])}'>✎</a><a class='icon-btn' title='Historial de cargas' href='{url_for('contratacion_plantilla_historial', pid=r['id'])}'>🔍</a><a class='icon-btn' title='Descargar plantilla Word' href='{url_for('contratacion_plantilla_archivo', pid=r['id'])}'>⬇</a>
             <form method='post' action='{url_for('contratacion_plantilla_eliminar', pid=r['id'])}' style='display:inline' onsubmit="return confirm('¿Eliminar esta plantilla? No se borrarán contratos/documentos históricos.');">
               <button class='icon-btn action-delete' title='Eliminar plantilla' type='submit'>🗑</button>
             </form>
