@@ -143,6 +143,63 @@ VALORES_CONDICION = {
     'Tipo Trabajador': ['OBRERO','EMPLEADO','PRACTICANTE'],
     'Zona': ['PLANTA','CAMPO','PACKING','OFICINA'],
 }
+
+
+# Campos oficiales del esquema "Trabajador Contrato Laboral".
+# Estos son los campos que se muestran con la lupita y también se exportan a Excel.
+CAMPOS_ESQUEMA_TRABAJADOR_CONTRATO_LABORAL = [
+    ('Indeterminado', 'SI/NO'), ('CentroCosto', 'CC101'), ('TipoContrato', 'Indefinido'),
+    ('FechaFinContrato', '31/12/2025'), ('FechaIniContrato', '1/01/2023'),
+    ('DireccionActual', 'Av. Secundaria 456'), ('Dni', '12345678'),
+    ('NombreCompletoTrabajador', 'Juan Antonio Pérez Garcia'), ('NombreMoneda', 'Sol Peruano'),
+    ('RemunBasica', '2500'), ('Estado', 'Activo'), ('Comentario', 'Sin observaciones'),
+    ('NivelJerarquico', 'Jefe'), ('Distrito', 'Miraflores'), ('Provincia', 'Lima'),
+    ('Departamento', 'Lima'), ('Area', 'Recursos Humanos'), ('Puesto', 'Analista'),
+    ('NroTelefonoMovil', '987654321'), ('Email', 'juan.perez@empresa.com'), ('SimboloMoneda', 'S/'),
+    ('SituacionEspecial', 'Ninguna'), ('Planilla', 'Planilla General'), ('Condicion', 'Permanente'),
+    ('Gerencia', 'Gerencia General'), ('Cargo', 'Contador'), ('Ocupacion', 'Ingeniero'),
+    ('TipoTrabajador', 'Empleado'), ('Zona', 'Zona Norte'), ('CategoriaOcupacional', 'Profesional'),
+    ('GrupoImpresion', 'Grupo A'), ('NivelEducativo', 'Universitario'), ('Sede', 'Sede Central'),
+    ('Producto', 'Producto A'), ('Actividad', 'Ventas'), ('RemuneracionLetra', 'Dos Mil Quinientos Soles'),
+    ('FechaIniPrueba', '1/06/2023'), ('FechaFinPrueba', '1/12/2023'), ('MesesRenovacion', '12'),
+    ('FechaFirma', '15/01/2023'), ('FechaInicioContratoOrigen', '1/01/2023'),
+    ('FechaFinContratoOrigen', '31/12/2025'), ('FechaNacimientoISO', '15/05/1980'),
+    ('FechaNacimientoGuion', '15/05/1980'), ('FechaNacimientoBarra', '15/05/1980'),
+    ('FechaNacimientoTextoMayuscula', '15 DE MAYO DE 1980'),
+    ('FechaNacimientoTextoMinuscula', '15 de mayo de 1980'), ('FechaFinContratoISO', '31/12/2025'),
+    ('FechaFinContratoGuion', '31/12/2025'), ('FechaFinContratoBarra', '31/12/2025'),
+    ('FechaFinContratoTextoMayuscula', '31 DE DICIEMBRE DE 2025'),
+    ('FechaFinContratoTextoMinuscula', '31 de diciembre de 2025'), ('FechaIniContratoISO', '0001-01-01'),
+    ('FechaIniContratoGuion', '01-01-0001'), ('FechaIniContratoBarra', '01/01/0001'),
+    ('FechaIniContratoTextoMayuscula', '01 DE ENERO DEL 0001'),
+    ('FechaIniContratoTextoMinuscula', '01 de enero del 0001'), ('DireccionDNI', 'Calle de Ejemplo'),
+    ('RemunBasicaAgraria', '2500'), ('ApellidoPaternoTrabajador', 'Pérez'),
+    ('ApellidoMaternoTrabajador', 'Garcia'), ('NombreTrabajador', 'Juan Antonio'),
+    ('NombreTipoDocumentoIdentidad', 'DOC. NACIONAL DE IDENTIDAD'), ('NombreCortoTipoDocumentoIdentidad', 'DNI'),
+    ('PeriodicidadPago', 'Quincenal'), ('TipoPago', 'Efectivo'), ('Cuspp', 'XXXXX'),
+    ('RegimenLaboral', 'AGRARIO'), ('Nacionalidad', 'Peruana'), ('EstadoCivil', 'SOLTERO/A'),
+    ('SistemaPensionario', 'ONP'), ('TipoVia', 'Calle'), ('PaisNacimiento', 'Perú'),
+    ('Sexo', 'MASCULINO'), ('Funciones', 'Funciones para el cargo'), ('MesesContrato', 'TRES'),
+    ('NumeroMesesContrato', '12'), ('DuracionContratoTexto', '1 mes y 2 días'),
+]
+
+
+def tipo_dato_esquema(campo):
+    c = (campo or '').lower()
+    if 'fecha' in c:
+        return 'DateTime'
+    if 'remun' in c or 'meses' in c or 'numero' in c:
+        return 'Numeric'
+    return 'Text'
+
+
+def nombre_legible_campo(campo):
+    return re.sub(r'(?<!^)(?=[A-ZÁÉÍÓÚÑ])', ' ', campo or '').strip() or campo
+
+# Mantiene compatibilidad con plantillas existentes, pero ahora incluye TODOS los campos del Excel modelo.
+for _campo, _desc in CAMPOS_ESQUEMA_TRABAJADOR_CONTRATO_LABORAL:
+    if not any(x[1] == _campo for x in CONTRATACION_CAMPOS_CORRESPONDENCIA):
+        CONTRATACION_CAMPOS_CORRESPONDENCIA.append((nombre_legible_campo(_campo), _campo, tipo_dato_esquema(_campo)))
 # Carpeta documental LOCAL y dinámica:
 # Por defecto se crea al costado de app.py, en la misma carpeta donde tienes tus archivos.
 # Ejemplo Windows: si app.py está en D:\MiSistema\, se crea D:\MiSistema\DOCUMENTOS_PRIZE_AUTO\
@@ -868,6 +925,69 @@ def get_trabajador(dni):
     dni = normalizar_dni(dni)
     with db() as con:
         return con.execute("SELECT * FROM trabajadores WHERE dni=?", (dni,)).fetchone()
+
+
+
+def row_get(row, key, default=''):
+    try:
+        return row[key] if row and key in row.keys() and row[key] is not None else default
+    except Exception:
+        return default
+
+
+def separar_nombres_apellidos(nombre):
+    txt = clean(nombre)
+    if ',' in txt:
+        ap, nom = [x.strip() for x in txt.split(',', 1)]
+        aps = ap.split()
+        return (aps[0] if aps else '', ' '.join(aps[1:]) if len(aps) > 1 else '', nom)
+    partes = txt.split()
+    if len(partes) >= 3:
+        return partes[0], partes[1], ' '.join(partes[2:])
+    return '', '', txt
+
+
+def formato_fecha_texto(fecha, mayus=False):
+    d = parse_fecha_any(fecha)
+    if not d:
+        return fecha_sin_hora(fecha)
+    meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+    txt = f"{d.day:02d} de {meses[d.month-1]} de {d.year}"
+    return txt.upper() if mayus else txt
+
+
+def valores_esquema_desde_trabajador(trabajador=None):
+    """Llena los campos de esquema desde la base de trabajadores cuando exista información."""
+    t = trabajador
+    nombre = clean(row_get(t, 'nombre'))
+    ap_pat, ap_mat, nombres = separar_nombres_apellidos(nombre)
+    fecha_ing = row_get(t, 'fecha_ingreso')
+    fecha_nac = row_get(t, 'fecha_nacimiento')
+    empresa = row_get(t, 'empresa')
+    cargo = row_get(t, 'cargo')
+    area = row_get(t, 'area')
+    correo = row_get(t, 'correo')
+    planilla = row_get(t, 'planilla')
+    dni = row_get(t, 'dni')
+    base = {
+        'Dni': dni, 'NombreCompletoTrabajador': nombre, 'Email': correo, 'Cargo': cargo,
+        'Puesto': cargo, 'Ocupacion': cargo, 'Area': area, 'Gerencia': area, 'Planilla': planilla,
+        'FechaIniContrato': fecha_sin_hora(fecha_ing), 'FechaInicioContratoOrigen': fecha_sin_hora(fecha_ing),
+        'FechaIniContratoBarra': fecha_sin_hora(fecha_ing), 'FechaIniContratoGuion': fecha_sin_hora(fecha_ing).replace('/','-'),
+        'FechaIniContratoISO': fecha_iso_segura(fecha_ing), 'FechaIniContratoTextoMayuscula': formato_fecha_texto(fecha_ing, True),
+        'FechaIniContratoTextoMinuscula': formato_fecha_texto(fecha_ing, False), 'FechaNacimientoISO': fecha_iso_segura(fecha_nac),
+        'FechaNacimientoGuion': fecha_sin_hora(fecha_nac).replace('/','-'), 'FechaNacimientoBarra': fecha_sin_hora(fecha_nac),
+        'FechaNacimientoTextoMayuscula': formato_fecha_texto(fecha_nac, True),
+        'FechaNacimientoTextoMinuscula': formato_fecha_texto(fecha_nac, False), 'ApellidoPaternoTrabajador': ap_pat,
+        'ApellidoMaternoTrabajador': ap_mat, 'NombreTrabajador': nombres, 'Estado': 'Activo',
+        'Condicion': 'ACTIVO' if row_get(t, 'activo', 1) else 'INACTIVO', 'CentroCosto': empresa,
+        'NombreMoneda': 'Sol Peruano', 'SimboloMoneda': 'S/', 'NombreTipoDocumentoIdentidad': 'DOC. NACIONAL DE IDENTIDAD',
+        'NombreCortoTipoDocumentoIdentidad': 'DNI',
+    }
+    salida=[]
+    for campo, ejemplo in CAMPOS_ESQUEMA_TRABAJADOR_CONTRATO_LABORAL:
+        salida.append((campo, clean(base.get(campo)) or clean(ejemplo)))
+    return salida
 
 
 def generar_clave_trabajador(dni, fecha_nac=''):
@@ -2625,7 +2745,7 @@ def contratacion_plantilla_detalle(pid):
     </div>"""
     if tab=='campos':
         rows=''.join([f"<tr><td><span class='state-pill {'ok' if c['activo'] else 'bad'}'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{html.escape(c['descripcion'] or '')}</td><td>{html.escape(c['tipo_campo'] or '')}</td><td>{html.escape(c['nombre_campo'] or '')}</td><td><code>{{{{{html.escape(c['campo_origen'] or '')}}}}}</code></td><td>{html.escape(c['tipo_dato'] or '')}</td><td>{html.escape(c['requerido'] or '')}</td></tr>" for c in campos])
-        body=f"""<div class='tpl-toolbar'>Campos de correspondencia para usar en Word como <b>{{{{CampoOrigen}}}}</b>.</div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="7">Sin campos registrados.</td></tr>'}</table></div>"""
+        body=f"""<div class='tpl-toolbar schema-toolbar'><span>Campos de correspondencia para usar en Word como <b>{{{{CampoOrigen}}}}</b>.</span><span><a class='c-btn gray' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕ Campos de Esquema</a> <a class='c-btn gray' href='{url_for('contratacion_campos_esquema_excel',pid=pid)}'>⬇ Descargar campos</a></span></div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="7">Sin campos registrados.</td></tr>'}</table></div>"""
     elif tab=='condiciones':
         crear_btn = f"<a class='c-btn' href='{url_for('contratacion_condicion_editar',pid=pid)}'>⊕ Crear Condición</a>" if condicion_habilitada else "<span class='c-btn gray disabled'>Condiciones deshabilitadas</span>"
         info = "" if condicion_habilitada else "<div class='notice'>Para crear o editar condiciones primero entra al lápiz de <b>Editar Plantilla</b> y cambia el campo <b>Condición</b> a <b>CONDICIONES</b>.</div>"
@@ -2669,6 +2789,7 @@ def contratacion_plantilla_detalle(pid):
       .c-btn{{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:12px;padding:11px 16px;background:linear-gradient(135deg,#ff963b,#ff7a1a);color:#fff!important;font-weight:950;text-decoration:none;cursor:pointer;box-shadow:0 10px 22px rgba(255,122,26,.22)}}
       .c-btn.gray{{background:#e7ebf2;color:#111827!important;box-shadow:none}}.c-btn.green{{background:#22c55e;color:#fff!important}}.c-btn.disabled{{opacity:.62;cursor:not-allowed}}
       .tpl-toolbar{{color:#647084;font-weight:850;padding:13px 18px;background:#fff;border-left:1px solid #dce4ef;border-right:1px solid #dce4ef}}
+      .schema-toolbar{{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}}
       .pdf-frame{{width:100%;height:720px;border:1px solid #d1d5db;background:#eee;border-radius:0 0 14px 14px}}
       .preview-empty{{background:#fff!important;color:#111827!important;border:1px dashed #cbd5e1;border-radius:14px;padding:30px;margin:12px 0;font-size:16px}}.preview-empty p{{color:#6b7280!important}}
       .cond-head{{display:flex;justify-content:flex-end;background:#fff;border:1px solid #dce4ef;border-top:0;padding:14px 18px}}
@@ -2699,7 +2820,7 @@ def contratacion_plantilla_detalle(pid):
         <div class='tpl-side'>
           <div class='tpl-line'><b>Versión:</b>{html.escape(pl['version'] or 'Version 01')}</div>
           <div class='tpl-line'><b>Modo selección:</b>{'Usar criterios de selección que cumplan los datos del trabajador' if condicion_habilitada else 'Sin criterios / plantilla general'}</div>
-          <div class='tpl-line'><b>Esquema:</b>{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')}</div>
+          <div class='tpl-line'><b>Esquema:</b>{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')} <a class='icon-btn' title='Ver campos de esquema' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕</a></div>
           <div class='tpl-line'><b>Tipo Documento:</b>{html.escape(pl['tipo_documento'] or '')}</div>
           <div class='tpl-line'><b>Estado:</b><span class='{'green-dot' if pl['activo'] else 'red-dot'}'></span>{estado}</div>
         </div>
@@ -2806,6 +2927,80 @@ def contratacion_condicion_eliminar(pid, cid):
         con.commit()
     flash('Condición eliminada correctamente.', 'ok')
     return redirect(url_for('contratacion_plantilla_detalle', pid=pid, tab='condiciones'))
+
+
+@app.route('/admin/contratacion/plantilla/<int:pid>/campos_esquema')
+@admin_required
+def contratacion_campos_esquema(pid):
+    dni = normalizar_dni(request.args.get('dni'))
+    with db() as con:
+        pl = con.execute('SELECT * FROM contratacion_plantillas WHERE id=?', (pid,)).fetchone()
+        trabajador = con.execute('SELECT * FROM trabajadores WHERE dni=?', (dni,)).fetchone() if dni else con.execute('SELECT * FROM trabajadores ORDER BY nombre LIMIT 1').fetchone()
+    if not pl:
+        abort(404)
+    valores = valores_esquema_desde_trabajador(trabajador)
+    rows = ''.join([f"<tr><td><code>{{{{{html.escape(campo)}}}}}</code></td><td>{html.escape(valor)}</td></tr>" for campo, valor in valores])
+    dni_val = html.escape(dni or row_get(trabajador, 'dni') or '')
+    content = f"""
+    <style>
+      .schema-overlay{{min-height:calc(100vh - 40px);display:flex;justify-content:center;align-items:flex-start;padding:18px;background:rgba(15,23,42,.55);margin:-20px -24px -40px}}
+      .schema-modal{{width:min(930px,96vw);background:#fff;color:#111827!important;border-radius:12px;border:1px solid #dbe1e8;box-shadow:0 24px 70px rgba(0,0,0,.35);overflow:hidden}}
+      .schema-head{{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid #e5e7eb}}
+      .schema-head h1{{margin:0;font-size:28px;font-weight:950;color:#111827}}
+      .close-x{{width:42px;height:42px;border-radius:10px;background:#fff;color:#8b9097!important;border:2px solid #e5e7eb;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:30px;font-weight:900}}
+      .schema-tools{{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:18px 24px;background:#fff;flex-wrap:wrap}}
+      .schema-search{{display:flex;gap:10px;align-items:center;flex-wrap:wrap}}
+      .schema-search input{{width:160px;background:#fff!important;color:#111!important;border:1px solid #cbd5e1;border-radius:10px;padding:11px 12px;font-weight:850}}
+      .schema-btn{{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:10px;background:#eef2f7;color:#111827!important;padding:12px 16px;text-decoration:none;font-weight:950;cursor:pointer}}
+      .schema-btn.orange{{background:#ff963b;color:#fff!important}}
+      .schema-note{{padding:0 24px 12px;color:#64748b;font-weight:800}}
+      .schema-table-wrap{{max-height:560px;overflow:auto;border-top:1px solid #e5e7eb}}
+      .schema-table{{width:100%;border-collapse:collapse;color:#111827!important;background:#fff!important}}
+      .schema-table th{{position:sticky;top:0;background:#f8fafc;color:#111827;text-align:left;border:1px solid #e5e7eb;padding:15px;font-size:18px}}
+      .schema-table td{{border:1px solid #e5e7eb;padding:13px 15px;font-size:17px;font-weight:760;background:#fff;color:#111827!important}}
+      .schema-table tr:nth-child(even) td{{background:#f6f6f6}}
+      code{{background:#eef2ff;border:1px solid #dbeafe;border-radius:8px;padding:4px 7px;color:#1e3a8a}}
+      @media(max-width:700px){{.schema-tools{{align-items:stretch}}.schema-search input{{width:100%}}.schema-btn{{width:100%;justify-content:center}}}}
+    </style>
+    <div class='schema-overlay'><div class='schema-modal'>
+      <div class='schema-head'><h1>Campos de Esquema</h1><a class='close-x' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='campos')}'>×</a></div>
+      <div class='schema-tools'>
+        <form class='schema-search' method='get'>
+          <b>DNI trabajador:</b><input name='dni' maxlength='8' value='{dni_val}' placeholder='Buscar DNI'>
+          <button class='schema-btn orange'>🔎 Traer datos</button>
+        </form>
+        <a class='schema-btn' href='{url_for('contratacion_campos_esquema_excel',pid=pid,dni=dni_val)}'>⬇ Descargar</a>
+      </div>
+      <div class='schema-note'>Plantilla: <b>{html.escape(pl['nombre_plantilla'] or '')}</b> | Esquema: <b>{html.escape(pl['esquema'] or 'Trabajador Contrato Laboral')}</b>. Los valores se llenan con la base de trabajadores cuando el dato exista; si falta, se muestra el modelo.</div>
+      <div class='schema-table-wrap'><table class='schema-table'><tr><th>Campo</th><th>Descripción / valor</th></tr>{rows}</table></div>
+    </div></div>
+    """
+    return render_page(content, active='Gestion Contratacion:plantillas')
+
+
+@app.route('/admin/contratacion/plantilla/<int:pid>/campos_esquema.xlsx')
+@admin_required
+def contratacion_campos_esquema_excel(pid):
+    dni = normalizar_dni(request.args.get('dni'))
+    with db() as con:
+        pl = con.execute('SELECT * FROM contratacion_plantillas WHERE id=?', (pid,)).fetchone()
+        trabajador = con.execute('SELECT * FROM trabajadores WHERE dni=?', (dni,)).fetchone() if dni else con.execute('SELECT * FROM trabajadores ORDER BY nombre LIMIT 1').fetchone()
+    if not pl:
+        abort(404)
+    wb = Workbook(); ws = wb.active; ws.title = 'Campos Esquema'
+    ws.append(['Campo', 'Descripción'])
+    for campo, valor in valores_esquema_desde_trabajador(trabajador):
+        ws.append([campo, valor])
+    ws.column_dimensions['A'].width = 34; ws.column_dimensions['B'].width = 58
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='1F2937')
+        cell.alignment = Alignment(horizontal='center')
+    ws.freeze_panes = 'A2'
+    out = PERSIST_DIR / f"Campos_Esquema_{pid}_{now_file()}.xlsx"
+    wb.save(out)
+    return send_file(out, as_attachment=True, download_name=f"Campos_Esquema_{pid}.xlsx")
+
 
 @app.route('/admin/contratacion/plantilla/<int:pid>/archivo')
 @admin_required
