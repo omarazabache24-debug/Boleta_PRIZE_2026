@@ -1247,6 +1247,10 @@ body{background:var(--bg)!important;color:var(--ink)!important;font-family:Inter
 }
 body{background:#0f141a!important;color:var(--ink)!important;font-family:Inter,Segoe UI,Arial,sans-serif!important;font-weight:850!important}.app{background:#0f141a!important}.main{background:radial-gradient(circle at 95% -8%,rgba(255,210,63,.12),transparent 24%),linear-gradient(180deg,#0f141a,#111821)!important;color:var(--ink)!important}.side{background:linear-gradient(180deg,#09131d,#101823 55%,#0b1119)!important;border-right:1px solid rgba(255,210,63,.16)!important;box-shadow:14px 0 38px rgba(0,0,0,.35)!important}.side-top{background:#08121c!important;border-bottom:1px solid rgba(255,210,63,.18)!important;color:#fff!important}.menu-title,.menu-item{background:transparent!important;color:#e9f1fb!important}.menu-title:hover,.menu-item:hover{background:rgba(255,210,63,.09)!important;color:#fff!important}.menu-group.force-open>.menu-title,.menu-title.active,.menu-item.active,.menu-item.parent-active{background:linear-gradient(135deg,#ffb21a,#ffd23f)!important;color:#0b1119!important;border-left:4px solid #fff0a6!important;box-shadow:0 12px 28px rgba(255,178,26,.24)!important}.menu-group.nested.force-open>.menu-title,.nested.force-open>.menu-item.parent-active{background:linear-gradient(90deg,rgba(255,210,63,.23),rgba(255,210,63,.08))!important;color:#fff!important;border-left:4px solid var(--accent2)!important}.menu-group.nested.force-open>.menu-title .chev{color:#fff!important}.c-title,.plantilla-top .c-title,h1,h2,h3{color:#f8fafc!important;text-shadow:none!important}.plantilla-top{margin-bottom:22px!important}.c-card,.filter-card,.table-wrap,.card{background:linear-gradient(145deg,#171f28,#111821)!important;border:1px solid var(--border)!important;border-radius:20px!important;box-shadow:0 18px 42px rgba(0,0,0,.25)!important;color:#f8fafc!important}.plantilla-filter b,.c-form b,label{color:#f8fafc!important}.input,input,select,textarea{background:#0b1119!important;color:#f8fafc!important;border:1.5px solid #34404d!important;border-radius:12px!important;font-weight:900!important}input::placeholder,textarea::placeholder{color:#7f8b99!important}input:focus,select:focus,textarea:focus{border-color:var(--accent2)!important;box-shadow:0 0 0 4px rgba(255,210,63,.18)!important;outline:none!important}option{background:#0b1119!important;color:#f8fafc!important}.c-btn,.btn,.btn-green,.btn-blue,.crear-btn,.modal-actions .c-btn{background:linear-gradient(135deg,#ffb21a,#ffd23f)!important;color:#111820!important;border:0!important;border-radius:14px!important;font-weight:1000!important;box-shadow:0 12px 28px rgba(255,178,26,.25)!important}.c-btn.gray,.btn.gray,.gray{background:#2b3441!important;color:#f8fafc!important;border:1px solid #3e4a58!important;box-shadow:none!important}.btn-red{background:#32151c!important;color:#ffc4ca!important;border:1px solid #7f1d1d!important}.state-pill.ok,.status-pill,.pill.ok{background:rgba(255,210,63,.13)!important;color:#ffd23f!important;border:1px solid rgba(255,210,63,.45)!important}.state-pill.bad{background:#32151c!important;color:#ffc4ca!important;border:1px solid #7f1d1d!important}.badge-green,.gestion-card.green .gestion-icon,.gestion-card.green .btn-green,.dashboard-panel.green .dash-metric .mi,.dashboard-panel.green .full-link{background:linear-gradient(135deg,#ffb21a,#ffd23f)!important;color:#111820!important;border-color:rgba(255,210,63,.35)!important}.gestion-card.green,.gestion-card.purple{border-color:rgba(255,210,63,.38)!important}.gestion-card.purple .gestion-icon,.dashboard-panel.purple .dash-metric .mi{background:linear-gradient(135deg,#ffb21a,#ffd23f)!important;color:#111820!important}.dashboard-panel.green .full-link,.dashboard-panel.purple .full-link{background:rgba(255,210,63,.10)!important;color:#ffd23f!important;border:1px solid rgba(255,210,63,.35)!important}.c-table,.tpl-table,table{background:#111821!important;color:#f8fafc!important}.c-table th,.tpl-table th,th{background:#0b1119!important;color:#ffd23f!important;border-bottom:1px solid #364250!important;text-transform:uppercase!important;letter-spacing:.04em!important;font-weight:1000!important}.c-table td,.tpl-table td,td{background:#151d26!important;color:#eaf2fb!important;border-bottom:1px solid #2b3541!important;font-weight:850!important}.c-table tr:nth-child(even) td,.tpl-table tr:nth-child(even) td{background:#111821!important}.c-table tr:hover td,.tpl-table tr:hover td{background:#1d2732!important}.plantilla-table td:nth-child(n),.plantilla-table td:nth-child(n) *{color:#eaf2fb!important;opacity:1!important}.plantilla-table td:nth-child(3){color:#fff!important;font-weight:1000!important}.modal-prize{background:rgba(0,0,0,.72)!important}.modal-box{background:#10161d!important;color:#f8fafc!important;border:1px solid #34404d!important;box-shadow:0 32px 90px rgba(0,0,0,.65)!important}.modal-head{border-bottom:1px solid #2f3946!important;background:#0b1119!important}.modal-head h2{color:#fff!important}.modal-close{color:#cbd5e1!important}.modal-body{background:#10161d!important}.modal-form label{color:#eaf2fb!important;font-weight:900!important}.modal-form label.req{color:#ffd23f!important}.modal-help{color:#ffb21a!important;font-weight:900!important}.select-soft{background:#0b1119!important}.file-row{background:#0b1119!important;border:1.5px solid #34404d!important;color:#f8fafc!important}.modal-form select#modal_esquema option{background:#0b1119!important;color:#f8fafc!important}.modal-form select#modal_esquema{border-color:#ffd23f!important}.only-yellow *{--green:#ffd23f!important;--success:#ffd23f!important}
 
+
+/* ===== AJUSTES PRO FICHA / PLANTILLAS 2026 ===== */
+.main{overflow-x:hidden!important}.plantilla-top{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:16px!important}.plantilla-top .crear-btn{position:relative!important;right:auto!important;top:auto!important;white-space:nowrap!important;min-width:190px!important;justify-content:center!important}.plantilla-filter{grid-template-columns:180px minmax(240px,1fr) 180px minmax(240px,1fr)!important}.plantilla-table{min-width:1220px!important}.plantilla-table th,.plantilla-table td{white-space:normal!important;line-height:1.28!important}.plantilla-table td,.plantilla-table td *{color:#f8fafc!important;opacity:1!important;text-shadow:none!important}.plantilla-table th{color:#ffd23f!important}.table-wrap{max-width:100%!important;overflow:auto!important}.ficha-search{display:flex;gap:12px;margin:0 0 16px;max-width:720px}.ficha-search input{flex:1}.ficha-profile{display:grid;grid-template-columns:150px minmax(320px,1.4fr) minmax(260px,1fr) minmax(260px,1fr);gap:18px;align-items:stretch;margin-bottom:18px}.avatar-panel,.profile-main,.profile-col{background:linear-gradient(145deg,#171f28,#111821);border:1px solid #34404d;border-radius:18px;padding:18px;color:#f8fafc;box-shadow:0 16px 34px rgba(0,0,0,.22)}.avatar-panel{display:grid;place-items:center}.profile-main h2{margin:0 0 10px;color:#fff;font-size:22px}.profile-main p,.profile-col p{margin:8px 0;color:#eaf2fb}.created-box{background:#0b1119;border:1px solid #34404d;border-radius:12px;padding:10px;margin-top:12px;color:#cbd5e1}.status-dot,.status-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;font-weight:1000}.status-dot.ok,.status-pill.ok{background:rgba(34,197,94,.13);color:#86efac;border:1px solid rgba(34,197,94,.45)}.status-dot.bad,.status-pill.bad{background:rgba(244,63,94,.13);color:#fecdd3;border:1px solid rgba(244,63,94,.45)}.ficha-tabs{display:flex!important;padding:0!important;margin:0 0 16px!important;overflow:hidden}.ficha-tabs .tab{flex:1;background:transparent;border:0;border-bottom:3px solid transparent;color:#cbd5e1!important;cursor:pointer;font-size:16px}.ficha-tabs .tab.active{color:#ffd23f!important;border-bottom-color:#ffd23f!important}.ficha-tab-content{display:none}.ficha-tab-content.active{display:block}.laboral-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 28px;padding:24px!important}.laboral-grid label{display:grid;grid-template-columns:220px 1fr;align-items:center;gap:12px;color:#f8fafc!important}.laboral-grid input{background:#0b1119!important;color:#eaf2fb!important;border:1px solid #34404d!important}.periodos-box{margin-top:14px;background:#111821;border:1px solid #34404d;border-radius:14px;padding:14px;color:#eaf2fb}.mini-chip{display:inline-flex;margin:5px;padding:8px 12px;border-radius:999px;background:rgba(255,210,63,.12);color:#ffd23f;border:1px solid rgba(255,210,63,.35);font-weight:900}.period-row td{background:#0b1119!important;color:#ffd23f!important;font-size:16px}.check-green{display:inline-grid;place-items:center;min-width:54px;padding:7px 13px;background:#4ea60f;color:white;border-radius:8px;font-weight:1000}.check-gray{display:inline-grid;place-items:center;min-width:54px;padding:7px 13px;background:#334155;color:#cbd5e1;border-radius:8px;font-weight:1000}@media(max-width:1100px){.ficha-profile{grid-template-columns:1fr}.laboral-grid{grid-template-columns:1fr}.laboral-grid label{grid-template-columns:1fr}.plantilla-top{flex-direction:column;align-items:flex-start!important}.plantilla-filter{grid-template-columns:1fr!important}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -3016,6 +3020,9 @@ def admin_contratacion():
     css="""
     <style>
     .main{background:#f4f6f8!important;color:#111827!important}.c-title{font-size:24px;margin:0 0 20px;font-weight:950;color:#111827}.c-bar{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}.c-filter{display:grid;grid-template-columns:180px minmax(260px,420px) 160px minmax(260px,420px);gap:10px 24px;align-items:center;margin-bottom:22px}.c-filter input,.c-filter select,.c-form input,.c-form select{background:#fff!important;color:#111827!important;border:1px solid #cfd6df!important;border-radius:8px!important;padding:10px!important}.c-btn{background:#ff8d35;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:950;display:inline-flex;gap:8px;align-items:center;text-decoration:none}.c-btn.gray{background:#66707c}.c-card{background:#fff;border:1px solid #dde2e7;border-radius:12px;box-shadow:0 6px 18px #0000000d;margin-bottom:18px}.tabs{display:flex;border-bottom:1px solid #dde2e7}.tab{padding:14px 24px;font-weight:900;color:#7a7f87;border-bottom:3px solid transparent}.tab.active{color:#1f2937;border-bottom-color:#ff8d35}.c-table{width:100%;border-collapse:collapse;background:#fff;font-size:15px}.c-table th{font-weight:900;text-align:left;background:#f7f8fa;border:1px solid #dde2e7;padding:12px}.c-table td{border:1px solid #e1e5ea;padding:11px;vertical-align:middle}.c-table tr:nth-child(even) td{background:#eeeeee}.c-table tr.selected td{background:#bcd7fb!important}.c-badge{display:inline-grid;place-items:center;min-width:70px;border-radius:7px;padding:6px 10px;color:#fff;font-weight:950}.c-badge.green{background:#55ad11}.c-badge.cyan{background:#51c2d4}.state{border:1px solid #d1d5db;border-radius:99px;padding:7px 12px;background:white;color:#16a34a;font-weight:900}.tile-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:30px;max-width:1100px;margin:45px auto}.c-tile{background:#fff;border:1px solid #dde2e7;border-radius:14px;min-height:185px;padding:28px;display:flex;gap:18px;align-items:flex-start;position:relative;box-shadow:0 6px 18px #0000000d}.tile-icon{width:74px;height:74px;border-radius:50%;background:#ffe5cc;color:#ff8d35;display:grid;place-items:center;font-size:34px}.download-corner{position:absolute;right:18px;bottom:14px;font-size:24px}.toolbar{display:flex;justify-content:flex-end;gap:18px;color:#7b8088;margin:12px 0}.c-form{display:grid;grid-template-columns:180px minmax(260px,430px) 180px minmax(260px,430px);gap:12px 22px;align-items:center}.profile{display:grid;grid-template-columns:150px 1fr 1fr 1fr;gap:24px;align-items:start}.avatar-big{width:135px;height:135px;border-radius:50%;background:#f7c26d;display:grid;place-items:center;font-size:80px}.divider{border-left:2px dashed #c8c8c8;padding-left:20px}.muted2{color:#667085}.anuncio-upload{background:#fff;padding:22px;border-radius:12px;border:1px dashed #ff8d35;max-width:900px}.anuncio-upload input[type=file]{background:#fff!important;color:#111!important;border:1px solid #ddd!important;padding:10px!important;border-radius:8px!important}.video-box{margin-top:16px;background:#111827;color:#fff;padding:18px;border-radius:10px}.video-box video{width:100%;max-height:260px;background:#000;border-radius:8px}.table-wrap{overflow:auto}.plantilla-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.crear-btn{border-radius:22px}.plantilla-filter{display:grid;grid-template-columns:190px minmax(280px,438px) 190px minmax(280px,438px);gap:8px 28px;align-items:center}.filter-card{margin-bottom:18px}.create-card{display:none}.create-card:target{display:block}.tpl-actions{white-space:nowrap;text-align:center}.icon-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;background:transparent;color:#111827!important;font-size:20px;font-weight:950;text-decoration:none;cursor:pointer}.icon-btn:hover{background:#eef2f7;border-radius:8px}.action-delete{color:#111827!important}.state.inactive{color:#6b7280;background:#f3f4f6}.state-form{margin:0}.state-select{background:white!important;color:#16a34a!important;border:1px solid #d1d5db!important;border-radius:99px!important;padding:7px 12px!important;font-weight:900;min-width:110px}.state-select.inactive{color:#e11d48!important}.tpl-link{font-weight:900;color:#0f172a!important}.plantilla-table th:first-child,.plantilla-table td:first-child{min-width:92px;text-align:center}@media(max-width:1000px){.c-filter,.c-form,.profile{grid-template-columns:1fr}.tile-grid{grid-template-columns:1fr;margin:20px 0}.c-table{min-width:1000px}}
+
+    .main{background:radial-gradient(circle at 95% -8%,rgba(255,210,63,.12),transparent 24%),linear-gradient(180deg,#0f141a,#111821)!important;color:#f8fafc!important}.c-title,h1,h2,h3{color:#f8fafc!important}.c-card,.filter-card,.table-wrap{background:linear-gradient(145deg,#171f28,#111821)!important;border:1px solid #34404d!important;color:#f8fafc!important}.c-filter input,.c-filter select,.c-form input,.c-form select,input,select,textarea{background:#0b1119!important;color:#f8fafc!important;border:1.5px solid #34404d!important}.c-table,table{background:#111821!important;color:#f8fafc!important}.c-table th,th{background:#0b1119!important;color:#ffd23f!important;border-color:#364250!important}.c-table td,td{background:#151d26!important;color:#eaf2fb!important;border-color:#2b3541!important}.c-table tr:nth-child(even) td{background:#111821!important}.plantilla-table td,.plantilla-table td *{color:#eaf2fb!important;opacity:1!important}.plantilla-table th{color:#ffd23f!important}.plantilla-top .crear-btn{position:relative!important;right:auto!important;top:auto!important;min-width:190px!important}.plantilla-top{gap:16px!important}.icon-btn{color:#ffd23f!important}.tpl-link{color:#fff!important}.state-select{background:#0b1119!important;color:#ffd23f!important;border:1px solid #ffd23f!important}.ficha-search{display:flex;gap:12px;margin:0 0 16px;max-width:720px}.ficha-search input{flex:1}.ficha-profile{display:grid;grid-template-columns:150px minmax(320px,1.4fr) minmax(260px,1fr) minmax(260px,1fr);gap:18px;align-items:stretch;margin-bottom:18px}.avatar-panel,.profile-main,.profile-col{background:linear-gradient(145deg,#171f28,#111821);border:1px solid #34404d;border-radius:18px;padding:18px;color:#f8fafc;box-shadow:0 16px 34px rgba(0,0,0,.22)}.avatar-panel{display:grid;place-items:center}.profile-main h2{margin:0 0 10px;color:#fff;font-size:22px}.profile-main p,.profile-col p{margin:8px 0;color:#eaf2fb}.created-box{background:#0b1119;border:1px solid #34404d;border-radius:12px;padding:10px;margin-top:12px;color:#cbd5e1}.status-dot,.status-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;font-weight:1000}.status-dot.ok,.status-pill.ok{background:rgba(34,197,94,.13);color:#86efac;border:1px solid rgba(34,197,94,.45)}.status-dot.bad,.status-pill.bad{background:rgba(244,63,94,.13);color:#fecdd3;border:1px solid rgba(244,63,94,.45)}.ficha-tabs{display:flex!important;padding:0!important;margin:0 0 16px!important;overflow:hidden}.ficha-tabs .tab{flex:1;background:transparent;border:0;border-bottom:3px solid transparent;color:#cbd5e1!important;cursor:pointer;font-size:16px}.ficha-tabs .tab.active{color:#ffd23f!important;border-bottom-color:#ffd23f!important}.ficha-tab-content{display:none}.ficha-tab-content.active{display:block}.laboral-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 28px;padding:24px!important}.laboral-grid label{display:grid;grid-template-columns:220px 1fr;align-items:center;gap:12px;color:#f8fafc!important}.periodos-box{margin-top:14px;background:#111821;border:1px solid #34404d;border-radius:14px;padding:14px;color:#eaf2fb}.mini-chip{display:inline-flex;margin:5px;padding:8px 12px;border-radius:999px;background:rgba(255,210,63,.12);color:#ffd23f;border:1px solid rgba(255,210,63,.35);font-weight:900}.period-row td{background:#0b1119!important;color:#ffd23f!important;font-size:16px}.check-green{display:inline-grid;place-items:center;min-width:54px;padding:7px 13px;background:#4ea60f;color:white;border-radius:8px;font-weight:1000}.check-gray{display:inline-grid;place-items:center;min-width:54px;padding:7px 13px;background:#334155;color:#cbd5e1;border-radius:8px;font-weight:1000}@media(max-width:1100px){.ficha-profile{grid-template-columns:1fr}.laboral-grid{grid-template-columns:1fr}.laboral-grid label{grid-template-columns:1fr}.plantilla-filter{grid-template-columns:1fr!important}}
+
     </style>"""
     def wrap(inner):
         return css + inner
@@ -3035,8 +3042,127 @@ def admin_contratacion():
     elif sec=='renovacion':
         content=wrap(f"<h2 class='c-title'>Renovación masiva de contratos</h2><div class='c-form'><b>Renovar por:</b><span>Meses <input type='checkbox' checked> Fecha Termino</span><b>Fecha Termino:</b><input placeholder='d/MM/yyyy'><b>Meses:</b><input type='number' value='0'></div><div class='toolbar'>🔎 Filtros &nbsp; ⚙ Acción ▾ &nbsp; ⬇ Descargar</div><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th>Código</th><th>Apellidos y Nombres</th><th>Modalidad</th><th>FI Planilla</th><th>Fecha Migración</th><th>FI Contrato</th><th>FF Contrato</th><th>Firmado</th><th>Archivado</th><th>Nro File</th></tr>{renov_rows}</table></div>")
     elif sec=='ficha':
-        nombre=sample_trab['nombre'] if sample_trab else ''
-        content=wrap(f"<h2 class='c-title'>Ficha Trabajador</h2><div class='profile'><div class='avatar-big'>👤</div><div><input placeholder='Buscar trabajador' value='{nombre}'><p><b>Dirección:</b></p><p>✉ &nbsp;&nbsp; ☎ &nbsp;&nbsp; 📱</p><div style='background:#e9e9e9;padding:8px'><b>Fecha de Creación:</b> &nbsp;&nbsp; <b>Creado por:</b></div></div><div class='divider'><p><b>Gerencia:</b></p><p><b>Area:</b></p><p><b>Puesto:</b></p><p><b>Supervisor:</b></p><p><b>Planilla:</b></p><p><b>Condición:</b></p></div><div class='divider'><p><b>Estado:</b></p><p><b>Fecha de Ingreso:</b></p><p><b>Fecha de Cese:</b></p><p><b>Centro Costo:</b></p><p><b>Zona:</b></p><p><b>Cargo:</b></p><p><b>Sindicalizado:</b></p></div></div><div class='c-card'><div class='tabs'><div class='tab active'>Datos Laborales</div><div class='tab'>Documentos</div><div class='tab'>Contratos</div></div></div>")
+        # FICHA TRABAJADOR MEJORADA: búsqueda real por DNI y pestañas funcionales.
+        dni_sel = normalizar_dni(request.args.get('dni')) or (sample_trab['dni'] if sample_trab else '')
+        trabajador_sel = get_trabajador(dni_sel) if dni_sel else None
+        if not trabajador_sel and sample_trab:
+            dni_sel = sample_trab['dni']; trabajador_sel = get_trabajador(dni_sel)
+
+        def rv(row, key, default=''):
+            try:
+                return row[key] if row and key in row.keys() and row[key] not in (None, '') else default
+            except Exception:
+                return default
+
+        with db() as con:
+            ficha_docs = con.execute("""SELECT id,dni,categoria,tipo,periodo,detalle,estado,archivo_nombre,fecha_subida,uploaded_by,ruta_archivo
+                                        FROM documentos WHERE dni=? OR categoria='empresa'
+                                        ORDER BY COALESCE(periodo,'' ) DESC, id DESC LIMIT 500""", (dni_sel,)).fetchall() if dni_sel else []
+            ficha_contratos = con.execute("""SELECT * FROM contratacion_docs WHERE dni=? ORDER BY id DESC LIMIT 300""", (dni_sel,)).fetchall() if dni_sel else []
+            vac_periodos = con.execute("""SELECT periodo_inicio,periodo_fin,fecha_ingreso,saldo,dias_ganados FROM vacaciones_saldos
+                                       WHERE dni=? ORDER BY periodo_inicio DESC, periodo_fin DESC""", (dni_sel,)).fetchall() if dni_sel else []
+
+        opt_trab_buscar=''.join([f"<option value='{h(r['dni'])}'>{h(r['dni'])} - {h(r['nombre'])}</option>" for r in trabajadores])
+        nombre = h(rv(trabajador_sel,'nombre','SIN TRABAJADOR'))
+        correo = h(rv(trabajador_sel,'correo',''))
+        celular = h(rv(trabajador_sel,'telefono', rv(trabajador_sel,'celular','')))
+        estado_txt = 'Activo' if int(rv(trabajador_sel,'activo',1) or 0)==1 else 'Baja'
+        estado_cls = 'ok' if estado_txt == 'Activo' else 'bad'
+        fecha_ing = h(fecha_sin_hora(rv(trabajador_sel,'fecha_ingreso','')))
+        fecha_reg = h(fecha_sin_hora(rv(trabajador_sel,'fecha_registro','')))
+        cargo = h(rv(trabajador_sel,'cargo',''))
+        area = h(rv(trabajador_sel,'area','NINGUNO'))
+        empresa = h(rv(trabajador_sel,'empresa',''))
+        planilla = h(rv(trabajador_sel,'planilla',''))
+        jefe = h(rv(trabajador_sel,'jefe_nombre','')) or h(rv(trabajador_sel,'jefe_dni',''))
+
+        docs_rows = ''
+        current_period = None
+        for d in ficha_docs:
+            periodo = h(d['periodo'] or 'SIN PERIODO')
+            if periodo != current_period:
+                current_period = periodo
+                docs_rows += f"<tr class='period-row'><td colspan='7'>▸ Movimiento / Periodo: {periodo}</td></tr>"
+            open_link = f"<a class='icon-btn' title='Abrir documento' href='/ver/{d['id']}'>📄</a>" if d['id'] else ''
+            docs_rows += f"""<tr><td>{open_link}</td><td>{h(d['dni'] or 'EMPRESA')}</td><td>{h(d['tipo'])}</td><td>{h(d['detalle'])}</td><td>{h(d['estado'] or 'Pendiente')}</td><td>{h(fecha_sin_hora(d['fecha_subida']))}</td><td>{h(d['uploaded_by'])}</td></tr>"""
+        if not docs_rows:
+            docs_rows = "<tr><td colspan='7'>No hay documentos acumulados para este trabajador. Carga documentos o ejecuta sincronización de carpetas.</td></tr>"
+
+        contratos_rows = ''
+        for c in ficha_contratos:
+            log_url = url_for('contratacion_doc_log', doc_id=c['id'])
+            file_url = url_for('contratacion_doc_archivo', doc_id=c['id']) if c['ruta_archivo'] else '#'
+            firmado = "<span class='check-green'>✓</span>" if str(c['estado']).upper() in ['FIRMADO','ARCHIVADO','GENERADO'] else "<span class='check-gray'>-</span>"
+            archivado = "<span class='check-green'>✓</span>" if c['ruta_archivo'] else "<span class='check-gray'>-</span>"
+            contratos_rows += f"""<tr>
+              <td><a class='icon-btn' title='Ver log del contrato' href='{log_url}'>📄</a> <a class='icon-btn' title='Abrir archivo' href='{file_url}'>⬇</a></td>
+              <td>{h(fecha_sin_hora(c['fecha_registro']))}</td><td>{h(c['etapa'])}</td><td>{firmado}</td><td>{archivado}</td>
+              <td>{h(c['tipo_doc'])}</td><td>{h(c['estado'])}</td><td>{h(c['uploaded_by'])}</td>
+            </tr>"""
+        if not contratos_rows:
+            contratos_rows = "<tr><td colspan='8'>No hay contratos registrados para este DNI.</td></tr>"
+
+        periodos_html = ''.join([f"<span class='mini-chip'>{h(p['periodo_inicio'])}/{h(p['periodo_fin'])} · saldo {h(p['saldo'])}</span>" for p in vac_periodos]) or '<span class="mini-chip">Sin periodos cargados</span>'
+
+        content=wrap(f"""
+        <h2 class='c-title'>Ficha Trabajador</h2>
+        <form method='get' action='/admin/contratacion' class='ficha-search'>
+          <input type='hidden' name='sec' value='ficha'>
+          <input name='dni' value='{h(dni_sel)}' list='trabajadores_ficha_list' placeholder='Buscar por DNI'>
+          <datalist id='trabajadores_ficha_list'>{opt_trab_buscar}</datalist>
+          <button class='c-btn'>Buscar</button>
+        </form>
+        <div class='ficha-profile'>
+          <div class='avatar-panel'><div class='avatar-big'>👤</div><span class='status-dot {estado_cls}'>{estado_txt}</span></div>
+          <div class='profile-main'>
+            <h2>{nombre}</h2><p><b>DNI:</b> {h(dni_sel)} &nbsp; <b>Empresa:</b> {empresa}</p>
+            <p><b>Dirección:</b> {h(rv(trabajador_sel,'direccion','')) or 'Sin dirección registrada'}</p>
+            <p>✉ {correo or 'Sin correo'} &nbsp;&nbsp; 📱 {celular or 'Sin celular'}</p>
+            <div class='created-box'><b>Fecha de Creación:</b> {fecha_reg or '-'} <b>Creado por:</b> SISTEMA PRIZE</div>
+          </div>
+          <div class='profile-col'><p><b>Gerencia:</b> NINGUNO</p><p><b>Área:</b> {area}</p><p><b>Puesto:</b> {cargo}</p><p><b>Supervisor:</b> {jefe or '-'}</p><p><b>Planilla:</b> {planilla or '-'}</p></div>
+          <div class='profile-col'><p><b>Estado:</b> <span class='status-pill {estado_cls}'>{estado_txt}</span></p><p><b>Fecha de Ingreso:</b> {fecha_ing or '-'}</p><p><b>Fecha de Cese:</b> {h(rv(trabajador_sel,'fecha_cese','')) or '-'}</p><p><b>Cargo:</b> {cargo}</p><p><b>Sindicalizado:</b> {h(rv(trabajador_sel,'sindicalizado','NO'))}</p></div>
+        </div>
+        <div class='ficha-tabs c-card'>
+          <button type='button' class='tab active' onclick="openFichaTab(event,'datos')">Datos Laborales</button>
+          <button type='button' class='tab' onclick="openFichaTab(event,'documentos')">Documentos</button>
+          <button type='button' class='tab' onclick="openFichaTab(event,'contratos')">Contratos</button>
+        </div>
+        <div id='tab-datos' class='ficha-tab-content active'>
+          <div class='c-card laboral-grid'>
+            <label>Discapacidad:<input readonly value='{h(rv(trabajador_sel,'discapacidad',''))}'></label>
+            <label>Fecha Ingreso Planilla:<input readonly value='{fecha_ing}'></label>
+            <label>Código:<input readonly value='{h(dni_sel)}'></label>
+            <label>Sindicalizado:<input readonly value='{h(rv(trabajador_sel,'sindicalizado','NO'))}'></label>
+            <label>Cargo:<input readonly value='{cargo}'></label>
+            <label>Categoría Ocupacional:<input readonly value='{h(rv(trabajador_sel,'categoria_ocupacional',''))}'></label>
+            <label>Centro de Costo:<input readonly value='{h(rv(trabajador_sel,'centro_costo',''))}'></label>
+            <label>Situación Especial:<input readonly value='{h(rv(trabajador_sel,'situacion_especial',''))}'></label>
+            <label>Modalidad de Trabajo:<input readonly value='{h(rv(trabajador_sel,'modalidad',''))}'></label>
+            <label>Nivel Educativo:<input readonly value='{h(rv(trabajador_sel,'nivel_educativo',''))}'></label>
+            <label>Nivel Jerárquico:<input readonly value='{h(rv(trabajador_sel,'nivel_jerarquico',''))}'></label>
+            <label>Ocupación:<input readonly value='{h(rv(trabajador_sel,'ocupacion',''))}'></label>
+            <label>Planilla:<input readonly value='{planilla}'></label>
+            <label>Zona:<input readonly value='{h(rv(trabajador_sel,'zona',''))}'></label>
+          </div>
+          <div class='periodos-box'><b>Periodos laborales/vacacionales detectados:</b> {periodos_html}</div>
+        </div>
+        <div id='tab-documentos' class='ficha-tab-content'>
+          <div class='toolbar'><a class='c-btn gray' href='/admin/crear_carpetas'>Refrescar carpetas</a> <span>Documentos acumulados por periodos de ingreso, renovación, baja o carga documental.</span></div>
+          <div class='c-card table-wrap'><table class='c-table'><tr><th></th><th>Código</th><th>Tipo Documento</th><th>Detalle</th><th>Estado Doc</th><th>Fecha Envío/Subida</th><th>Creado por</th></tr>{docs_rows}</table></div>
+        </div>
+        <div id='tab-contratos' class='ficha-tab-content'>
+          <div class='toolbar'>📄 Hojita = abrir log del contrato &nbsp; | &nbsp; ⬇ = abrir/descargar archivo</div>
+          <div class='c-card table-wrap'><table class='c-table'><tr><th>Acción</th><th>Fecha Registro</th><th>Modalidad/Etapa</th><th>Firmado</th><th>Archivado</th><th>Tipo Contrato</th><th>Estado</th><th>Creado por</th></tr>{contratos_rows}</table></div>
+        </div>
+        <script>
+        function openFichaTab(ev,name){{
+          document.querySelectorAll('.ficha-tab-content').forEach(x=>x.classList.remove('active'));
+          document.querySelectorAll('.ficha-tabs .tab').forEach(x=>x.classList.remove('active'));
+          document.getElementById('tab-'+name).classList.add('active'); ev.currentTarget.classList.add('active');
+        }}
+        </script>
+        """)
     elif sec=='plantillas':
         f_nombre_v = html.escape(clean(request.args.get('f_nombre')))
         f_tipo_v = html.escape(clean(request.args.get('f_tipo')))
@@ -3191,6 +3317,41 @@ def admin_desbloquear_usuarios():
         con.commit()
     flash('Usuarios desbloqueados. Los intentos fallidos fueron reiniciados.', 'ok')
     return redirect(url_for('admin'))
+
+
+@app.route('/admin/contratacion/doc/<int:doc_id>/archivo')
+@admin_required
+def contratacion_doc_archivo(doc_id):
+    with db() as con:
+        r = con.execute('SELECT * FROM contratacion_docs WHERE id=?', (doc_id,)).fetchone()
+    if not r or not r['ruta_archivo']:
+        abort(404)
+    path = Path(r['ruta_archivo'])
+    if not path.exists():
+        abort(404)
+    return send_file(path, as_attachment=False, download_name=r['archivo_nombre'] or 'contrato')
+
+@app.route('/admin/contratacion/doc/<int:doc_id>/log')
+@admin_required
+def contratacion_doc_log(doc_id):
+    with db() as con:
+        r = con.execute('SELECT * FROM contratacion_docs WHERE id=?', (doc_id,)).fetchone()
+    if not r:
+        abort(404)
+    eventos = [
+        ('Fecha Registro', fecha_sin_hora(r['fecha_registro']), r['uploaded_by'] or 'SISTEMA', 'Documento registrado en Gestión Contratación'),
+        ('Firmado', fecha_sin_hora(r['fecha_registro']), r['uploaded_by'] or 'SISTEMA', 'Marcado como firmado / reconocido facialmente o cargado por RR.HH.' if str(r['estado']).upper() in ['FIRMADO','ARCHIVADO','GENERADO'] else 'Pendiente de firma'),
+        ('Archivado', fecha_sin_hora(r['fecha_registro']), r['uploaded_by'] or 'SISTEMA', 'Archivo almacenado correctamente' if r['ruta_archivo'] else 'Sin archivo adjunto'),
+    ]
+    rows = ''.join([f"<tr><td>{html.escape(a)}</td><td>{html.escape(b or '-')}</td><td>{html.escape(c or '-')}</td><td>{html.escape(d or '')}</td></tr>" for a,b,c,d in eventos])
+    content = f"""
+    <div class='c-card' style='padding:24px;max-width:1100px;margin:auto'>
+      <h1 class='c-title'>Log de Contrato</h1>
+      <p><b>DNI:</b> {html.escape(r['dni'] or '')} &nbsp; <b>Trabajador:</b> {html.escape(r['trabajador'] or '')} &nbsp; <b>Tipo:</b> {html.escape(r['tipo_doc'] or '')}</p>
+      <div class='table-wrap'><table class='c-table'><tr><th>Evento</th><th>Fecha Registro</th><th>Creado por</th><th>Comentario</th></tr>{rows}</table></div>
+      <br><a class='c-btn gray' href='{url_for('admin_contratacion', sec='ficha', dni=r['dni'])}'>Cerrar / volver a ficha</a>
+    </div>"""
+    return render_page(content, active='Gestion Contratacion:ficha')
 
 # API compatibles
 @app.route('/api/health')
