@@ -1375,6 +1375,28 @@ body{background:#0f141a!important;color:var(--ink)!important;font-family:Inter,S
 /* ===== AJUSTES PRO FICHA / PLANTILLAS 2026 ===== */
 .main{overflow-x:hidden!important}.plantilla-top{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:16px!important}.plantilla-top .crear-btn{position:relative!important;right:auto!important;top:auto!important;white-space:nowrap!important;min-width:190px!important;justify-content:center!important}.plantilla-filter{grid-template-columns:180px minmax(240px,1fr) 180px minmax(240px,1fr)!important}.plantilla-table{min-width:1220px!important}.plantilla-table th,.plantilla-table td{white-space:normal!important;line-height:1.28!important}.plantilla-table td,.plantilla-table td *{color:#f8fafc!important;opacity:1!important;text-shadow:none!important}.plantilla-table th{color:#ffd23f!important}.table-wrap{max-width:100%!important;overflow:auto!important}.ficha-search{display:flex;gap:12px;margin:0 0 16px;max-width:720px}.ficha-search input{flex:1}.ficha-profile{display:grid;grid-template-columns:150px minmax(320px,1.4fr) minmax(260px,1fr) minmax(260px,1fr);gap:18px;align-items:stretch;margin-bottom:18px}.avatar-panel,.profile-main,.profile-col{background:linear-gradient(145deg,#171f28,#111821);border:1px solid #34404d;border-radius:18px;padding:18px;color:#f8fafc;box-shadow:0 16px 34px rgba(0,0,0,.22)}.avatar-panel{display:grid;place-items:center}.profile-main h2{margin:0 0 10px;color:#fff;font-size:22px}.profile-main p,.profile-col p{margin:8px 0;color:#eaf2fb}.created-box{background:#0b1119;border:1px solid #34404d;border-radius:12px;padding:10px;margin-top:12px;color:#cbd5e1}.status-dot,.status-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;font-weight:1000}.status-dot.ok,.status-pill.ok{background:rgba(34,197,94,.13);color:#86efac;border:1px solid rgba(34,197,94,.45)}.status-dot.bad,.status-pill.bad{background:rgba(244,63,94,.13);color:#fecdd3;border:1px solid rgba(244,63,94,.45)}.ficha-tabs{display:flex!important;padding:0!important;margin:0 0 16px!important;overflow:hidden}.ficha-tabs .tab{flex:1;background:transparent;border:0;border-bottom:3px solid transparent;color:#cbd5e1!important;cursor:pointer;font-size:16px}.ficha-tabs .tab.active{color:#ffd23f!important;border-bottom-color:#ffd23f!important}.ficha-tab-content{display:none}.ficha-tab-content.active{display:block}.laboral-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 28px;padding:24px!important}.laboral-grid label{display:grid;grid-template-columns:220px 1fr;align-items:center;gap:12px;color:#f8fafc!important}.laboral-grid input{background:#0b1119!important;color:#eaf2fb!important;border:1px solid #34404d!important}.periodos-box{margin-top:14px;background:#111821;border:1px solid #34404d;border-radius:14px;padding:14px;color:#eaf2fb}.mini-chip{display:inline-flex;margin:5px;padding:8px 12px;border-radius:999px;background:rgba(255,210,63,.12);color:#ffd23f;border:1px solid rgba(255,210,63,.35);font-weight:900}.period-row td{background:#0b1119!important;color:#ffd23f!important;font-size:16px}.check-green{display:inline-grid;place-items:center;min-width:54px;padding:7px 13px;background:#4ea60f;color:white;border-radius:8px;font-weight:1000}.check-gray{display:inline-grid;place-items:center;min-width:54px;padding:7px 13px;background:#334155;color:#cbd5e1;border-radius:8px;font-weight:1000}@media(max-width:1100px){.ficha-profile{grid-template-columns:1fr}.laboral-grid{grid-template-columns:1fr}.laboral-grid label{grid-template-columns:1fr}.plantilla-top{flex-direction:column;align-items:flex-start!important}.plantilla-filter{grid-template-columns:1fr!important}}
 
+
+/* ===== CORRECCIÓN VISIBILIDAD FINAL PANEL / LIENZO ===== */
+.side,.side *{color:#f8fafc!important;text-shadow:none!important;opacity:1!important;filter:none!important;}
+.side .menu-title,.side .menu-title *,.side .menu-item,.side .menu-item *{color:#f1f5f9!important;font-weight:1000!important;letter-spacing:.01em!important;}
+.side .menu-group.force-open>.menu-title,.side .menu-group.force-open>.menu-title *{color:#08111b!important;}
+.side .menu-group.nested.force-open>.menu-title,.side .menu-group.nested.force-open>.menu-title *,.side .menu-item.parent-active,.side .menu-item.parent-active *{color:#fff!important;}
+.side .submenu .menu-item,.side .submenu .menu-item *{color:#e5edf7!important;font-weight:950!important;}
+.side .menu-item.active,.side .menu-item.active *{color:#08111b!important;}
+.main,.main *{text-shadow:none!important;}
+.contract-detail-wrap,.contract-detail-wrap *{opacity:1!important;filter:none!important;}
+.contract-detail-wrap{background:#f4f7fb!important;color:#0f172a!important;}
+.contract-detail-wrap .template-head,.contract-detail-wrap .tpl-tabs,.contract-detail-wrap .preview-tools{background:#ffffff!important;color:#0f172a!important;}
+.contract-detail-wrap h1,.contract-detail-wrap h2,.contract-detail-wrap h3,.contract-detail-wrap b{color:#0f172a!important;}
+.contract-detail-wrap .tpl-line,.contract-detail-wrap .tpl-line *{color:#334155!important;}
+.contract-detail-wrap .tpl-line b{color:#0f172a!important;}
+.contract-detail-wrap .c-btn.gray{background:#263243!important;color:#f8fafc!important;}
+.contract-detail-wrap .c-btn.green,.contract-detail-wrap .c-btn{color:#111827!important;}
+.edit-overlay .modal-page,.edit-overlay .modal-page *{opacity:1!important;filter:none!important;text-shadow:none!important;}
+.edit-overlay .modal-page{font-size:14px!important;}
+.edit-overlay .modal-head h1,.edit-overlay label,.edit-overlay .actual-file{color:#111827!important;}
+.edit-overlay input,.edit-overlay select,.edit-overlay textarea{color:#111827!important;background:#fff!important;}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -2808,6 +2830,14 @@ def contratacion_plantilla_detalle(pid):
       .actions{{display:flex;gap:8px;align-items:center}}.actions form{{margin:0}}.trash{{height:32px;border:0;background:#fee2e2;border-radius:10px;cursor:pointer}}
       .back-top{{display:flex;justify-content:flex-end;margin:0 0 10px}}
       code{{background:#eef2ff;border:1px solid #dbeafe;border-radius:8px;padding:4px 7px;color:#1e3a8a}}
+
+      .contract-detail-wrap h1,.contract-detail-wrap h2,.contract-detail-wrap h3,.contract-detail-wrap b,.contract-detail-wrap label,.contract-detail-wrap span,.contract-detail-wrap div{{text-shadow:none!important;opacity:1!important}}
+      .contract-detail-wrap .detail-title,.contract-detail-wrap .template-head h1{{color:#0f172a!important}}
+      .contract-detail-wrap .tpl-line,.contract-detail-wrap .tpl-line span{{color:#334155!important;font-weight:900!important}}
+      .contract-detail-wrap .tpl-line b{{color:#0f172a!important;font-weight:1000!important}}
+      .contract-detail-wrap .meta-box,.contract-detail-wrap .meta-box *{{color:#475569!important}}
+      .contract-detail-wrap .tpl-toolbar{{color:#475569!important;background:#fff!important}}
+      .contract-detail-wrap .preview-empty,.contract-detail-wrap .preview-empty *{{color:#0f172a!important;font-weight:950!important}}
       @media(max-width:900px){{.template-head{{grid-template-columns:1fr}}.tpl-side{{border-left:0;border-top:2px dashed #cbd5e1;padding-left:0;padding-top:18px}}.tpl-tabs{{overflow:auto}}}}
     </style>
     <div class='contract-detail-wrap'>
@@ -3082,7 +3112,7 @@ def contratacion_plantilla_historial(pid):
       .hist-modal{{width:min(1120px,97vw);max-height:calc(100vh - 38px);background:#fff;color:#111827!important;border-radius:8px;border:1px solid #dbe1e8;box-shadow:0 22px 65px rgba(0,0,0,.35);overflow:hidden}}
       .hist-head{{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid #dbe1e8;background:#fff}}
       .hist-head h1{{margin:0;font-size:25px;font-weight:950;color:#111827!important}}
-      .close-x{{width:38px;height:38px;border-radius:8px;background:#fff;color:#8b9097!important;border:2px solid #e5e7eb;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:28px;font-weight:900}}
+      .close-x{{width:34px;height:34px;border-radius:8px;background:#fff;color:#697386!important;border:2px solid #e5e7eb;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:25px;font-weight:900}}
       .hist-info{{padding:12px 22px;background:#f8fafc;color:#475569;font-weight:850;border-bottom:1px solid #e5e7eb}}
       .hist-table-wrap{{height:min(650px,72vh);overflow:auto;background:#fff}}
       .hist-table{{width:100%;min-width:1050px;border-collapse:collapse;background:#fff;color:#111827!important}}
@@ -3116,26 +3146,26 @@ def contratacion_plantilla_editar(pid):
     archivo_actual = html.escape(pl['archivo_nombre'] or 'Sin archivo cargado')
     content=f"""
     <style>
-      .edit-overlay{{min-height:calc(100vh - 70px);display:flex;align-items:flex-start;justify-content:center;padding:18px 10px;background:rgba(17,24,39,.55);margin:-20px -24px -40px;overflow:auto}}
-      .modal-page{{width:min(760px,96vw);max-height:calc(100vh - 36px);overflow:auto;background:#fff;color:#111827!important;border-radius:8px;border:1px solid #dbe1e8;box-shadow:0 22px 65px rgba(0,0,0,.35)}}
+      .edit-overlay{{min-height:calc(100vh - 70px);display:flex;align-items:flex-start;justify-content:center;padding:12px 10px;background:rgba(3,10,18,.72);margin:-20px -24px -40px;overflow:auto}}
+      .modal-page{{width:min(640px,94vw);max-height:calc(100vh - 28px);overflow:auto;background:#fff;color:#111827!important;border-radius:10px;border:1px solid #dbe1e8;box-shadow:0 22px 65px rgba(0,0,0,.42)}}
       .modal-page *{{box-sizing:border-box}}
-      .modal-head{{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid #dbe1e8;background:#fff}}
-      .modal-head h1{{margin:0;font-size:25px;font-weight:950;color:#111827!important;letter-spacing:-.2px}}
+      .modal-head{{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid #dbe1e8;background:#fff}}
+      .modal-head h1{{margin:0;font-size:21px;font-weight:950;color:#111827!important;letter-spacing:-.2px}}
       .close-x{{width:38px;height:38px;border-radius:8px;background:#fff;color:#8b9097!important;border:2px solid #e5e7eb;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:28px;font-weight:900}}
-      .edit-grid{{display:grid;grid-template-columns:180px minmax(0,1fr);gap:11px 14px;align-items:center;padding:22px 34px}}
-      .edit-grid label{{color:#374151!important;font-size:18px;text-align:right;font-weight:800;line-height:1.25}}
-      .edit-grid input,.edit-grid select,.edit-grid textarea{{background:#fff!important;color:#111827!important;border:1px solid #cfd6df;border-radius:8px;padding:10px 12px;width:100%;font-size:16px;font-weight:750;min-height:38px;box-shadow:none!important}}
-      .edit-grid textarea{{min-height:62px;resize:vertical}}
+      .edit-grid{{display:grid;grid-template-columns:150px minmax(0,1fr);gap:9px 12px;align-items:center;padding:16px 22px}}
+      .edit-grid label{{color:#1f2937!important;font-size:15px;text-align:right;font-weight:950;line-height:1.18}}
+      .edit-grid input,.edit-grid select,.edit-grid textarea{{background:#fff!important;color:#111827!important;border:1px solid #b8c2cf;border-radius:8px;padding:8px 11px;width:100%;font-size:14px;font-weight:900;min-height:36px;box-shadow:none!important}}
+      .edit-grid textarea{{min-height:54px;resize:vertical}}
       .locked-field{{background:#eef1f5!important;color:#6b7280!important;cursor:not-allowed;border-color:#d8dee8!important}}
       .schema-line{{display:grid;grid-template-columns:1fr 42px 42px;gap:8px}}
       .schema-line .icon-btn{{height:38px;min-width:42px;border-radius:8px;background:#e9edf4;color:#111827!important;border:1px solid #d8dee8;text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:950}}
       .upload-box{{background:#eef1f5;border-radius:7px;padding:0;color:#111827;overflow:hidden}}
       .upload-row{{display:flex;align-items:center;gap:10px;padding:10px 12px;white-space:nowrap;overflow:auto}}
       .upload-row input[type=file]{{border:0!important;padding:0!important;background:transparent!important;min-height:auto;font-size:15px}}
-      .warn{{background:#fff3cd;border:1px solid #ffe08a;color:#7a5400;border-radius:6px;margin:0 0 10px;padding:12px;text-align:center;font-size:15px;font-weight:900}}
+      .warn{{background:#fff3cd;border:1px solid #ffe08a;color:#6b4a00!important;border-radius:6px;margin:0 0 8px;padding:9px;text-align:center;font-size:13px;font-weight:950}}
       .actual-file{{display:block;margin-top:8px;color:#111827!important;font-weight:900}}
-      .modal-actions{{position:sticky;bottom:0;background:#fff;display:flex;justify-content:flex-end;gap:10px;padding:14px 34px 22px;border-top:1px solid #eef2f7}}
-      .c-btn{{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;padding:11px 18px;background:#ff963b;color:#fff!important;font-weight:950;text-decoration:none;cursor:pointer;font-size:16px}}
+      .modal-actions{{position:sticky;bottom:0;background:#fff;display:flex;justify-content:flex-end;gap:10px;padding:12px 22px 16px;border-top:1px solid #eef2f7}}
+      .c-btn{{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;padding:9px 15px;background:#ff963b;color:#fff!important;font-weight:950;text-decoration:none;cursor:pointer;font-size:14px}}
       .c-btn.gray{{background:#e5e9ef;color:#111827!important}}
       @media(max-width:720px){{.edit-overlay{{padding:8px}}.modal-page{{width:100%;max-height:calc(100vh - 16px)}}.edit-grid{{grid-template-columns:1fr;padding:18px}}.edit-grid label{{text-align:left;font-size:15px}}.modal-actions{{padding:14px 18px 20px}}}}
     </style>
