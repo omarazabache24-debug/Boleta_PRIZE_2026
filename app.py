@@ -1203,6 +1203,72 @@ button.menu-item{font:inherit;text-align:left;background:transparent;border-top:
 
 /* === MEJORA VISUAL VACACIONES: solicitud y mis solicitudes === */
 .vac-request-card{padding:28px!important;border-radius:22px!important;overflow:hidden;position:relative}.vac-request-card:before{content:"";position:absolute;right:-80px;top:-90px;width:230px;height:230px;border-radius:50%;background:rgba(255,210,63,.10);pointer-events:none}.vac-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:20px}.vac-head h2{margin:0 0 8px;font-size:26px}.vac-help{color:#c2ccd8;font-weight:800;line-height:1.45;margin:0}.period-list{display:grid;grid-template-columns:repeat(3,minmax(230px,1fr));gap:14px;margin-top:10px}.period-card{position:relative;display:grid!important;grid-template-columns:auto 1fr;gap:12px;align-items:flex-start;margin:0!important;padding:18px!important;border:1px solid #34404d;border-radius:18px;background:linear-gradient(145deg,#171c23,#11161c);cursor:pointer;min-height:104px;box-shadow:0 12px 26px rgba(0,0,0,.16);transition:.15s}.period-card:hover{transform:translateY(-1px);border-color:rgba(255,210,63,.7);box-shadow:0 16px 35px rgba(0,0,0,.28)}.period-card input{width:18px;height:18px;accent-color:#ffd23f;margin-top:4px}.period-main{display:grid;gap:8px}.period-years{font-size:18px;color:#fff;font-weight:1000;letter-spacing:.2px}.period-meta{display:flex;flex-wrap:wrap;gap:8px}.period-badge{background:#202732;border:1px solid #3a4654;border-radius:999px;padding:6px 10px;color:#d9e5f2;font-size:12px;font-weight:950}.period-badge strong{color:var(--yellow)}.period-card input:disabled~.period-main{opacity:.45}.vac-form-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:18px}.vac-form-row .field{min-width:0}.vac-submit-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:end;margin-top:16px}.check-card{height:100%;display:flex!important;align-items:center;gap:10px;padding:15px 16px!important;border:1px solid #34404d;border-radius:16px;background:#11161c;color:#eaf3ff;font-weight:950}.check-card input{accent-color:#ffd23f;width:18px;height:18px}.vac-submit-row .btn-green{height:52px;justify-content:center;font-size:15px}.sol-cards{display:grid;gap:14px}.sol-card{display:grid;grid-template-columns:1.12fr 1.55fr .55fr 1.65fr 1.2fr 1fr;gap:14px;align-items:center;background:linear-gradient(145deg,#171c23,#11161d);border:1px solid #33404d;border-radius:18px;padding:18px 20px;box-shadow:0 12px 30px rgba(0,0,0,.18)}.sol-card.head{background:#0b1015;color:var(--yellow);font-size:13px;font-weight:1000;text-transform:uppercase;box-shadow:none;border-radius:18px 18px 8px 8px}.sol-card:not(.head){border-left:5px solid var(--yellow)}.sol-card b{color:#fff;font-size:16px}.sol-card .dias b{display:inline-grid;place-items:center;min-width:46px;height:38px;border-radius:12px;background:rgba(255,210,63,.12);color:var(--yellow);border:1px solid rgba(255,210,63,.28)}.sol-card .coment{color:#dbe4ee;font-weight:850}.sol-empty{padding:22px;border:1px dashed #3b4552;border-radius:16px;color:#b8c0cb}.local-note{margin-top:10px;color:#b8c0cb;font-size:13px}@media(max-width:1100px){.period-list{grid-template-columns:1fr}.vac-form-row,.vac-submit-row{grid-template-columns:1fr}}@media(max-width:900px){.sol-card,.sol-card.head{grid-template-columns:1fr}.sol-card.head{display:none}.sol-card{gap:9px}.sol-card>div:before{content:attr(data-label);display:block;color:var(--yellow);font-size:11px;text-transform:uppercase;margin-bottom:3px}.vac-head{display:block}}
+
+
+/* =========================================================
+   PRIZE RRHH - TEMA CLARO PRO (alto contraste como referencia)
+   Mejora de legibilidad: fondo claro, letras oscuras, sidebar navy,
+   acentos verdes/azules y tablas limpias.
+   ========================================================= */
+:root{
+  --txt:#0f172a!important;
+  --mut:#64748b!important;
+  --yellow:#22c55e!important;
+  --yellow2:#16a34a!important;
+  --dark:#f5f7fb!important;
+  --panel:#ffffff!important;
+  --panel2:#f8fafc!important;
+  --line:#dbe3ef!important;
+  --shadow:0 10px 28px rgba(15,23,42,.08)!important;
+}
+body{background:#f3f6fa!important;color:#0f172a!important;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif!important;font-weight:650!important}
+.app{background:#f3f6fa!important;grid-template-columns:300px 1fr!important}
+.app.side-collapsed{grid-template-columns:86px 1fr!important}
+.side{background:linear-gradient(180deg,#062033 0%,#071b2c 54%,#081827 100%)!important;color:#eaf2f8!important;border-right:0!important;box-shadow:8px 0 26px rgba(2,8,23,.14)!important;width:300px!important}
+.side-top{background:#052038!important;border-bottom:1px solid rgba(255,255,255,.10)!important;color:#fff!important}
+.brand img{background:#fff!important;border:0!important;border-radius:18px!important;box-shadow:0 10px 24px rgba(0,0,0,.20)!important}
+.brand p,.side-user{color:#cbd5e1!important}
+.menu-title{background:transparent!important;border:0!important;color:#cbd5e1!important;border-radius:14px!important;font-size:14px!important;font-weight:850!important;letter-spacing:.1px!important}
+.menu-title:hover{background:rgba(255,255,255,.08)!important;color:#fff!important}
+.menu-group.force-open .menu-title,.menu-title.active{background:linear-gradient(135deg,#1f9d55,#23b26b)!important;color:#fff!important;box-shadow:0 12px 24px rgba(34,197,94,.18)!important}
+.menu-item{color:#cbd5e1!important;font-weight:800!important;font-size:13.5px!important;border-left:3px solid transparent!important;border-radius:12px!important}
+.menu-item:hover{background:rgba(255,255,255,.08)!important;color:#fff!important;border-left-color:#22c55e!important}
+.menu-item.active{background:rgba(34,197,94,.16)!important;color:#fff!important;border-left-color:#22c55e!important}
+.main{background:#f3f6fa!important;color:#0f172a!important;padding:0 28px 44px!important}
+.hero{background:#f3f6fa!important;border-bottom:0!important;margin:0 -28px 18px!important;padding:26px 28px 18px!important}
+.topbar h1,.c-title{color:#0f172a!important;font-size:28px!important;font-weight:950!important;letter-spacing:-.3px!important;text-shadow:none!important}
+.subtitle{color:#64748b!important}
+.card,.c-card,.filter-card,.create-card,.detail-box,.module-tile,.doc-card{background:#ffffff!important;color:#0f172a!important;border:1px solid #e2e8f0!important;border-radius:16px!important;box-shadow:0 8px 24px rgba(15,23,42,.06)!important}
+.card *,.c-card *,.filter-card *,.create-card *,.detail-box *{text-shadow:none!important}
+.input,input,select,textarea{background:#fff!important;color:#0f172a!important;border:1px solid #d7dee8!important;border-radius:11px!important;font-weight:700!important;box-shadow:none!important}
+.input:focus,input:focus,select:focus,textarea:focus{border-color:#1f7ab8!important;box-shadow:0 0 0 4px rgba(31,122,184,.12)!important;outline:none!important}
+select option{background:#fff!important;color:#0f172a!important}
+.btn,.btn-blue,.c-btn{background:#2f80b7!important;color:#fff!important;border:0!important;border-radius:11px!important;font-weight:900!important;box-shadow:0 8px 18px rgba(47,128,183,.20)!important}
+.btn-green,.crear-btn,.btn-warn{background:linear-gradient(135deg,#ff8a34,#ff7a1a)!important;color:#fff!important;border:0!important;border-radius:26px!important;font-weight:950!important;box-shadow:0 10px 20px rgba(255,122,26,.22)!important}
+.btn-red,.btn-danger{background:#ef4444!important;color:#fff!important;border:0!important}
+.table-wrap{background:#fff!important;border:1px solid #e2e8f0!important;border-radius:16px!important;box-shadow:0 8px 24px rgba(15,23,42,.05)!important}
+table,.c-table{background:#fff!important;color:#0f172a!important;border-collapse:separate!important;border-spacing:0!important;font-size:14px!important}
+th,.c-table th{background:#f8fafc!important;color:#334155!important;border-bottom:1px solid #e2e8f0!important;text-transform:none!important;font-size:12px!important;font-weight:950!important;letter-spacing:.02em!important;padding:14px 14px!important}
+td,.c-table td{color:#0f172a!important;border-bottom:1px solid #eef2f7!important;background:#fff!important;font-weight:700!important;padding:14px 14px!important}
+tr:nth-child(even) td,.c-table tr:nth-child(even) td{background:#f8fafc!important}
+tr:hover td,.c-table tr:hover td{background:#eef7ff!important;color:#0f172a!important}
+.tpl-link{color:#0f172a!important;font-weight:950!important;line-height:1.25!important}
+.plantilla-table th{color:#2563eb!important;background:#f8fafc!important}
+.plantilla-table td:nth-child(4),.plantilla-table td:nth-child(5),.plantilla-table td:nth-child(6),.plantilla-table td:nth-child(7),.plantilla-table td:nth-child(8),.plantilla-table td:nth-child(9){color:#334155!important;font-weight:750!important}
+.state,.state-select{background:#fff!important;color:#16a34a!important;border:1px solid #d8e0ea!important;border-radius:999px!important;font-weight:950!important;box-shadow:0 4px 12px rgba(15,23,42,.04)!important}
+.state.inactive,.state-select.inactive{color:#ef4444!important;background:#fff!important}
+.icon-btn{color:#0f172a!important;background:transparent!important;font-size:18px!important}
+.icon-btn:hover{background:#eaf2fb!important;color:#0f172a!important}
+.plantilla-filter{gap:12px 28px!important}
+.plantilla-filter b,.c-form b,label{color:#0f172a!important;font-weight:950!important}
+.badge-green{background:#22c55e!important;color:#fff!important}.badge-orange{background:#ff8a34!important;color:#fff!important}
+.status-pill{background:#eaf7ef!important;border:1px solid #bde9cb!important;color:#15803d!important}
+.muted2,.detail-box small{color:#64748b!important}
+.flash{background:#fff8e1!important;border:1px solid #fde68a!important;color:#92400e!important}
+.flash.err{background:#fff1f2!important;border-color:#fecdd3!important;color:#be123c!important}
+.modal-card{background:#fff!important;color:#0f172a!important;border:1px solid #e2e8f0!important;box-shadow:0 30px 90px rgba(15,23,42,.24)!important}
+@media(max-width:1000px){.app{grid-template-columns:1fr!important}.side{width:100%!important}.main{padding:0 14px 35px!important}.hero{margin:0 -14px 16px!important;padding:22px 14px!important}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
