@@ -1203,6 +1203,32 @@ button.menu-item{font:inherit;text-align:left;background:transparent;border-top:
 
 /* === MEJORA VISUAL VACACIONES: solicitud y mis solicitudes === */
 .vac-request-card{padding:28px!important;border-radius:22px!important;overflow:hidden;position:relative}.vac-request-card:before{content:"";position:absolute;right:-80px;top:-90px;width:230px;height:230px;border-radius:50%;background:rgba(255,210,63,.10);pointer-events:none}.vac-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:20px}.vac-head h2{margin:0 0 8px;font-size:26px}.vac-help{color:#c2ccd8;font-weight:800;line-height:1.45;margin:0}.period-list{display:grid;grid-template-columns:repeat(3,minmax(230px,1fr));gap:14px;margin-top:10px}.period-card{position:relative;display:grid!important;grid-template-columns:auto 1fr;gap:12px;align-items:flex-start;margin:0!important;padding:18px!important;border:1px solid #34404d;border-radius:18px;background:linear-gradient(145deg,#171c23,#11161c);cursor:pointer;min-height:104px;box-shadow:0 12px 26px rgba(0,0,0,.16);transition:.15s}.period-card:hover{transform:translateY(-1px);border-color:rgba(255,210,63,.7);box-shadow:0 16px 35px rgba(0,0,0,.28)}.period-card input{width:18px;height:18px;accent-color:#ffd23f;margin-top:4px}.period-main{display:grid;gap:8px}.period-years{font-size:18px;color:#fff;font-weight:1000;letter-spacing:.2px}.period-meta{display:flex;flex-wrap:wrap;gap:8px}.period-badge{background:#202732;border:1px solid #3a4654;border-radius:999px;padding:6px 10px;color:#d9e5f2;font-size:12px;font-weight:950}.period-badge strong{color:var(--yellow)}.period-card input:disabled~.period-main{opacity:.45}.vac-form-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:18px}.vac-form-row .field{min-width:0}.vac-submit-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:end;margin-top:16px}.check-card{height:100%;display:flex!important;align-items:center;gap:10px;padding:15px 16px!important;border:1px solid #34404d;border-radius:16px;background:#11161c;color:#eaf3ff;font-weight:950}.check-card input{accent-color:#ffd23f;width:18px;height:18px}.vac-submit-row .btn-green{height:52px;justify-content:center;font-size:15px}.sol-cards{display:grid;gap:14px}.sol-card{display:grid;grid-template-columns:1.12fr 1.55fr .55fr 1.65fr 1.2fr 1fr;gap:14px;align-items:center;background:linear-gradient(145deg,#171c23,#11161d);border:1px solid #33404d;border-radius:18px;padding:18px 20px;box-shadow:0 12px 30px rgba(0,0,0,.18)}.sol-card.head{background:#0b1015;color:var(--yellow);font-size:13px;font-weight:1000;text-transform:uppercase;box-shadow:none;border-radius:18px 18px 8px 8px}.sol-card:not(.head){border-left:5px solid var(--yellow)}.sol-card b{color:#fff;font-size:16px}.sol-card .dias b{display:inline-grid;place-items:center;min-width:46px;height:38px;border-radius:12px;background:rgba(255,210,63,.12);color:var(--yellow);border:1px solid rgba(255,210,63,.28)}.sol-card .coment{color:#dbe4ee;font-weight:850}.sol-empty{padding:22px;border:1px dashed #3b4552;border-radius:16px;color:#b8c0cb}.local-note{margin-top:10px;color:#b8c0cb;font-size:13px}@media(max-width:1100px){.period-list{grid-template-columns:1fr}.vac-form-row,.vac-submit-row{grid-template-columns:1fr}}@media(max-width:900px){.sol-card,.sol-card.head{grid-template-columns:1fr}.sol-card.head{display:none}.sol-card{gap:9px}.sol-card>div:before{content:attr(data-label);display:block;color:var(--yellow);font-size:11px;text-transform:uppercase;margin-bottom:3px}.vac-head{display:block}}
+
+
+/* =========================================================
+   OVERRIDE UI PRIZE RRHH - SOLO AMARILLO / SIN VERDE
+   Pantallas Gestión Contratación + Crear Plantilla
+   ========================================================= */
+:root{
+  --brand:#0b2f4a!important;
+  --brand2:#08263d!important;
+  --accent:#ffb21a!important;
+  --accent2:#ffd23f!important;
+  --bg:#eef4f8!important;
+  --paper:#ffffff!important;
+  --ink:#061a33!important;
+  --soft:#5b6878!important;
+  --border:#cdd9e6!important;
+}
+body{background:var(--bg)!important;color:var(--ink)!important;font-family:Inter,Segoe UI,Arial,sans-serif!important;font-weight:750!important}
+.app{background:var(--bg)!important}.main{background:linear-gradient(135deg,#f7fbff 0%,#edf4f8 45%,#e9f1f6 100%)!important;color:var(--ink)!important;padding-top:32px!important}.hero{background:transparent!important;border-bottom:0!important;padding-top:10px!important}.topbar h1,.c-title{color:var(--ink)!important;text-shadow:none!important;letter-spacing:-.7px!important;font-weight:1000!important}.subtitle,.muted,.muted2{color:#687589!important}
+.side{background:linear-gradient(180deg,#083454 0%,#061d33 100%)!important;border-right:1px solid rgba(255,255,255,.12)!important;color:#eaf3ff!important}.side-top{background:#062840!important;border-bottom:1px solid rgba(255,255,255,.12)!important}.menu-title,.menu-item{color:#eaf3ff!important}.menu-group.force-open .menu-title,.menu-title.active,.menu-item.active,.menu-group.nested.force-open>.menu-title{background:linear-gradient(135deg,var(--accent2),var(--accent))!important;color:#061a33!important;border-left-color:var(--accent)!important;box-shadow:0 14px 32px rgba(255,178,26,.22)!important}.menu-group.force-open .menu-title *, .menu-title.active *, .menu-item.active *, .menu-group.nested.force-open>.menu-title *{color:#061a33!important}.menu-title:hover,.menu-item:hover{background:rgba(255,210,63,.14)!important;border-left-color:var(--accent2)!important}.side .btn-green,.side .green,.gestion-card.green .btn-green{background:linear-gradient(135deg,var(--accent2),var(--accent))!important;color:#061a33!important;border-color:rgba(255,178,26,.45)!important}
+.card,.c-card,.filter-card,.create-card{background:rgba(255,255,255,.96)!important;color:var(--ink)!important;border:1px solid var(--border)!important;border-radius:22px!important;box-shadow:0 18px 42px rgba(9,46,75,.10)!important}.c-card h2,.c-card h3,.card h2,.card h3{color:var(--ink)!important}.input,input,select,textarea{background:#fff!important;color:var(--ink)!important;border:1.5px solid #c5d2df!important;border-radius:14px!important;font-weight:900!important;box-shadow:none!important}input:focus,select:focus,textarea:focus{border-color:var(--accent)!important;box-shadow:0 0 0 4px rgba(255,178,26,.18)!important;outline:none!important}option{background:#fff!important;color:var(--ink)!important}.c-btn,.btn,.btn-blue,.btn-green,.crear-btn{background:linear-gradient(135deg,var(--accent2),var(--accent))!important;color:#061a33!important;border:0!important;border-radius:16px!important;font-weight:1000!important;box-shadow:0 12px 28px rgba(255,178,26,.28)!important}.c-btn.gray,.btn.gray,.gray{background:#6b7788!important;color:#fff!important;box-shadow:none!important}.btn-red{background:#ffe8e8!important;color:#b42318!important;border:1px solid #ffc8c8!important}.state-pill.ok,.status-pill,.pill.ok{background:#fff7d1!important;color:#8a5a00!important;border:1px solid #ffd66b!important}.state-pill.bad{background:#ffe8e8!important;color:#b42318!important;border:1px solid #ffc8c8!important}
+.table-wrap{background:#fff!important;border:1px solid var(--border)!important;border-radius:20px!important;box-shadow:0 16px 36px rgba(9,46,75,.08)!important}table,.c-table,.tpl-table{background:#fff!important;color:var(--ink)!important;border-collapse:separate!important;border-spacing:0!important}.c-table th,.tpl-table th,th{background:#e9f1f7!important;color:#15304a!important;border-bottom:1px solid #cfdae6!important;text-transform:uppercase!important;letter-spacing:.04em!important;font-weight:1000!important}.c-table td,.tpl-table td,td{background:#fff!important;color:#13263e!important;border-bottom:1px solid #e1e8f0!important;font-weight:850!important}.c-table tr:nth-child(even) td,.tpl-table tr:nth-child(even) td{background:#f7fafc!important}.plantilla-table td:nth-child(n+4),.plantilla-table td:nth-child(n+4) *{color:#31445a!important;opacity:1!important}.plantilla-table td:nth-child(3){color:#061a33!important;font-weight:1000!important}.plantilla-filter{display:grid!important;grid-template-columns:180px 1fr 210px 1fr!important;gap:18px 22px!important;align-items:center!important}.plantilla-filter b,.c-form b{color:var(--ink)!important;font-weight:1000!important}.plantilla-top{display:flex!important;align-items:center!important;justify-content:space-between!important;margin-bottom:28px!important}.plantilla-top .crear-btn{padding:18px 30px!important;border-radius:999px!important;font-size:17px!important}
+/* Modal Crear Plantilla */
+.modal-prize{position:fixed;inset:0;background:rgba(3,14,26,.58);z-index:9999;display:none;align-items:center;justify-content:center;padding:24px}.modal-prize:target{display:flex}.modal-box{width:min(920px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:18px;border:1px solid #d8e2ec;box-shadow:0 28px 80px rgba(0,0,0,.32);color:var(--ink)}.modal-head{display:flex;align-items:center;justify-content:space-between;padding:24px 28px;border-bottom:1px solid #e3e9f0}.modal-head h2{margin:0;color:var(--ink);font-size:28px;font-weight:1000}.modal-close{font-size:28px;color:#7a8593;font-weight:1000}.modal-body{padding:32px 48px 42px}.modal-form{display:grid;grid-template-columns:210px 1fr;gap:12px 18px;align-items:start}.modal-form label{font-size:20px;font-weight:850;color:#2d3642;text-align:right;padding-top:12px}.modal-form label.req{color:#f04438}.modal-form input,.modal-form select,.modal-form textarea{min-height:46px;font-size:18px;border-radius:9px!important}.modal-form textarea{min-height:74px}.modal-help{grid-column:2;color:#f04438;font-size:15px;font-weight:750;margin-top:-8px}.modal-actions{grid-column:2;display:flex;gap:12px;justify-content:flex-end;margin-top:24px}.modal-actions .c-btn{padding:12px 22px!important;border-radius:10px!important}.select-soft{background:#e3e7ec!important}.file-row{padding:10px 12px!important;background:#fff!important;border:1.5px solid #c5d2df!important;border-radius:9px!important;font-weight:900}.only-yellow *{--green:var(--accent)!important}
+@media(max-width:900px){.plantilla-filter{grid-template-columns:1fr!important}.modal-form{grid-template-columns:1fr}.modal-form label{text-align:left}.modal-help,.modal-actions{grid-column:1}.plantilla-top{align-items:flex-start!important;gap:14px;flex-direction:column}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -2947,147 +2973,6 @@ def admin_contratacion():
     css="""
     <style>
     .main{background:#f4f6f8!important;color:#111827!important}.c-title{font-size:24px;margin:0 0 20px;font-weight:950;color:#111827}.c-bar{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}.c-filter{display:grid;grid-template-columns:180px minmax(260px,420px) 160px minmax(260px,420px);gap:10px 24px;align-items:center;margin-bottom:22px}.c-filter input,.c-filter select,.c-form input,.c-form select{background:#fff!important;color:#111827!important;border:1px solid #cfd6df!important;border-radius:8px!important;padding:10px!important}.c-btn{background:#ff8d35;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:950;display:inline-flex;gap:8px;align-items:center;text-decoration:none}.c-btn.gray{background:#66707c}.c-card{background:#fff;border:1px solid #dde2e7;border-radius:12px;box-shadow:0 6px 18px #0000000d;margin-bottom:18px}.tabs{display:flex;border-bottom:1px solid #dde2e7}.tab{padding:14px 24px;font-weight:900;color:#7a7f87;border-bottom:3px solid transparent}.tab.active{color:#1f2937;border-bottom-color:#ff8d35}.c-table{width:100%;border-collapse:collapse;background:#fff;font-size:15px}.c-table th{font-weight:900;text-align:left;background:#f7f8fa;border:1px solid #dde2e7;padding:12px}.c-table td{border:1px solid #e1e5ea;padding:11px;vertical-align:middle}.c-table tr:nth-child(even) td{background:#eeeeee}.c-table tr.selected td{background:#bcd7fb!important}.c-badge{display:inline-grid;place-items:center;min-width:70px;border-radius:7px;padding:6px 10px;color:#fff;font-weight:950}.c-badge.green{background:#55ad11}.c-badge.cyan{background:#51c2d4}.state{border:1px solid #d1d5db;border-radius:99px;padding:7px 12px;background:white;color:#16a34a;font-weight:900}.tile-grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:30px;max-width:1100px;margin:45px auto}.c-tile{background:#fff;border:1px solid #dde2e7;border-radius:14px;min-height:185px;padding:28px;display:flex;gap:18px;align-items:flex-start;position:relative;box-shadow:0 6px 18px #0000000d}.tile-icon{width:74px;height:74px;border-radius:50%;background:#ffe5cc;color:#ff8d35;display:grid;place-items:center;font-size:34px}.download-corner{position:absolute;right:18px;bottom:14px;font-size:24px}.toolbar{display:flex;justify-content:flex-end;gap:18px;color:#7b8088;margin:12px 0}.c-form{display:grid;grid-template-columns:180px minmax(260px,430px) 180px minmax(260px,430px);gap:12px 22px;align-items:center}.profile{display:grid;grid-template-columns:150px 1fr 1fr 1fr;gap:24px;align-items:start}.avatar-big{width:135px;height:135px;border-radius:50%;background:#f7c26d;display:grid;place-items:center;font-size:80px}.divider{border-left:2px dashed #c8c8c8;padding-left:20px}.muted2{color:#667085}.anuncio-upload{background:#fff;padding:22px;border-radius:12px;border:1px dashed #ff8d35;max-width:900px}.anuncio-upload input[type=file]{background:#fff!important;color:#111!important;border:1px solid #ddd!important;padding:10px!important;border-radius:8px!important}.video-box{margin-top:16px;background:#111827;color:#fff;padding:18px;border-radius:10px}.video-box video{width:100%;max-height:260px;background:#000;border-radius:8px}.table-wrap{overflow:auto}.plantilla-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.crear-btn{border-radius:22px}.plantilla-filter{display:grid;grid-template-columns:190px minmax(280px,438px) 190px minmax(280px,438px);gap:8px 28px;align-items:center}.filter-card{margin-bottom:18px}.create-card{display:none}.create-card:target{display:block}.tpl-actions{white-space:nowrap;text-align:center}.icon-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;background:transparent;color:#111827!important;font-size:20px;font-weight:950;text-decoration:none;cursor:pointer}.icon-btn:hover{background:#eef2f7;border-radius:8px}.action-delete{color:#111827!important}.state.inactive{color:#6b7280;background:#f3f4f6}.state-form{margin:0}.state-select{background:white!important;color:#16a34a!important;border:1px solid #d1d5db!important;border-radius:99px!important;padding:7px 12px!important;font-weight:900;min-width:110px}.state-select.inactive{color:#e11d48!important}.tpl-link{font-weight:900;color:#0f172a!important}.plantilla-table th:first-child,.plantilla-table td:first-child{min-width:92px;text-align:center}@media(max-width:1000px){.c-filter,.c-form,.profile{grid-template-columns:1fr}.tile-grid{grid-template-columns:1fr;margin:20px 0}.c-table{min-width:1000px}}
-
-    /* ===== MEJORA VISUAL PRO - PLANTILLAS / CONTRATACIÓN ===== */
-    .main{
-      background:linear-gradient(180deg,#eef3f8 0%,#f8fafc 45%,#ffffff 100%)!important;
-      color:#0b1728!important;
-      padding:28px 34px 54px!important;
-    }
-    .c-title{
-      color:#0b1728!important;
-      font-size:30px!important;
-      letter-spacing:-.7px;
-      font-weight:1000!important;
-      text-shadow:none!important;
-    }
-    .plantilla-top{margin:0 0 22px!important;align-items:center!important}
-    .c-card{
-      background:#ffffff!important;
-      border:1px solid #d7e0ea!important;
-      border-radius:18px!important;
-      box-shadow:0 14px 34px rgba(15,23,42,.08)!important;
-      color:#0f172a!important;
-    }
-    .filter-card{
-      background:linear-gradient(135deg,#ffffff 0%,#f8fbff 100%)!important;
-      padding:24px!important;
-    }
-    .plantilla-filter{
-      grid-template-columns:190px minmax(270px,1fr) 190px minmax(270px,1fr)!important;
-      gap:14px 28px!important;
-    }
-    .plantilla-filter b,.c-form b,.c-filter b{
-      color:#0f172a!important;
-      font-size:16px!important;
-      font-weight:1000!important;
-    }
-    .plantilla-filter input,.plantilla-filter select,
-    .c-filter input,.c-filter select,.c-form input,.c-form select,.c-form textarea{
-      background:#ffffff!important;
-      color:#0f172a!important;
-      border:1.5px solid #cbd5e1!important;
-      border-radius:12px!important;
-      min-height:46px!important;
-      box-shadow:inset 0 1px 0 rgba(15,23,42,.03)!important;
-      font-weight:850!important;
-    }
-    .plantilla-filter input:focus,.plantilla-filter select:focus,
-    .c-form input:focus,.c-form select:focus,.c-form textarea:focus{
-      border-color:#2563eb!important;
-      box-shadow:0 0 0 4px rgba(37,99,235,.12)!important;
-      outline:none!important;
-    }
-    .c-btn{
-      background:linear-gradient(135deg,#2563eb,#1d4ed8)!important;
-      color:#ffffff!important;
-      border:0!important;
-      border-radius:12px!important;
-      padding:12px 18px!important;
-      font-weight:1000!important;
-      box-shadow:0 10px 22px rgba(37,99,235,.18)!important;
-    }
-    .crear-btn{
-      background:linear-gradient(135deg,#ff8a2a,#f97316)!important;
-      border-radius:999px!important;
-      padding:14px 22px!important;
-      box-shadow:0 12px 26px rgba(249,115,22,.25)!important;
-    }
-    .c-btn.gray{background:#64748b!important;box-shadow:0 10px 20px rgba(100,116,139,.15)!important}
-    .table-wrap{
-      border-radius:18px!important;
-      overflow:auto!important;
-      border:1px solid #d8e1ea!important;
-      background:#fff!important;
-    }
-    .c-table{
-      color:#102033!important;
-      background:#ffffff!important;
-      font-size:15px!important;
-      font-weight:750!important;
-    }
-    .c-table th{
-      background:linear-gradient(180deg,#f1f5f9,#e8eef6)!important;
-      color:#334155!important;
-      border:1px solid #d8e1ea!important;
-      padding:14px 14px!important;
-      text-transform:uppercase;
-      letter-spacing:.35px;
-      font-size:13px!important;
-      font-weight:1000!important;
-      white-space:nowrap;
-    }
-    .c-table td{
-      color:#1e293b!important;
-      background:#ffffff!important;
-      border:1px solid #e2e8f0!important;
-      padding:16px 14px!important;
-      vertical-align:middle!important;
-      line-height:1.35!important;
-    }
-    .c-table tr:nth-child(even) td{background:#f8fafc!important}
-    .c-table tr:hover td{background:#eef6ff!important}
-    .plantilla-table td:nth-child(3),.plantilla-table td:nth-child(4),.plantilla-table td:nth-child(6),.plantilla-table td:nth-child(8),.plantilla-table td:nth-child(9){
-      color:#0f172a!important;
-      font-weight:950!important;
-    }
-    .plantilla-table td:nth-child(5),.plantilla-table td:nth-child(7){
-      color:#334155!important;
-      font-weight:850!important;
-    }
-    .tpl-link{color:#0f172a!important;font-weight:1000!important;line-height:1.25!important}
-    .state-select{
-      background:#ffffff!important;
-      color:#16a34a!important;
-      border:1.5px solid #cbd5e1!important;
-      border-radius:999px!important;
-      padding:10px 18px!important;
-      min-width:128px!important;
-      font-weight:1000!important;
-      box-shadow:0 8px 20px rgba(15,23,42,.07)!important;
-    }
-    .icon-btn{color:#0f172a!important;background:#eef2f7!important;border-radius:10px!important;margin:0 3px!important}
-    .icon-btn:hover{background:#dbeafe!important;color:#1d4ed8!important}
-    .side{
-      background:linear-gradient(180deg,#082f49 0%,#0f172a 62%,#111827 100%)!important;
-      border-right:1px solid rgba(148,163,184,.25)!important;
-      box-shadow:12px 0 32px rgba(15,23,42,.22)!important;
-    }
-    .side-top{background:#082f49!important;border-bottom:1px solid rgba(255,255,255,.12)!important}
-    .menu-title{background:rgba(255,255,255,.05)!important;color:#e5eef8!important;border:1px solid rgba(255,255,255,.08)!important}
-    .menu-group.force-open .menu-title,.menu-title.active{
-      background:linear-gradient(135deg,#22c55e,#16a34a)!important;color:#ffffff!important;
-      box-shadow:0 12px 24px rgba(34,197,94,.22)!important;
-    }
-    .menu-item{color:#dbeafe!important}
-    .menu-item.active{
-      background:rgba(34,197,94,.16)!important;border-left-color:#22c55e!important;color:#ffffff!important;
-    }
-    @media(max-width:1000px){
-      .plantilla-filter{grid-template-columns:1fr!important}
-      .main{padding:18px!important}
-    }
-
     </style>"""
     def wrap(inner):
         return css + inner
@@ -3125,23 +3010,63 @@ def admin_contratacion():
             <b>Nombre Plantilla:</b><input name='f_nombre' value='{f_nombre_v}'>
             <b>Tipo Documento:</b><input name='f_tipo' value='{f_tipo_v}' list='tipos_doc_list_filter'><datalist id='tipos_doc_list_filter'>{opt_tipo}</datalist>
             <b>Esquema:</b><select name='f_esquema'><option value=''></option><option {'selected' if f_esquema_v=='Trabajador Contrato Laboral' else ''}>Trabajador Contrato Laboral</option></select>
-            <b>Condición:</b><select name='f_condicion'><option value=''></option><option {'selected' if f_cond_v=='SIN CONDICIONES' else ''}>SIN CONDICIONES</option><option {'selected' if f_cond_v=='CONDICIONES' else ''}>CON CONDICIONES</option></select>
+            <b>Condición:</b><select name='f_condicion'><option value=''></option><option value='SIN CONDICIONES' {'selected' if f_cond_v=='SIN CONDICIONES' else ''}>SIN CONDICIONES</option><option value='CONDICIONES' {'selected' if f_cond_v=='CONDICIONES' else ''}>CONDICIONES</option></select>
             <span></span><span><button class='c-btn'>⌕ Buscar</button> <a class='c-btn gray' href='/admin/contratacion?sec=plantillas'>Limpiar</a></span>
           </form>
         </div>
-        <div id='crearPlantilla' class='c-card create-card' style='padding:18px'>
-          <h3 style='margin-top:0'>Crear / cargar nueva plantilla</h3>
-          <form method='post' enctype='multipart/form-data' class='c-form'>
-            <input type='hidden' name='accion' value='plantilla'>
-            <b>Nombre Plantilla:</b><input name='nombre_plantilla' required>
-            <b>Tipo Documento:</b><input name='tipo_documento' list='tipos_doc_list' required><datalist id='tipos_doc_list'>{opt_tipo}</datalist>
-            <b>Esquema:</b><select name='esquema'><option>Trabajador Contrato Laboral</option></select>
-            <b>Condición:</b><select name='condicion'><option>SIN CONDICIONES</option><option>CONDICIONES</option></select>
-            <b>Versión:</b><input name='version' value='Version 01'>
-            <b>Archivo plantilla:</b><input type='file' name='archivo' accept='.pdf,.doc,.docx'>
-            <b>Descripción:</b><textarea name='descripcion' placeholder='Descripción de la plantilla'></textarea>
-            <span></span><button class='c-btn'>+ Guardar Plantilla</button>
-          </form>
+        <div id='crearPlantilla' class='modal-prize'>
+          <div class='modal-box'>
+            <div class='modal-head'>
+              <h2>Crear Plantilla</h2>
+              <a class='modal-close' href='#' aria-label='Cerrar'>×</a>
+            </div>
+            <div class='modal-body'>
+              <form method='post' enctype='multipart/form-data' class='modal-form'>
+                <input type='hidden' name='accion' value='plantilla'>
+                <input type='hidden' name='version' value='Version 01'>
+
+                <label class='req'>Tipo Plantilla</label>
+                <select name='tipo_plantilla' class='select-soft' required>
+                  <option value=''></option>
+                  <option>WORD</option>
+                  <option>PDF</option>
+                </select>
+                <div class='modal-help'>Debe seleccionar Tipo Plantilla</div>
+
+                <label class='req'>Tipo Documento</label>
+                <input name='tipo_documento' list='tipos_doc_list' required autocomplete='off'>
+                <datalist id='tipos_doc_list'>{opt_tipo}</datalist>
+                <div class='modal-help'>Debe seleccionar Tipo Documento</div>
+
+                <label class='req'>Nombre Plantilla</label>
+                <input name='nombre_plantilla' required autocomplete='off'>
+                <div class='modal-help'>Debe ingresar Nombre Archivo</div>
+
+                <label>Descripcion</label>
+                <textarea name='descripcion'></textarea>
+
+                <label>Modo de<br>selección de la<br>plantilla</label>
+                <select name='condicion' class='select-soft' required>
+                  <option value='SIN CONDICIONES'>Utilizar para todos los trabajadores</option>
+                  <option value='CONDICIONES'>Usar criterios de selección que cumplan con los datos del trabajador</option>
+                </select>
+
+                <label>Esquema</label>
+                <select name='esquema'>
+                  <option>Trabajador Contrato Laboral</option>
+                </select>
+
+                <label>Archivo plantilla</label>
+                <div class='file-row'><input type='file' name='archivo' accept='.pdf,.doc,.docx'></div>
+
+                <div class='modal-actions'>
+                  <button class='c-btn' type='submit'>Guardar</button>
+                  <button class='c-btn gray' type='reset'>Limpiar</button>
+                  <a class='c-btn gray' href='#'>Cerrar</a>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
         <div class='c-card table-wrap'><table class='c-table plantilla-table'><tr><th>Proceso</th><th>Estado</th><th>Nombre Plantilla</th><th>Tipo Documento</th><th>Esquema</th><th>Descripción</th><th>Versión</th><th>Condición</th><th>Nombre Archivo</th></tr>{plantillas_rows or '<tr><td colspan=9>No hay plantillas registradas.</td></tr>'}</table></div>
         """)
