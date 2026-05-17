@@ -17,6 +17,9 @@ import os
 import re
 import sqlite3
 import html
+import base64
+import hashlib
+import uuid
 from datetime import datetime
 from pathlib import Path
 from copy import copy
@@ -784,6 +787,22 @@ def init_db():
             fecha_firma TEXT,
             observacion TEXT
         )''')
+        # Migración segura: solicitudes de firma con cámara laptop/celular y trazabilidad.
+        for col, ddl in [
+            ('firma_token', 'ALTER TABLE firma_solicitudes ADD COLUMN firma_token TEXT'),
+            ('selfie_path', 'ALTER TABLE firma_solicitudes ADD COLUMN selfie_path TEXT'),
+            ('documento_firmado_path', 'ALTER TABLE firma_solicitudes ADD COLUMN documento_firmado_path TEXT'),
+            ('camara_origen', 'ALTER TABLE firma_solicitudes ADD COLUMN camara_origen TEXT'),
+            ('acepta_terminos', 'ALTER TABLE firma_solicitudes ADD COLUMN acepta_terminos INTEGER DEFAULT 0'),
+            ('ip_registro', 'ALTER TABLE firma_solicitudes ADD COLUMN ip_registro TEXT'),
+            ('user_agent', 'ALTER TABLE firma_solicitudes ADD COLUMN user_agent TEXT'),
+            ('hash_evidencia', 'ALTER TABLE firma_solicitudes ADD COLUMN hash_evidencia TEXT'),
+            ('fecha_captura', 'ALTER TABLE firma_solicitudes ADD COLUMN fecha_captura TEXT'),
+            ('validacion_estado', 'ALTER TABLE firma_solicitudes ADD COLUMN validacion_estado TEXT'),
+            ('proveedor_respuesta', 'ALTER TABLE firma_solicitudes ADD COLUMN proveedor_respuesta TEXT'),
+        ]:
+            try: con.execute(ddl)
+            except Exception: pass
         if not con.execute("SELECT 1 FROM contratacion_plantillas LIMIT 1").fetchone():
             semillas=[
                 ('ACUERDO PREFERENCIAL','ACUERDO PREFERENCIAL','ACUERDO PREFERENCIAL','CONTRATACION PREFERENCIAL AQUII'),
@@ -1818,7 +1837,7 @@ def sidebar(active):
                     <a class='menu-item sub-mini {'active' if active_sub == 'documentaria' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=documentaria'><span>•</span><span class='label'>Archivos Trabajador</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'ficha' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=ficha'><span>•</span><span class='label'>Ficha Trabajador</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'plantillas' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=plantillas'><span>•</span><span class='label'>Plantilla Documentos</span></a>
-                    <a class='menu-item sub-mini' onclick='saveSideScroll()' href='/admin/contratacion?sec=firma'><span>•</span><span class='label'>Firma / Facial / Digital</span></a>
+                    <a class='menu-item sub-mini {'active' if active_sub == 'firma' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=firma'><span>•</span><span class='label'>Firma / Facial / Digital</span></a>
                     <a class='menu-item sub-mini' onclick='saveSideScroll()' href='/admin/plantilla_gestion/contratacion'><span>•</span><span class='label'>Plantilla Contratación</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'nisira' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=nisira'><span>•</span><span class='label'>Contratación NISIRA</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'descargas' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=descargas'><span>•</span><span class='label'>Descargas</span></a>
@@ -3771,6 +3790,105 @@ def contratacion_plantilla_eliminar(pid):
     flash('Plantilla eliminada correctamente. Los documentos/contratos históricos no se borran.', 'ok')
     return redirect(url_for('admin_contratacion', sec='plantillas'))
 
+
+
+def crear_token_firma():
+    return uuid.uuid4().hex + uuid.uuid4().hex[:8]
+
+
+def firma_url_token(token):
+    # En Render/producción request.host_url será HTTPS. En local funciona por localhost.
+    try:
+        return url_for('firma_publica_token', token=token, _external=True)
+    except Exception:
+        return '/firma/' + str(token or '')
+
+
+def guardar_selfie_firma(data_url, firma_id, dni, origen='WEB'):
+    """Guarda captura PNG/JPG enviada desde getUserMedia. No realiza identificación biométrica interna;
+    deja evidencia y trazabilidad para integración con proveedor facial/firma digital autorizado."""
+    if not data_url or 'base64,' not in data_url:
+        raise ValueError('No se recibió imagen válida desde la cámara.')
+    meta, b64 = data_url.split('base64,', 1)
+    ext = '.jpg' if 'jpeg' in meta.lower() or 'jpg' in meta.lower() else '.png'
+    raw = base64.b64decode(b64)
+    if len(raw) < 1000:
+        raise ValueError('La imagen capturada parece estar vacía.')
+    if len(raw) > 8 * 1024 * 1024:
+        raise ValueError('La imagen supera el tamaño permitido.')
+    carpeta = UPLOAD_DIR / 'firma_digital' / normalizar_dni(dni or 'SIN_DNI')
+    carpeta.mkdir(parents=True, exist_ok=True)
+    nombre = f"{now_file()}_firma_{firma_id}_{origen}{ext}"
+    path = carpeta / secure_filename(nombre)
+    path.write_bytes(raw)
+    return str(path), hashlib.sha256(raw).hexdigest()
+
+
+@app.route('/admin/firma/camara_demo')
+@admin_required
+def firma_camara_demo():
+    content = """
+    <section class='grid'><div class='card span-12'><h1>Prueba de cámara para firma facial</h1>
+    <p class='muted'>Valida cámara en laptop o celular. No guarda datos.</p>
+    <div class='camera-box'><video id='video' autoplay playsinline></video><canvas id='canvas' style='display:none'></canvas><img id='preview' style='display:none'></div>
+    <div class='actions'><button class='btn-green' type='button' onclick='startCamera()'>Activar cámara</button><button class='btn-blue' type='button' onclick='capturePhoto()'>Capturar vista previa</button><a class='btn' href='/admin/contratacion?sec=firma'>Volver a firma</a></div><p id='camStatus' class='muted'></p>
+    </div></section>
+    <style>.camera-box{background:#0f172a;border-radius:18px;padding:16px;display:grid;place-items:center;min-height:360px}.camera-box video,.camera-box img{max-width:100%;border-radius:14px;background:#000}</style>
+    <script>
+    let stream=null;
+    async function startCamera(){const st=document.getElementById('camStatus');try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});document.getElementById('video').srcObject=stream;st.textContent='Cámara activa correctamente.';}catch(e){st.textContent='No se pudo activar la cámara. Revisa permisos del navegador o usa HTTPS/localhost.';}}
+    function capturePhoto(){const v=document.getElementById('video'),c=document.getElementById('canvas'),img=document.getElementById('preview');if(!v.videoWidth){document.getElementById('camStatus').textContent='Primero activa la cámara.';return;}c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);img.src=c.toDataURL('image/png');img.style.display='block';}
+    </script>
+    """
+    return render_page(content, active='Gestion Contratacion:firma')
+
+
+@app.route('/firma/<token>', methods=['GET','POST'])
+def firma_publica_token(token):
+    token = clean(token)
+    with db() as con:
+        sol = con.execute('SELECT * FROM firma_solicitudes WHERE firma_token=? ORDER BY id DESC LIMIT 1', (token,)).fetchone()
+        if not sol:
+            abort(404)
+        doc = con.execute('SELECT * FROM contratacion_docs WHERE id=?', (sol['documento_id'],)).fetchone() if sol['documento_id'] else None
+    if request.method == 'POST':
+        acepta = 1 if request.form.get('acepta') == '1' else 0
+        firma_texto = clean(request.form.get('firma_texto'))
+        img_data = request.form.get('captura_base64')
+        cam_origen = clean(request.form.get('camara_origen')) or 'CELULAR/LAPTOP'
+        if not acepta:
+            flash('Debe aceptar la declaración para registrar la firma.', 'err')
+            return redirect(url_for('firma_publica_token', token=token))
+        if not img_data:
+            flash('Debe capturar una foto de evidencia desde la cámara.', 'err')
+            return redirect(url_for('firma_publica_token', token=token))
+        try:
+            selfie_path, hash_ev = guardar_selfie_firma(img_data, sol['id'], sol['dni'], cam_origen)
+            evidencia = f"SELFIE:{Path(selfie_path).name}; HASH:{hash_ev[:16]}; FIRMA:{firma_texto or sol['trabajador']}"
+            with db() as con:
+                con.execute('UPDATE firma_solicitudes SET estado=?, evidencia_ref=?, selfie_path=?, camara_origen=?, acepta_terminos=?, ip_registro=?, user_agent=?, hash_evidencia=?, fecha_captura=?, fecha_firma=?, validacion_estado=?, proveedor_respuesta=? WHERE id=?',
+                            ('Firmado con evidencia facial', evidencia, selfie_path, cam_origen, 1, request.headers.get('X-Forwarded-For', request.remote_addr), request.headers.get('User-Agent','')[:500], hash_ev, now_txt(), now_txt(), 'EVIDENCIA CAPTURADA - PENDIENTE VALIDACIÓN PROVEEDOR', 'Captura local registrada. Integración biométrica externa configurable.', sol['id']))
+                if sol['documento_id']:
+                    con.execute("UPDATE contratacion_docs SET estado='FIRMADO CON EVIDENCIA FACIAL' WHERE id=?", (sol['documento_id'],))
+                con.commit()
+            flash('Firma registrada correctamente con evidencia de cámara.', 'ok')
+            return redirect(url_for('firma_publica_token', token=token, ok='1'))
+        except Exception as e:
+            flash('No se pudo guardar la evidencia: ' + str(e), 'err')
+            return redirect(url_for('firma_publica_token', token=token))
+    ok = request.args.get('ok') == '1'
+    estado = sol['estado'] or 'Pendiente'
+    contrato_info = f"{html.escape(doc['tipo_doc'])} - {html.escape(doc['archivo_nombre'] or '')}" if doc else 'Contrato/documento de contratación'
+    content = f"""
+    <!doctype html><html lang='es'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Firma digital / facial</title>
+    <style>body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#0f172a;color:#111827}}.wrap{{max-width:920px;margin:0 auto;padding:22px}}.card{{background:#fff;border-radius:22px;padding:22px;box-shadow:0 18px 45px #0005;margin:18px 0}}h1{{margin:0;color:#0f172a}}.muted{{color:#64748b;line-height:1.5}}.badge{{display:inline-block;background:#fef3c7;color:#92400e;border-radius:999px;padding:8px 12px;font-weight:800}}video,img{{width:100%;max-height:430px;background:#000;border-radius:18px;object-fit:contain}}.camera{{background:#111827;border-radius:22px;padding:14px}}button,.btn{{border:0;border-radius:12px;padding:13px 16px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-block}}.primary{{background:#2563eb;color:white}}.green{{background:#16a34a;color:white}}.gray{{background:#475569;color:white}}input[type=text]{{width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:12px;font-size:16px;box-sizing:border-box}}.actions{{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}}.ok{{background:#dcfce7;color:#166534;padding:12px;border-radius:12px;font-weight:900}}label{{font-weight:800}}canvas{{display:none}}@media(max-width:700px){{.wrap{{padding:12px}}.card{{padding:16px;border-radius:16px}}}}</style></head>
+    <body><div class='wrap'><div class='card'><h1>Firma de contrato con cámara</h1><p class='muted'>Trabajador: <b>{html.escape(sol['trabajador'] or '')}</b> · DNI: <b>{html.escape(sol['dni'] or '')}</b></p><p>Documento: <b>{contrato_info}</b></p><span class='badge'>Estado: {html.escape(estado)}</span></div>
+    {"<div class='card ok'>✅ Firma registrada correctamente. Ya puede cerrar esta ventana.</div>" if ok else ""}
+    <form method='post' class='card' onsubmit='return prepararEnvio()'><h2>1. Activar cámara y capturar evidencia</h2><p class='muted'>Funciona en laptop y celular. En celular usa la cámara frontal cuando el navegador lo permite.</p><div class='camera'><video id='video' autoplay playsinline></video><canvas id='canvas'></canvas><img id='preview' style='display:none'></div><input type='hidden' name='captura_base64' id='captura_base64'><input type='hidden' name='camara_origen' id='camara_origen' value='WEB'><div class='actions'><button type='button' class='primary' onclick='startCamera()'>📷 Activar cámara</button><button type='button' class='green' onclick='capturePhoto()'>✅ Capturar foto</button><button type='button' class='gray' onclick='stopCamera()'>Detener cámara</button></div><p id='camStatus' class='muted'></p><h2>2. Aceptación / firma digital simple</h2><p class='muted'>Declaro que soy el titular del DNI indicado, que he revisado el documento y acepto registrar mi firma/aceptación electrónica con evidencia de cámara.</p><label><input type='checkbox' name='acepta' value='1' required> Acepto firmar/validar este documento</label><br><br><label>Nombre completo como firma</label><input type='text' name='firma_texto' value='{html.escape(sol['trabajador'] or '')}' required><div class='actions'><button class='green' type='submit'>✍️ Registrar firma</button></div></form></div>
+    <script>let stream=null,captured=false;async function startCamera(){{const st=document.getElementById('camStatus');try{{const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);document.getElementById('camara_origen').value=isMobile?'CELULAR':'LAPTOP/PC';stream=await navigator.mediaDevices.getUserMedia({{video:{{facingMode:'user',width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}});document.getElementById('video').srcObject=stream;st.textContent='Cámara activa. Ahora presiona Capturar foto.';}}catch(e){{st.textContent='No se pudo activar cámara. Revisa permisos, usa HTTPS o localhost.';}}}}function capturePhoto(){{const v=document.getElementById('video'),c=document.getElementById('canvas'),img=document.getElementById('preview'),st=document.getElementById('camStatus');if(!v.videoWidth){{st.textContent='Primero activa la cámara.';return;}}c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);const data=c.toDataURL('image/png');document.getElementById('captura_base64').value=data;img.src=data;img.style.display='block';captured=true;st.textContent='Foto capturada correctamente.';}}function stopCamera(){{if(stream){{stream.getTracks().forEach(t=>t.stop());}}}}function prepararEnvio(){{if(!captured||!document.getElementById('captura_base64').value){{alert('Primero capture la foto de evidencia.');return false;}}return true;}}</script>
+    </body></html>"""
+    return content
+
 @app.route('/admin/contratacion', methods=['GET','POST'])
 @admin_required
 def admin_contratacion():
@@ -3848,9 +3966,10 @@ def admin_contratacion():
             with db() as con:
                 doc = con.execute('SELECT * FROM contratacion_docs WHERE id=?',(doc_id,)).fetchone()
                 if doc:
-                    con.execute('INSERT INTO firma_solicitudes(documento_id,dni,trabajador,metodo,estado,evidencia_ref,fecha_envio,observacion) VALUES(?,?,?,?,?,?,?,?)',(doc['id'],doc['dni'],doc['trabajador'],metodo,'Pendiente','',now_txt(),obs))
+                    token = crear_token_firma()
+                    con.execute('INSERT INTO firma_solicitudes(documento_id,dni,trabajador,metodo,estado,evidencia_ref,fecha_envio,observacion,firma_token,validacion_estado) VALUES(?,?,?,?,?,?,?,?,?,?)',(doc['id'],doc['dni'],doc['trabajador'],metodo,'Pendiente de captura facial','',now_txt(),obs,token,'PENDIENTE'))
                     con.execute("UPDATE contratacion_docs SET estado='ENVIADO A FIRMA' WHERE id=?",(doc['id'],))
-                    con.commit(); flash('Solicitud de firma creada. Queda pendiente de integración con proveedor facial/firma digital.', 'ok')
+                    con.commit(); flash('Solicitud de firma creada. Copia el enlace móvil/web para que el trabajador abra cámara, capture evidencia y acepte/firme.', 'ok')
                 else:
                     flash('Documento no encontrado para enviar a firma.', 'error')
             return redirect(url_for('admin_contratacion', sec='firma'))
@@ -4152,30 +4271,48 @@ def admin_contratacion():
         """)
     elif sec=='firma':
         opt_docs = ''.join([f"<option value='{d['id']}'>ID {d['id']} - {h(d['dni'])} - {h(d['trabajador'])} - {h(d['tipo_doc'])}</option>" for d in docs])
-        rows_firma = ''.join([f"<tr><td>{r['id']}</td><td>{h(r['dni'])}</td><td>{h(r['trabajador'])}</td><td>{h(r['metodo'])}</td><td><span class='status-pill'>{h(r['estado'])}</span></td><td>{h(r['fecha_envio'])}</td><td>{h(r['fecha_firma'] or '')}</td><td>{h(r['observacion'] or '')}</td></tr>" for r in firma_sols])
+        rows_firma = ''
+        for r in firma_sols:
+            token = r['firma_token'] if 'firma_token' in r.keys() and r['firma_token'] else ''
+            link = firma_url_token(token) if token else ''
+            evidencia = r['evidencia_ref'] if 'evidencia_ref' in r.keys() and r['evidencia_ref'] else ''
+            estado_val = r['validacion_estado'] if 'validacion_estado' in r.keys() and r['validacion_estado'] else ''
+            rows_firma += f"""<tr>
+              <td>{r['id']}</td><td>{h(r['dni'])}</td><td>{h(r['trabajador'])}</td><td>{h(r['metodo'])}</td>
+              <td><span class='status-pill'>{h(r['estado'])}</span><br><small>{h(estado_val)}</small></td>
+              <td>{h(r['fecha_envio'])}</td><td>{h(r['fecha_firma'] or '')}</td>
+              <td>{'<a class="c-btn gray mini-btn" href="'+h(link)+'" target="_blank">Abrir enlace</a>' if link else '-'}</td>
+              <td>{'<span class="state">Con evidencia</span>' if evidencia else '<span class="muted2">Pendiente</span>'}</td>
+              <td>{h(r['observacion'] or '')}</td>
+            </tr>"""
+        camara_demo_url = url_for('firma_camara_demo')
         content=wrap(f"""
-        <h2 class='c-title'>Firma de documentos: reconocimiento facial / firma digital</h2>
-        <div class='c-card' style='padding:18px'>
-          <h3>Flujo sugerido para contratos</h3>
-          <div class='mini-grid'>
-            <div class='dash-metric'><span>1. Generar contrato</span><b>Word/PDF</b><em class='mi'>📄</em></div>
-            <div class='dash-metric'><span>2. Enviar enlace</span><b>Correo/SMS</b><em class='mi'>🔗</em></div>
-            <div class='dash-metric'><span>3. Validar identidad</span><b>Facial/OTP</b><em class='mi'>🙂</em></div>
-            <div class='dash-metric'><span>4. Firma digital</span><b>Evidencia</b><em class='mi'>✍️</em></div>
-            <div class='dash-metric'><span>5. Archivar</span><b>Contrato</b><em class='mi'>🗂️</em></div>
-            <div class='dash-metric'><span>6. Auditoría</span><b>Log</b><em class='mi'>🧾</em></div>
+        <h2 class='c-title'>Reconocimiento facial / firma digital de contratos</h2>
+        <div class='c-card firma-hero' style='padding:18px'>
+          <div>
+            <h3>✅ Pestaña activa para cámara laptop y celular</h3>
+            <p class='muted2'>Desde aquí se envía el contrato a firma, se genera un enlace para abrirlo desde celular o laptop, se activa la cámara con permiso del trabajador y se guarda evidencia, IP, navegador, fecha y hash.</p>
+            <p class='muted2'><b>Importante:</b> el sistema guarda evidencia y trazabilidad. La comparación biométrica/RENIEC real queda lista para integrarse con proveedor autorizado/API oficial en configuración.</p>
+            <a class='c-btn' href='{camara_demo_url}' target='_blank'>📷 Probar cámara ahora</a>
+            <a class='c-btn gray' href='/admin/firma/configuracion'>⚙ Configurar proveedor / API</a>
           </div>
-          <p class='muted2'>Para RENIEC o firma digital real se debe integrar un proveedor autorizado/API oficial. Este módulo deja lista la bandeja, trazabilidad y configuración.</p>
-          <a class='c-btn gray' href='/admin/firma/configuracion'>⚙ Configurar proveedor / API</a>
+          <div class='firma-flow'>
+            <span>1 Generar contrato</span><span>2 Enviar link</span><span>3 Cámara facial</span><span>4 Aceptar/firma</span><span>5 Archivar</span>
+          </div>
         </div>
         <form method='post' class='c-card c-form' style='padding:18px'>
           <input type='hidden' name='accion' value='firma_solicitud'>
           <b>Documento de contratación</b><select name='documento_id' required>{opt_docs}</select>
           <b>Método</b><select name='metodo'><option>FACIAL + FIRMA DIGITAL</option><option>RECONOCIMIENTO FACIAL</option><option>FIRMA DIGITAL</option><option>OTP + ACEPTACIÓN</option><option>CARGA MANUAL RRHH</option></select>
           <b>Observación</b><input name='observacion' placeholder='Ej: Enviar contrato por WhatsApp/correo'>
-          <span></span><button class='c-btn'>Enviar a firma</button>
+          <span></span><button class='c-btn'>Generar enlace y enviar a firma</button>
         </form>
-        <div class='c-card table-wrap'><table class='c-table'><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Método</th><th>Estado</th><th>Fecha envío</th><th>Fecha firma</th><th>Observación</th></tr>{rows_firma or '<tr><td colspan=8>No hay solicitudes de firma.</td></tr>'}</table></div>
+        <div class='c-card' style='padding:18px'>
+          <h3>📌 ¿Dónde veo lo implementado?</h3>
+          <p class='muted2'>Menú izquierdo → <b>Gestión Contratación</b> → <b>Gestión documentaria</b> → <b>Firma / Facial / Digital</b>. Cada solicitud muestra su enlace para abrir desde celular o laptop.</p>
+        </div>
+        <div class='c-card table-wrap'><table class='c-table'><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Método</th><th>Estado</th><th>Fecha envío</th><th>Fecha firma</th><th>Link cámara</th><th>Evidencia</th><th>Observación</th></tr>{rows_firma or '<tr><td colspan=10>No hay solicitudes de firma. Primero sube/genera un contrato en Archivos Trabajador y luego envíalo a firma.</td></tr>'}</table></div>
+        <style>.firma-hero{{display:grid;grid-template-columns:1.4fr .8fr;gap:18px;align-items:center}}.firma-flow{{display:grid;gap:10px}}.firma-flow span{{background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;font-weight:900;color:#9a3412}}@media(max-width:900px){{.firma-hero{{grid-template-columns:1fr}}}}</style>
         """)
     elif sec=='nisira':
         content=wrap("<h2 class='c-title'>Contratación NISIRA</h2><div class='c-card' style='padding:22px'><p class='muted2'>Sección preparada para importar contratos / altas desde NISIRA y cruzar por DNI.</p><button class='c-btn'>Sincronizar NISIRA</button></div>")

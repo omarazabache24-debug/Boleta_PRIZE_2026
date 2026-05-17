@@ -1,0 +1,37 @@
+MEJORA IMPLEMENTADA - FIRMA / RECONOCIMIENTO FACIAL / FIRMA DIGITAL
+
+1. Dónde verlo:
+   Menú administrador -> Gestión Contratación -> Gestión documentaria -> Firma / Facial / Digital.
+
+2. Qué se agregó:
+   - Pestaña real y visible para firma de contratos.
+   - Botón "Probar cámara ahora" para laptop/celular.
+   - Generación de enlace público por cada solicitud de firma.
+   - Pantalla responsive /firma/<token> para que el trabajador abra desde celular o laptop.
+   - Activación de cámara con getUserMedia.
+   - Captura de evidencia facial en PNG.
+   - Registro de aceptación/firma simple.
+   - Trazabilidad: IP, navegador, fecha captura, fecha firma, hash de evidencia, origen cámara.
+   - Estado del contrato: FIRMADO CON EVIDENCIA FACIAL.
+
+3. Flujo de uso:
+   A. Cargar o generar contrato en Gestión Contratación -> Archivos Trabajador.
+   B. Entrar a Firma / Facial / Digital.
+   C. Seleccionar documento y presionar "Generar enlace y enviar a firma".
+   D. Copiar el enlace que aparece en la bandeja y enviarlo al trabajador por correo/WhatsApp.
+   E. El trabajador abre el enlace, activa cámara, captura foto, acepta declaración y registra firma.
+   F. El sistema guarda evidencia y actualiza el estado.
+
+4. Importante sobre RENIEC/firma digital real:
+   El sistema queda preparado para conectar proveedor/API autorizado. La captura local NO reemplaza validación biométrica oficial; guarda evidencia y trazabilidad para integrarla con RENIEC/proveedor/firma digital certificada.
+
+5. Archivos modificados:
+   - app.py
+
+6. Rutas nuevas:
+   - /admin/firma/camara_demo
+   - /firma/<token>
+
+7. Base de datos:
+   Se agregan columnas automáticamente a firma_solicitudes si no existen:
+   firma_token, selfie_path, documento_firmado_path, camara_origen, acepta_terminos, ip_registro, user_agent, hash_evidencia, fecha_captura, validacion_estado, proveedor_respuesta.
