@@ -1779,6 +1779,7 @@ def sidebar(active):
                   <div class='submenu'>{per}</div>
                 </div>
                 <a class='{cls_docs}' onclick='saveSideScroll()' href='/admin/documentos'><span>⬆️</span><span class='label'>Subir / gestionar documentos</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/plantilla_gestion/documental'><span>⬇️</span><span class='label'>Plantilla Documental</span></a>
               </div>
             </div>
             <div id='grp_vacacional' data-group='vacacional' class='{vac_cls}'>
@@ -1789,6 +1790,7 @@ def sidebar(active):
                 <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#solicitudes'><span>📄</span><span class='label'>Solicitudes de Vacaciones</span></a>
                 <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#aprobaciones'><span>✅</span><span class='label'>Aprobaciones</span></a>
                 <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#reportes'><span>📑</span><span class='label'>Reportes</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/plantilla_gestion/vacacional'><span>⬇️</span><span class='label'>Plantilla Vacacional</span></a>
               </div>
             </div>
             <div id='grp_contratacion' data-group='contratacion' class='{con_cls}'>
@@ -1809,14 +1811,15 @@ def sidebar(active):
                   </div>
                 </div>
                 <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'anuncios' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=anuncios'><span>!</span><span class='label'>Anuncios</span></a>
-                <div id='grp_con_documentaria' data-group='con_documentaria' class='menu-group nested {'force-open' if active_sub in ['renovacion','documentaria','ficha','plantillas','nisira','descargas'] else ''}'>
-                  <button type='button' class='menu-title {'active' if active_sub in ['renovacion','documentaria','ficha','plantillas','nisira','descargas'] else ''}' onclick="toggleGroup('grp_con_documentaria')"><span>🪪</span><span class='label'>Gestión Documentaria</span><span class='chev'>∨</span></button>
+                <div id='grp_con_documentaria' data-group='con_documentaria' class='menu-group nested {'force-open' if active_sub in ['renovacion','documentaria','ficha','plantillas','nisira','descargas','firma'] else ''}'>
+                  <button type='button' class='menu-title {'active' if active_sub in ['renovacion','documentaria','ficha','plantillas','nisira','descargas','firma'] else ''}' onclick="toggleGroup('grp_con_documentaria')"><span>🪪</span><span class='label'>Gestión Documentaria</span><span class='chev'>∨</span></button>
                   <div class='submenu'>
                     <a class='menu-item sub-mini {'active' if active_sub == 'renovacion' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=renovacion'><span>•</span><span class='label'>Renovación Contrato</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'documentaria' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=documentaria'><span>•</span><span class='label'>Archivos Trabajador</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'ficha' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=ficha'><span>•</span><span class='label'>Ficha Trabajador</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'plantillas' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=plantillas'><span>•</span><span class='label'>Plantilla Documentos</span></a>
-                    <a class='menu-item sub-mini' onclick='saveSideScroll()' href='/admin/firma/configuracion'><span>•</span><span class='label'>Firma / Facial / Digital</span></a>
+                    <a class='menu-item sub-mini' onclick='saveSideScroll()' href='/admin/contratacion?sec=firma'><span>•</span><span class='label'>Firma / Facial / Digital</span></a>
+                    <a class='menu-item sub-mini' onclick='saveSideScroll()' href='/admin/plantilla_gestion/contratacion'><span>•</span><span class='label'>Plantilla Contratación</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'nisira' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=nisira'><span>•</span><span class='label'>Contratación NISIRA</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'descargas' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=descargas'><span>•</span><span class='label'>Descargas</span></a>
                   </div>
@@ -2533,9 +2536,98 @@ def admin_trabajadores():
     content = f"""
     <div class='topbar'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div><div class='local-note'>Respaldo local automático: REGISTROS_EXCEL_LOCAL / 01_TRABAJADORES_LOCAL.xlsx</div></div></div><section class='grid'>
     <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><select name='empresa'><option>AQUANQA</option><option>AQUANCA II</option></select></div><div class='field'><label>Jefe inmediato DNI</label><input name='jefe_dni' placeholder='DNI del jefe'></div><div class='field'><label>Jefe nombre</label><input name='jefe_nombre' placeholder='Opcional'></div><div class='field'><label>Planilla</label><input name='planilla'></div><div class='field'><label>Fecha nacimiento</label><input name='fecha_nacimiento' placeholder='dd/mm/aaaa'></div><div class='field'><label>Fecha de ingreso</label><input name='fecha_ingreso' placeholder='dd/mm/aaaa'></div><button class='btn-green'>Guardar + crear usuario</button></form></div>
-    <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial maestra para Gestión Documental, Vacacional y Contratos. Acepta columnas amplias: datos laborales, jefe inmediato, emergencia, contrato, ubicación, CONADIS e indumentaria. Crea usuario masivo con DNI y clave automática.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Descargar plantilla</a></form></div>
+    <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial maestra para Gestión Documental, Vacacional y Contratos. Acepta columnas amplias: datos laborales, jefe inmediato, emergencia, contrato, ubicación, CONADIS e indumentaria. Crea usuario masivo con DNI y clave automática.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Plantilla Trabajadores</a> <a class='btn-blue' href='/admin/plantilla_gestion/documental'>Plantilla Documental</a> <a class='btn-blue' href='/admin/plantilla_gestion/vacacional'>Plantilla Vacacional</a> <a class='btn-blue' href='/admin/plantilla_gestion/contratacion'>Plantilla Contratación</a></form></div>
     <div class='card span-12'><h2>Listado</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Empresa</th><th>Jefe DNI</th><th>Planilla</th></tr>{table}</table></div></div></section>"""
     return render_page(content, active='Trabajadores')
+
+
+
+def aplicar_formato_plantilla(ws, headers, color='111827'):
+    dark = PatternFill('solid', fgColor=color)
+    green = PatternFill('solid', fgColor='22C55E')
+    thin = Side(style='thin', color='D1D5DB')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    ws.freeze_panes = 'A2'
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = dark
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = border
+    for row in ws.iter_rows(min_row=2, max_row=500, max_col=len(headers)):
+        for cell in row:
+            cell.border = border
+            cell.alignment = Alignment(vertical='center', wrap_text=True)
+    for col in range(1, len(headers)+1):
+        ws.column_dimensions[ws.cell(1,col).column_letter].width = 22
+    for col in range(1, min(6, len(headers))+1):
+        ws.cell(1, col).fill = green
+
+def agregar_validacion_lista(ws, col, values, end=5000):
+    dv = DataValidation(type='list', formula1='"' + ','.join(values) + '"', allow_blank=True)
+    ws.add_data_validation(dv)
+    dv.add(f'{col}2:{col}{end}')
+
+def construir_plantilla_gestion_documental_xlsx(path):
+    wb = Workbook(); ws = wb.active; ws.title = 'GESTION_DOCUMENTAL'
+    headers = ['EMPRESA','DNI','TRABAJADOR','CATEGORIA DOCUMENTO','TIPO DOCUMENTO','PERIODO','DETALLE','RUTA ARCHIVO O NOMBRE PDF','ESTADO','REQUIERE ACEPTACION','REQUIERE FIRMA','FECHA LIMITE','OBSERVACION']
+    ws.append(headers)
+    ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','DOCUMENTOS DE PAGO','BOLETA NORMAL','2026-05','SEMANA 20','74324033_BOLETA.pdf','PENDIENTE','SI','NO','31/05/2026','Ejemplo, borrar antes de cargar'])
+    aplicar_formato_plantilla(ws, headers, '1F2937')
+    agregar_validacion_lista(ws,'A',['AQUANQA','AQUANCA II'])
+    agregar_validacion_lista(ws,'D',['DOCUMENTOS DE PAGO','DOCUMENTOS DE LA EMPRESA','DOCUMENTOS PERSONALES'])
+    agregar_validacion_lista(ws,'E',['BOLETA NORMAL','CTS','GRATIFICACION','UTILIDAD','CONTRATO DE TRABAJO','REGLAMENTO INTERNO','POLITICA','OTROS'])
+    agregar_validacion_lista(ws,'I',['PENDIENTE','ACEPTADO','FIRMADO','APROBADO','RECHAZADO','ARCHIVADO'])
+    agregar_validacion_lista(ws,'J',['SI','NO']); agregar_validacion_lista(ws,'K',['SI','NO'])
+    ins=wb.create_sheet('INSTRUCCIONES'); ins.append(['Plantilla para cargar/controlar documentos por trabajador, periodo y estado. Usar en Gestión Documental.'])
+    ins.column_dimensions['A'].width=120
+    wb.save(path); return path
+
+def construir_plantilla_gestion_vacacional_xlsx(path):
+    wb = Workbook(); ws = wb.active; ws.title = 'GESTION_VACACIONAL'
+    headers = ['EMPRESA','DNI','TRABAJADOR','AREA','JEFE INMEDIATO','JEFE NOMBRE','FECHA INGRESO','I_PERIODO','F_PERIODO','DIAS GANADOS','DIAS GOZADOS','SALDO','ADELANTO VACACIONES','OBSERVACION']
+    ws.append(headers)
+    ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','GESTION DEL TALENTO HUMANO','43043999','JEFE DIRECTO','01/05/2024','2025','2026',30,0,30,'NO','Ejemplo, borrar antes de cargar'])
+    aplicar_formato_plantilla(ws, headers, '166534')
+    agregar_validacion_lista(ws,'A',['AQUANQA','AQUANCA II']); agregar_validacion_lista(ws,'M',['SI','NO'])
+    for col in ('H','I'):
+        for row in range(2, 5001): ws[f'{col}{row}'].number_format='@'
+    ins=wb.create_sheet('INSTRUCCIONES'); ins.append(['Plantilla para saldos vacacionales. I_PERIODO y F_PERIODO deben ser años: 2025 / 2026.'])
+    ins.column_dimensions['A'].width=120
+    wb.save(path); return path
+
+def construir_plantilla_gestion_contratacion_xlsx(path):
+    wb = Workbook(); ws = wb.active; ws.title = 'GESTION_CONTRATACION'
+    headers = ['EMPRESA','DNI','TRABAJADOR','AREA','CARGO','PLANILLA','TIPO TRABAJADOR','TIPO CONTRATO','FECHA INICIO CONTRATO','FECHA FIN CONTRATO','REMUNERACION BASICA','MONEDA','SEDE','ZONA','DIRECCION','DEPARTAMENTO','PROVINCIA','DISTRITO','MODALIDAD FIRMA','ESTADO FIRMA','PROVEEDOR FIRMA','REQUIERE RECONOCIMIENTO FACIAL','REQUIERE FIRMA DIGITAL','OBSERVACION']
+    ws.append(headers)
+    ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','RRHH','ANALISTA','MENSUAL','EMPLEADO','INTERMITENTE','01/05/2024','31/12/2026','1200','SOLES','TRUJILLO','OFICINA','AV. EJEMPLO 123','LA LIBERTAD','TRUJILLO','TRUJILLO','FACIAL + FIRMA DIGITAL','PENDIENTE','INTERNO','SI','SI','Ejemplo, borrar antes de cargar'])
+    aplicar_formato_plantilla(ws, headers, '4C1D95')
+    agregar_validacion_lista(ws,'A',['AQUANQA','AQUANCA II']); agregar_validacion_lista(ws,'H',['INDETERMINADO','INTERMITENTE','TEMPORAL','SUPLENCIA','PRACTICANTE','OTROS'])
+    agregar_validacion_lista(ws,'S',['RECONOCIMIENTO FACIAL','FIRMA DIGITAL','FACIAL + FIRMA DIGITAL','CARGA MANUAL RRHH'])
+    agregar_validacion_lista(ws,'T',['PENDIENTE','ENVIADO','VALIDADO FACIAL','FIRMADO DIGITAL','OBSERVADO','ANULADO'])
+    agregar_validacion_lista(ws,'V',['SI','NO']); agregar_validacion_lista(ws,'W',['SI','NO'])
+    campos=wb.create_sheet('CAMPOS_WORD')
+    campos.append(['CAMPO PARA WORD','EJEMPLO DE USO'])
+    for campo,_ in CAMPOS_ESQUEMA_TRABAJADOR_CONTRATO_LABORAL:
+        campos.append([campo, '{{'+campo+'}}'])
+    campos.column_dimensions['A'].width=34; campos.column_dimensions['B'].width=38
+    aplicar_formato_plantilla(campos, ['CAMPO PARA WORD','EJEMPLO DE USO'], '4C1D95')
+    ins=wb.create_sheet('INSTRUCCIONES'); ins.append(['Plantilla para contratación: sirve para contratos, renovaciones, estados de firma y campos de correspondencia Word.'])
+    ins.column_dimensions['A'].width=120
+    wb.save(path); return path
+
+@app.route('/admin/plantilla_gestion/<gestion>')
+@admin_required
+def plantilla_gestion(gestion):
+    gestion = clean(gestion).lower()
+    if gestion == 'documental':
+        path = PERSIST_DIR / 'PLANTILLA_GESTION_DOCUMENTAL.xlsx'; construir_plantilla_gestion_documental_xlsx(path); name='PLANTILLA_GESTION_DOCUMENTAL.xlsx'
+    elif gestion == 'vacacional':
+        path = PERSIST_DIR / 'PLANTILLA_GESTION_VACACIONAL.xlsx'; construir_plantilla_gestion_vacacional_xlsx(path); name='PLANTILLA_GESTION_VACACIONAL.xlsx'
+    elif gestion in ['contratacion','contratación']:
+        path = PERSIST_DIR / 'PLANTILLA_GESTION_CONTRATACION.xlsx'; construir_plantilla_gestion_contratacion_xlsx(path); name='PLANTILLA_GESTION_CONTRATACION.xlsx'
+    else:
+        abort(404)
+    return send_file(path, as_attachment=True, download_name=name)
 
 @app.route('/admin/plantilla_trabajadores')
 @admin_required
@@ -3749,6 +3841,19 @@ def admin_contratacion():
                     redir = url_for('contratacion_plantilla_detalle', pid=nuevo_id, tab='contenido')
                 con.commit()
             return redirect(redir)
+        if accion == 'firma_solicitud':
+            doc_id = request.form.get('documento_id')
+            metodo = clean(request.form.get('metodo')) or 'FACIAL + FIRMA DIGITAL'
+            obs = clean(request.form.get('observacion'))
+            with db() as con:
+                doc = con.execute('SELECT * FROM contratacion_docs WHERE id=?',(doc_id,)).fetchone()
+                if doc:
+                    con.execute('INSERT INTO firma_solicitudes(documento_id,dni,trabajador,metodo,estado,evidencia_ref,fecha_envio,observacion) VALUES(?,?,?,?,?,?,?,?)',(doc['id'],doc['dni'],doc['trabajador'],metodo,'Pendiente','',now_txt(),obs))
+                    con.execute("UPDATE contratacion_docs SET estado='ENVIADO A FIRMA' WHERE id=?",(doc['id'],))
+                    con.commit(); flash('Solicitud de firma creada. Queda pendiente de integración con proveedor facial/firma digital.', 'ok')
+                else:
+                    flash('Documento no encontrado para enviar a firma.', 'error')
+            return redirect(url_for('admin_contratacion', sec='firma'))
         f=request.files.get('archivo'); dni=normalizar_dni(request.form.get('dni')); trab=get_trabajador(dni); tipo=clean(request.form.get('tipo_doc')); etapa=clean(request.form.get('etapa')) or 'Incorporación'
         if f and f.filename and dni:
             folder=UPLOAD_DIR/'contratacion'/dni; folder.mkdir(parents=True, exist_ok=True)
@@ -3762,6 +3867,7 @@ def admin_contratacion():
     with db() as con:
         tipos=con.execute('SELECT * FROM contratacion_tipos ORDER BY etapa, descripcion').fetchall()
         docs=con.execute('SELECT * FROM contratacion_docs ORDER BY id DESC LIMIT 300').fetchall()
+        firma_sols=con.execute('SELECT * FROM firma_solicitudes ORDER BY id DESC LIMIT 300').fetchall()
         trabajadores=con.execute('SELECT dni,nombre,empresa,cargo,area,correo,activo,fecha_registro FROM trabajadores ORDER BY nombre LIMIT 700').fetchall()
         # Filtros reales de Plantilla Documentos
         f_nombre = clean(request.args.get('f_nombre'))
@@ -4043,6 +4149,33 @@ def admin_contratacion():
           </div>
         </div>
         <div class='c-card table-wrap'><table class='c-table plantilla-table'><tr><th>Proceso</th><th>Estado</th><th>Nombre Plantilla</th><th>Tipo Documento</th><th>Esquema</th><th>Descripción</th><th>Versión</th><th>Condición</th><th>Nombre Archivo</th></tr>{plantillas_rows or '<tr><td colspan=9>No hay plantillas registradas.</td></tr>'}</table></div>
+        """)
+    elif sec=='firma':
+        opt_docs = ''.join([f"<option value='{d['id']}'>ID {d['id']} - {h(d['dni'])} - {h(d['trabajador'])} - {h(d['tipo_doc'])}</option>" for d in docs])
+        rows_firma = ''.join([f"<tr><td>{r['id']}</td><td>{h(r['dni'])}</td><td>{h(r['trabajador'])}</td><td>{h(r['metodo'])}</td><td><span class='status-pill'>{h(r['estado'])}</span></td><td>{h(r['fecha_envio'])}</td><td>{h(r['fecha_firma'] or '')}</td><td>{h(r['observacion'] or '')}</td></tr>" for r in firma_sols])
+        content=wrap(f"""
+        <h2 class='c-title'>Firma de documentos: reconocimiento facial / firma digital</h2>
+        <div class='c-card' style='padding:18px'>
+          <h3>Flujo sugerido para contratos</h3>
+          <div class='mini-grid'>
+            <div class='dash-metric'><span>1. Generar contrato</span><b>Word/PDF</b><em class='mi'>📄</em></div>
+            <div class='dash-metric'><span>2. Enviar enlace</span><b>Correo/SMS</b><em class='mi'>🔗</em></div>
+            <div class='dash-metric'><span>3. Validar identidad</span><b>Facial/OTP</b><em class='mi'>🙂</em></div>
+            <div class='dash-metric'><span>4. Firma digital</span><b>Evidencia</b><em class='mi'>✍️</em></div>
+            <div class='dash-metric'><span>5. Archivar</span><b>Contrato</b><em class='mi'>🗂️</em></div>
+            <div class='dash-metric'><span>6. Auditoría</span><b>Log</b><em class='mi'>🧾</em></div>
+          </div>
+          <p class='muted2'>Para RENIEC o firma digital real se debe integrar un proveedor autorizado/API oficial. Este módulo deja lista la bandeja, trazabilidad y configuración.</p>
+          <a class='c-btn gray' href='/admin/firma/configuracion'>⚙ Configurar proveedor / API</a>
+        </div>
+        <form method='post' class='c-card c-form' style='padding:18px'>
+          <input type='hidden' name='accion' value='firma_solicitud'>
+          <b>Documento de contratación</b><select name='documento_id' required>{opt_docs}</select>
+          <b>Método</b><select name='metodo'><option>FACIAL + FIRMA DIGITAL</option><option>RECONOCIMIENTO FACIAL</option><option>FIRMA DIGITAL</option><option>OTP + ACEPTACIÓN</option><option>CARGA MANUAL RRHH</option></select>
+          <b>Observación</b><input name='observacion' placeholder='Ej: Enviar contrato por WhatsApp/correo'>
+          <span></span><button class='c-btn'>Enviar a firma</button>
+        </form>
+        <div class='c-card table-wrap'><table class='c-table'><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Método</th><th>Estado</th><th>Fecha envío</th><th>Fecha firma</th><th>Observación</th></tr>{rows_firma or '<tr><td colspan=8>No hay solicitudes de firma.</td></tr>'}</table></div>
         """)
     elif sec=='nisira':
         content=wrap("<h2 class='c-title'>Contratación NISIRA</h2><div class='c-card' style='padding:22px'><p class='muted2'>Sección preparada para importar contratos / altas desde NISIRA y cruzar por DNI.</p><button class='c-btn'>Sincronizar NISIRA</button></div>")
