@@ -142,10 +142,14 @@ CONDICION_OPERADORES = ['=', '<>', 'CONTIENE', 'NO CONTIENE', '>', '<', '>=', '<
 VALORES_CONDICION = {
     'Planilla': ['EMPLEADOS RÉGIMEN GENERAL','EMPLEADOS RÉGIMEN AGRÍCOLA','OBREROS RÉGIMEN AGRÍCOLA','OBREROS REGIMEN GENERAL','OBREROS REGIMEN PACKING','PRACTICANTES'],
     'Tipo Contrato': ['INTERMITENTE OBRERO','INTERMITENTE EMPLEADO','INDETERMINADO','TEMPORAL','RENOVACIÓN'],
+    'TipoContrato': ['INTERMITENTE OBRERO','INTERMITENTE EMPLEADO','INDETERMINADO','TEMPORAL','RENOVACIÓN'],
     'Condición': ['ACTIVO','INACTIVO'],
     'Estado': ['ACTIVO','INACTIVO'],
     'Tipo Trabajador': ['OBRERO','EMPLEADO','PRACTICANTE'],
     'Zona': ['PLANTA','CAMPO','PACKING','OFICINA'],
+    'Area': ['RECURSOS HUMANOS','OPERACIONES','CAMPO','PACKING','ADMINISTRACIÓN'],
+    'Cargo': ['OBRERO','OPERARIO','AUXILIAR','ASISTENTE','ANALISTA','SUPERVISOR','JEFE'],
+    'Puesto': ['OBRERO','OPERARIO','AUXILIAR','ASISTENTE','ANALISTA','SUPERVISOR','JEFE'],
 }
 
 
@@ -993,6 +997,212 @@ def valores_esquema_desde_trabajador(trabajador=None):
         salida.append((campo, clean(base.get(campo)) or clean(ejemplo)))
     return salida
 
+
+
+
+def mapa_campos_trabajador(trabajador=None):
+    """Diccionario CampoOrigen -> valor real del trabajador para combinar correspondencia."""
+    return {campo: valor for campo, valor in valores_esquema_desde_trabajador(trabajador)}
+
+
+def evaluar_condicion_valor(actual, operador, esperado):
+    """Evalúa condiciones de plantilla contra los datos del trabajador."""
+    actual_txt = clean(actual).upper()
+    esperado_txt = clean(esperado).upper()
+    op = clean(operador).upper() or '='
+    if op in ('=', '=='):
+        return actual_txt == esperado_txt
+    if op in ('<>', '!='):
+        return actual_txt != esperado_txt
+    if op == 'CONTIENE':
+        return esperado_txt in actual_txt
+    if op == 'NO CONTIENE':
+        return esperado_txt not in actual_txt
+    try:
+        a = float(re.sub(r'[^0-9.-]', '', actual_txt) or 0)
+        b = float(re.sub(r'[^0-9.-]', '', esperado_txt) or 0)
+        if op == '>': return a > b
+        if op == '<': return a < b
+        if op == '>=': return a >= b
+        if op == '<=': return a <= b
+    except Exception:
+        return False
+    return False
+
+
+def plantilla_cumple_condiciones(plantilla, condiciones, trabajador=None):
+    """Retorna (cumple, detalle_html). Si la plantilla está SIN CONDICIONES, siempre cumple."""
+    if not plantilla or (plantilla['condicion'] or '').upper() != 'CONDICIONES':
+        return True, '<span class="cond-ok">Plantilla general: sin condiciones.</span>'
+    valores = mapa_campos_trabajador(trabajador)
+    if not condiciones:
+        return False, '<span class="cond-bad">La plantilla exige condiciones, pero no tiene reglas registradas.</span>'
+    partes = []
+    cumple_todo = True
+    for c in condiciones:
+        if not int(c['activo'] or 0):
+            continue
+        campo_label = clean(c['nombre_campo'])
+        campo_origen = None
+        for nom, origen, td in CONTRATACION_CAMPOS_CORRESPONDENCIA:
+            if nom == campo_label or origen == campo_label:
+                campo_origen = origen
+                break
+        campo_origen = campo_origen or campo_label.replace(' ', '')
+        actual = valores.get(campo_origen, '')
+        ok = evaluar_condicion_valor(actual, c['condicion'], c['valor'])
+        cumple_todo = cumple_todo and ok
+        partes.append(f"<span class='{'cond-ok' if ok else 'cond-bad'}'>{html.escape(campo_label)} {html.escape(c['condicion'] or '=')} {html.escape(c['valor'] or '')} → dato trabajador: {html.escape(actual or 'VACÍO')}</span>")
+    return cumple_todo, ' '.join(partes) if partes else '<span class="cond-bad">No hay condiciones activas.</span>'
+
+
+
+def extraer_campos_word_docx(path):
+    """Detecta campos de correspondencia escritos como «Campo» y {{Campo}} en un Word .docx."""
+    campos = []
+    if Document is None:
+        return campos
+    try:
+        doc = Document(str(path))
+    except Exception:
+        return campos
+    textos = []
+    def add(txt):
+        if txt:
+            textos.append(str(txt))
+    for p in doc.paragraphs:
+        add(p.text)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    add(p.text)
+    texto = "\n".join(textos)
+    # Soporta campos Word tipo combinación: «NombreCompletoTrabajador»
+    # y campos internos del sistema: {{NombreCompletoTrabajador}}
+    patrones = [r'«\s*([^»\n\r]+?)\s*»', r'\{\{\s*([^}\n\r]+?)\s*\}\}']
+    vistos = set()
+    for pat in patrones:
+        for m in re.finditer(pat, texto):
+            campo = clean(m.group(1)).strip()
+            campo = re.sub(r'\s+', '', campo)
+            if campo and campo not in vistos:
+                vistos.add(campo); campos.append(campo)
+    return campos
+
+
+def sincronizar_campos_desde_word(plantilla_id, ruta_archivo):
+    """Carga automáticamente a la pestaña Campos los campos encontrados en Word."""
+    if not ruta_archivo:
+        return 0
+    path = Path(ruta_archivo)
+    if not path.exists() or path.suffix.lower() != '.docx':
+        return 0
+    encontrados = extraer_campos_word_docx(path)
+    if not encontrados:
+        return 0
+    tipos = {origen: td for nom, origen, td in CONTRATACION_CAMPOS_CORRESPONDENCIA}
+    nombres = {origen: nom for nom, origen, td in CONTRATACION_CAMPOS_CORRESPONDENCIA}
+    n = 0
+    with db() as con:
+        for campo in encontrados:
+            existe = con.execute('SELECT 1 FROM contratacion_plantilla_campos WHERE plantilla_id=? AND campo_origen=?', (plantilla_id, campo)).fetchone()
+            if not existe:
+                con.execute("INSERT INTO contratacion_plantilla_campos(plantilla_id,descripcion,tipo_campo,nombre_campo,campo_origen,tipo_dato,requerido,activo) VALUES(?,?,?,?,?,?,?,1)",
+                            (plantilla_id, 'Detectado automáticamente desde Word', 'Origen de Datos', nombres.get(campo, nombre_legible_campo(campo)), campo, tipos.get(campo, tipo_dato_esquema(campo)), 'SI'))
+                n += 1
+        con.commit()
+    return n
+
+def reemplazar_texto_docx(doc, valores):
+    """Reemplaza campos {{CampoOrigen}} y «CampoOrigen» en párrafos y tablas de un Word."""
+    def repl(txt):
+        if not txt:
+            return txt
+        for k, v in valores.items():
+            val = clean(v)
+            txt = txt.replace('{{' + k + '}}', val)
+            txt = txt.replace('{{ ' + k + ' }}', val)
+            txt = txt.replace('«' + k + '»', val)
+            txt = txt.replace('« ' + k + ' »', val)
+        return txt
+    def proc_paragraph(p):
+        full = ''.join(run.text for run in p.runs)
+        new = repl(full)
+        if new != full:
+            for run in p.runs:
+                run.text = ''
+            if p.runs:
+                p.runs[0].text = new
+            else:
+                p.add_run(new)
+    for p in doc.paragraphs:
+        proc_paragraph(p)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    proc_paragraph(p)
+    return doc
+
+
+def generar_docx_desde_plantilla(pid, dni=''):
+    """Genera un DOCX final combinado con datos del trabajador y valida condiciones."""
+    if Document is None:
+        raise RuntimeError('python-docx no está instalado.')
+    dni = normalizar_dni(dni)
+    with db() as con:
+        pl = con.execute('SELECT * FROM contratacion_plantillas WHERE id=?', (pid,)).fetchone()
+        campos = con.execute('SELECT * FROM contratacion_plantilla_campos WHERE plantilla_id=? AND activo=1 ORDER BY id', (pid,)).fetchall()
+        condiciones = con.execute('SELECT * FROM contratacion_plantilla_condiciones WHERE plantilla_id=? ORDER BY id', (pid,)).fetchall()
+        trabajador = con.execute('SELECT * FROM trabajadores WHERE dni=?', (dni,)).fetchone() if dni else con.execute('SELECT * FROM trabajadores ORDER BY nombre LIMIT 1').fetchone()
+    if not pl:
+        raise FileNotFoundError('Plantilla no encontrada.')
+    valores = mapa_campos_trabajador(trabajador)
+    # Asegura que todos los campos registrados existan, aunque no haya dato en trabajador.
+    for c in campos:
+        valores.setdefault(c['campo_origen'] or c['nombre_campo'], '')
+    cumple, detalle = plantilla_cumple_condiciones(pl, condiciones, trabajador)
+    ruta = Path(pl['ruta_archivo']) if pl['ruta_archivo'] else None
+    if ruta and ruta.exists() and ruta.suffix.lower() == '.docx':
+        doc = Document(str(ruta))
+    else:
+        doc = Document()
+        doc.add_heading(pl['nombre_plantilla'] or 'Documento contractual', level=1)
+        doc.add_paragraph('Plantilla generada automáticamente. Reemplace el contenido por su Word oficial o use los campos siguientes:')
+        doc.add_paragraph('Trabajador: {{NombreCompletoTrabajador}}')
+        doc.add_paragraph('DNI: {{Dni}}')
+        doc.add_paragraph('Cargo: {{Cargo}}')
+        doc.add_paragraph('Planilla: {{Planilla}}')
+        doc.add_paragraph('Tipo Contrato: {{TipoContrato}}')
+    reemplazar_texto_docx(doc, valores)
+    safe_name = re.sub(r'[^A-Za-z0-9_ -]+', '', pl['nombre_plantilla'] or 'plantilla').strip() or 'plantilla'
+    out_dir = UPLOAD_DIR / 'contratacion' / 'generados'
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"{safe_name}_{dni or 'SIN_DNI'}_{now_file()}.docx"
+    doc.save(out)
+    return out, pl, trabajador, cumple, detalle
+
+
+def docx_to_preview_html(path, valores=None):
+    """Vista previa simple de Word en HTML: párrafos y tablas con campos reemplazados."""
+    if Document is None:
+        return '<div class="preview-empty">No se puede previsualizar Word porque falta python-docx.</div>'
+    doc = Document(str(path))
+    if valores:
+        reemplazar_texto_docx(doc, valores)
+    parts = ["<div class='word-preview'>"]
+    for p in doc.paragraphs:
+        txt = html.escape(p.text or '').replace('\n','<br>')
+        if txt.strip():
+            parts.append(f"<p>{txt}</p>")
+    for table in doc.tables:
+        parts.append("<table class='word-table'>")
+        for row in table.rows:
+            parts.append('<tr>' + ''.join(f"<td>{html.escape(cell.text or '').replace(chr(10), '<br>')}</td>" for cell in row.cells) + '</tr>')
+        parts.append('</table>')
+    parts.append('</div>')
+    return ''.join(parts)
 
 def generar_clave_trabajador(dni, fecha_nac=''):
     """Clave del trabajador: fecha de nacimiento sin / ni guiones (ddmmaaaa)."""
@@ -2771,7 +2981,7 @@ def contratacion_plantilla_detalle(pid):
     </div>"""
     if tab=='campos':
         rows=''.join([f"<tr><td><span class='state-pill {'ok' if c['activo'] else 'bad'}'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{html.escape(c['descripcion'] or '')}</td><td>{html.escape(c['tipo_campo'] or '')}</td><td>{html.escape(c['nombre_campo'] or '')}</td><td><code>{{{{{html.escape(c['campo_origen'] or '')}}}}}</code></td><td>{html.escape(c['tipo_dato'] or '')}</td><td>{html.escape(c['requerido'] or '')}</td></tr>" for c in campos])
-        body=f"""<div class='tpl-toolbar schema-toolbar'><span>Campos de correspondencia para usar en Word como <b>{{{{CampoOrigen}}}}</b>.</span><span><a class='c-btn gray' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕ Campos de Esquema</a> <a class='c-btn gray' href='{url_for('contratacion_campos_esquema_excel',pid=pid)}'>⬇ Descargar campos</a></span></div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="7">Sin campos registrados.</td></tr>'}</table></div>"""
+        body=f"""<div class='tpl-toolbar schema-toolbar'><span>Campos de correspondencia para usar en Word como <b>«CampoOrigen»</b> o <b>{{{{CampoOrigen}}}}</b>.</span><span><a class='c-btn gray' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕ Campos de Esquema</a> <a class='c-btn gray' href='{url_for('contratacion_campos_esquema_excel',pid=pid)}'>⬇ Descargar campos</a></span></div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="7">Sin campos registrados.</td></tr>'}</table></div>"""
     elif tab=='condiciones':
         crear_btn = f"<a class='c-btn' href='{url_for('contratacion_condicion_editar',pid=pid)}'>⊕ Crear Condición</a>" if condicion_habilitada else "<span class='c-btn gray disabled'>Condiciones deshabilitadas</span>"
         info = "" if condicion_habilitada else "<div class='notice'>Para crear o editar condiciones primero entra al lápiz de <b>Editar Plantilla</b> y cambia el campo <b>Condición</b> a <b>CONDICIONES</b>.</div>"
@@ -2784,13 +2994,27 @@ def contratacion_plantilla_detalle(pid):
           </tr>""" for c in condiciones])
         body=f"""<div class='cond-head'><div>{crear_btn}</div></div>{info}<div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Proceso</th><th>Estado</th><th>Label</th><th>Condición</th><th>Valor</th></tr>{rows or '<tr><td colspan="5">Sin condiciones registradas.</td></tr>'}</table></div>"""
     else:
-        if pl['ruta_archivo'] and Path(pl['ruta_archivo']).exists() and str(pl['archivo_nombre']).lower().endswith('.pdf'):
+        dni_preview = normalizar_dni(request.args.get('dni_preview'))
+        trabajador_preview = None
+        with db() as con:
+            trabajador_preview = con.execute('SELECT * FROM trabajadores WHERE dni=?', (dni_preview,)).fetchone() if dni_preview else con.execute('SELECT * FROM trabajadores ORDER BY nombre LIMIT 1').fetchone()
+        valores_preview = mapa_campos_trabajador(trabajador_preview)
+        cumple_cond, detalle_cond = plantilla_cumple_condiciones(pl, condiciones, trabajador_preview)
+        ruta_preview = Path(pl['ruta_archivo']) if pl['ruta_archivo'] else None
+        if ruta_preview and ruta_preview.exists() and str(pl['archivo_nombre']).lower().endswith('.pdf'):
             preview=f"<iframe class='pdf-frame' src='{url_for('contratacion_plantilla_archivo',pid=pid)}'></iframe>"
-        elif pl['ruta_archivo'] and Path(pl['ruta_archivo']).exists():
-            preview=f"<div class='preview-empty'><b>Archivo cargado:</b> {html.escape(pl['archivo_nombre'] or '')}<br><br><a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar / abrir archivo</a><p>La vista previa directa funciona mejor con PDF. Para Word, descarga el archivo y ábrelo en Word.</p></div>"
+        elif ruta_preview and ruta_preview.exists() and ruta_preview.suffix.lower()=='.docx':
+            preview=docx_to_preview_html(ruta_preview, valores_preview)
+        elif ruta_preview and ruta_preview.exists() and ruta_preview.suffix.lower()=='.doc':
+            preview=f"<div class='preview-empty'><b>Archivo Word .doc cargado:</b> {html.escape(pl['archivo_nombre'] or '')}<br><br><a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar / abrir archivo</a><p>Para vista previa dentro del sistema se recomienda guardar la plantilla como .docx.</p></div>"
+        elif ruta_preview and ruta_preview.exists():
+            preview=f"<div class='preview-empty'><b>Archivo cargado:</b> {html.escape(pl['archivo_nombre'] or '')}<br><br><a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar / abrir archivo</a></div>"
         else:
-            preview=f"<div class='preview-empty'><b>Sin archivo cargado.</b><br>Haz clic en el lápiz ✎ para editar y cargar la plantilla PDF/DOC/DOCX.</div>"
-        body=f"""<div class='preview-tools'><input placeholder='Código de Trabajador'><button class='c-btn green'>Previsualizar</button></div><div class='tpl-toolbar'>Contenido de plantilla y archivo base.</div>{preview}"""
+            preview=f"<div class='preview-empty'><b>Sin archivo cargado.</b><br>Haz clic en el lápiz ✎ para editar y cargar la plantilla Word/PDF.</div>"
+        dni_val = html.escape(dni_preview or row_get(trabajador_preview, 'dni') or '')
+        gen_url = url_for('contratacion_plantilla_generar', pid=pid, dni=dni_val) if dni_val else url_for('contratacion_plantilla_generar', pid=pid)
+        estado_cond = '✅ Cumple condiciones' if cumple_cond else '⚠ No cumple condiciones'
+        body=f"""<form class='preview-tools' method='get' action='{url_for('contratacion_plantilla_detalle',pid=pid)}'><input type='hidden' name='tab' value='contenido'><input name='dni_preview' maxlength='8' value='{dni_val}' placeholder='DNI del trabajador para previsualizar'><button class='c-btn green'>Previsualizar conectado</button><a class='c-btn gray' href='{gen_url}'>⬇ Generar Word combinado</a></form><div class='tpl-toolbar'><b>{estado_cond}</b> &nbsp; {detalle_cond}</div>{preview}"""
     file_btn = f"<a class='c-btn gray' href='{url_for('contratacion_plantilla_archivo',pid=pid)}'>⬇ Descargar Archivo</a>"
     content=f"""
     <style>
@@ -2828,6 +3052,10 @@ def contratacion_plantilla_detalle(pid):
       .state-pill{{display:inline-flex;align-items:center;border:1px solid #d1d5db;border-radius:20px;padding:6px 12px;background:#fff;font-weight:900;color:#111827}}
       .state-pill.ok:before{{content:'';width:10px;height:10px;border-radius:50%;background:#22c55e;margin-right:7px}}.state-pill.bad:before{{content:'';width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:7px}}
       .actions{{display:flex;gap:8px;align-items:center}}.actions form{{margin:0}}.trash{{height:32px;border:0;background:#fee2e2;border-radius:10px;cursor:pointer}}
+      .word-preview{{background:#fff;color:#111827!important;border:1px solid #dce4ef;border-radius:0 0 14px 14px;padding:32px 42px;min-height:620px;line-height:1.65;font-family:Arial,serif;font-size:15.5px;box-shadow:inset 0 0 0 1px #eef2f7}}
+      .word-preview p{{margin:0 0 12px;color:#111827!important;font-weight:500;text-align:justify}}
+      .word-table{{width:100%;border-collapse:collapse;margin:14px 0;background:#fff;color:#111827!important}}.word-table td{{border:1px solid #cbd5e1;padding:8px 10px;background:#fff!important;color:#111827!important;font-weight:500}}
+      .cond-ok{{display:inline-flex;margin:3px 6px 3px 0;padding:5px 9px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:900;border:1px solid #86efac}}.cond-bad{{display:inline-flex;margin:3px 6px 3px 0;padding:5px 9px;border-radius:999px;background:#fee2e2;color:#991b1b;font-weight:900;border:1px solid #fecaca}}
       .back-top{{display:flex;justify-content:flex-end;margin:0 0 10px}}
       code{{background:#eef2ff;border:1px solid #dbeafe;border-radius:8px;padding:4px 7px;color:#1e3a8a}}
 
@@ -2973,7 +3201,7 @@ def contratacion_campos_esquema(pid):
     if not pl:
         abort(404)
     valores = valores_esquema_desde_trabajador(trabajador)
-    rows = ''.join([f"<tr><td><code>{{{{{html.escape(campo)}}}}}</code></td><td>{html.escape(valor)}</td></tr>" for campo, valor in valores])
+    rows = ''.join([f"<tr><td><code>«{html.escape(campo)}»</code><br><small><code>{{{{{html.escape(campo)}}}}}</code></small></td><td>{html.escape(valor)}</td></tr>" for campo, valor in valores])
     dni_val = html.escape(dni or row_get(trabajador, 'dni') or '')
     content = f"""
     <style>
@@ -3022,10 +3250,10 @@ def contratacion_campos_esquema_excel(pid):
     if not pl:
         abort(404)
     wb = Workbook(); ws = wb.active; ws.title = 'Campos Esquema'
-    ws.append(['Campo', 'Descripción'])
+    ws.append(['Campo Word', 'Campo Sistema', 'Descripción / Valor'])
     for campo, valor in valores_esquema_desde_trabajador(trabajador):
-        ws.append([campo, valor])
-    ws.column_dimensions['A'].width = 34; ws.column_dimensions['B'].width = 58
+        ws.append(['«' + campo + '»', '{{' + campo + '}}', valor])
+    ws.column_dimensions['A'].width = 34; ws.column_dimensions['B'].width = 34; ws.column_dimensions['C'].width = 58
     for cell in ws[1]:
         cell.font = Font(bold=True, color='FFFFFF')
         cell.fill = PatternFill('solid', fgColor='1F2937')
@@ -3035,6 +3263,23 @@ def contratacion_campos_esquema_excel(pid):
     wb.save(out)
     return send_file(out, as_attachment=True, download_name=f"Campos_Esquema_{pid}.xlsx")
 
+
+
+@app.route('/admin/contratacion/plantilla/<int:pid>/generar')
+@admin_required
+def contratacion_plantilla_generar(pid):
+    """Genera y descarga el Word final con campos {{CampoOrigen}} reemplazados por datos del trabajador."""
+    dni = normalizar_dni(request.args.get('dni'))
+    try:
+        out, pl, trabajador, cumple, detalle = generar_docx_desde_plantilla(pid, dni)
+    except Exception as e:
+        flash(f'No se pudo generar el Word combinado: {e}', 'error')
+        return redirect(url_for('contratacion_plantilla_detalle', pid=pid, tab='contenido'))
+    if not cumple:
+        flash('El trabajador no cumple las condiciones configuradas. Se descarga en modo revisión para que puedas validar.', 'error')
+    nombre_trab = re.sub(r'[^A-Za-z0-9_ -]+', '', row_get(trabajador, 'nombre', 'TRABAJADOR')).strip() or 'TRABAJADOR'
+    safe_pl = re.sub(r'[^A-Za-z0-9_ -]+', '', pl['nombre_plantilla'] or 'plantilla').strip() or 'plantilla'
+    return send_file(out, as_attachment=True, download_name=f"{safe_pl}_{dni or nombre_trab}.docx")
 
 @app.route('/admin/contratacion/plantilla/<int:pid>/archivo')
 @admin_required
@@ -3071,7 +3316,7 @@ def contratacion_plantilla_archivo(pid):
         row = table.add_row().cells
         row[0].text = str(c['nombre_campo'] or '')
         row[1].text = str(c['campo_origen'] or '')
-        row[2].text = '{{' + str(c['campo_origen'] or '') + '}}'
+        row[2].text = '«' + str(c['campo_origen'] or '') + '»'
     safe_name = re.sub(r'[^A-Za-z0-9_ -]+', '', pl['nombre_plantilla'] or 'plantilla').strip() or 'plantilla'
     out = PERSIST_DIR / f"{safe_name}_{pid}_{now_file()}.docx"
     doc.save(out)
@@ -3267,17 +3512,19 @@ def admin_contratacion():
                     if not ruta and row:
                         ruta=row['ruta_archivo']; archivo_nombre=row['archivo_nombre']
                     con.execute('''UPDATE contratacion_plantillas SET nombre_plantilla=?,descripcion=?,tipo_documento=?,esquema=?,condicion=?,version=?,activo=?,archivo_nombre=?,ruta_archivo=?,fecha_actualizacion=? WHERE id=?''', (nombre,descripcion,tipo_doc,esquema,condicion,version,activo,archivo_nombre,ruta,now_txt(),pid))
-                    flash('Plantilla actualizada correctamente.', 'ok')
+                    detectados = sincronizar_campos_desde_word(pid, ruta) if ruta else 0
+                    flash(('Plantilla actualizada correctamente. Campos Word detectados: ' + str(detectados)) if detectados else 'Plantilla actualizada correctamente.', 'ok')
                     redir = url_for('contratacion_plantilla_detalle', pid=pid, tab='contenido')
                 else:
                     cur=con.execute('''INSERT INTO contratacion_plantillas(nombre_plantilla,descripcion,tipo_documento,esquema,condicion,version,activo,archivo_nombre,ruta_archivo,fecha_creacion,fecha_actualizacion,creado_por) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''', (nombre,descripcion,tipo_doc,esquema,condicion,version,activo,archivo_nombre,ruta,now_txt(),now_txt(),marca_carga(session.get('admin_user','admin'))))
                     nuevo_id=cur.lastrowid
+                    detectados = sincronizar_campos_desde_word(nuevo_id, ruta) if ruta else 0
                     for nom,origen,td in CONTRATACION_CAMPOS_CORRESPONDENCIA:
                         con.execute('INSERT INTO contratacion_plantilla_campos(plantilla_id,nombre_campo,campo_origen,tipo_dato) VALUES(?,?,?,?)',(nuevo_id,nom,origen,td))
                     if condicion == 'CONDICIONES':
                         con.execute('INSERT INTO contratacion_plantilla_condiciones(plantilla_id,nombre_campo,condicion,valor,activo,fecha_registro,creado_por) VALUES(?,?,?,?,?,?,?)',(nuevo_id,'Planilla','=','OBREROS RÉGIMEN AGRÍCOLA',1,now_txt(),marca_carga(session.get('admin_user','admin'))))
                         con.execute('INSERT INTO contratacion_plantilla_condiciones(plantilla_id,nombre_campo,condicion,valor,activo,fecha_registro,creado_por) VALUES(?,?,?,?,?,?,?)',(nuevo_id,'Tipo Contrato','=','INTERMITENTE OBRERO',1,now_txt(),marca_carga(session.get('admin_user','admin'))))
-                    flash('Plantilla creada correctamente.', 'ok')
+                    flash(('Plantilla creada correctamente. Campos Word detectados: ' + str(detectados)) if 'detectados' in locals() and detectados else 'Plantilla creada correctamente.', 'ok')
                     redir = url_for('contratacion_plantilla_detalle', pid=nuevo_id, tab='contenido')
                 con.commit()
             return redirect(redir)
