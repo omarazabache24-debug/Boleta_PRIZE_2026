@@ -1555,7 +1555,7 @@ BASE = r'''
 /* LOGIN - estilo imagen negra/amarilla */
 .login-body{min-height:100vh;display:grid;place-items:center;padding:20px;position:relative;overflow:hidden;background:linear-gradient(rgba(22,25,29,.86),rgba(22,25,29,.90)),radial-gradient(circle at 7% 4%,#ffd23f 0 23%,transparent 23.2%),radial-gradient(circle at 94% -2%,#ffd23f 0 11%,transparent 11.2%),radial-gradient(circle at 72% 112%,#ffd23f 0 20%,transparent 20.2%),linear-gradient(135deg,#2a2e33,#111418)}.login-card{width:min(92vw,500px);background:linear-gradient(180deg,rgba(25,28,33,.98),rgba(29,33,38,.95));border:1px solid rgba(255,255,255,.10);border-radius:18px;padding:38px 42px 0;box-shadow:0 38px 90px rgba(0,0,0,.52);overflow:hidden;position:relative}.login-card:before{content:"";position:absolute;left:-72px;bottom:-58px;width:365px;height:150px;background:linear-gradient(135deg,#2e4f86,#5d83e6);border-radius:50% 50% 0 0;transform:rotate(-8deg);opacity:.95}.login-card:after{content:"";position:absolute;right:-78px;bottom:-52px;width:350px;height:145px;background:linear-gradient(135deg,#253849,#475b6f);border-radius:50% 50% 0 0;transform:rotate(8deg);opacity:.92}.login-inner{position:relative;z-index:2}.login-logo{text-align:center}.login-logo img{max-width:145px;max-height:105px;object-fit:contain;background:rgba(255,255,255,.92);border-radius:10px;padding:7px;filter:drop-shadow(0 14px 24px rgba(0,0,0,.45))}.login-title{text-align:center;margin:20px 0 30px;color:#aeb7c3}.login-title h1{margin:0 0 7px;color:#fff;font-size:24px;letter-spacing:.5px;text-transform:uppercase}.login-title b{color:#98a4b3}.login-card .field label{display:none}.login-input{display:flex;align-items:center;gap:13px;background:transparent;border-bottom:1px solid rgba(226,232,240,.40);padding:0 6px;margin-bottom:22px;transition:.18s}.login-input:focus-within{border-bottom-color:var(--yellow);box-shadow:0 10px 0 -9px rgba(255,210,63,.9)}.login-input input{border:0;padding:15px 8px;width:100%;font:inherit;outline:none;background:transparent;color:#fff;font-weight:900}.login-input input::placeholder{color:#cbd5e1}.login-card .btn-green{width:auto;justify-content:center;font-size:15px;margin:8px 0 74px;padding:14px 34px;border-radius:28px;background:linear-gradient(135deg,var(--yellow2),var(--yellow));color:#212529;border:0;box-shadow:0 14px 30px rgba(255,178,26,.35)}.login-links{text-align:center;margin-top:-48px;padding-bottom:24px;position:relative;z-index:3}.login-links a{color:#dbeafe;font-size:13px;font-weight:900}
 /* APP - dashboard ejecutivo */
-.app{display:grid;grid-template-columns:320px 1fr;min-height:100vh;background:#15181d;transition:grid-template-columns .22s ease}.app.side-collapsed{grid-template-columns:86px 1fr}.side{background:linear-gradient(180deg,#1e2024,#171a1f 72%,#111318);color:#f2f4f8;position:sticky;top:0;height:100vh;overflow:auto;transition:.25s;width:320px;z-index:5;box-shadow:12px 0 35px rgba(0,0,0,.34);border-right:1px solid #33373d}.side.collapsed{width:86px}.side-top{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#17191e;border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:3}.toggle{cursor:pointer;background:transparent;border:0;color:white;font-size:21px}.brand{padding:28px 16px 22px;text-align:center}.brand img{max-width:150px;max-height:95px;background:rgba(255,255,255,.90);border-radius:16px;object-fit:contain;padding:8px;box-shadow:0 14px 30px rgba(0,0,0,.35);border:1px solid rgba(255,210,63,.28)}.brand p{color:#c8cdd6;font-size:14px;margin-top:18px}.side.collapsed .brand p,.side.collapsed .label,.side.collapsed .chev,.side.collapsed .subtxt,.side.collapsed .side-user{display:none}.side.collapsed .brand{padding:20px 8px}.side.collapsed .brand img{max-width:55px;max-height:55px;border-radius:14px;padding:4px}.menu-group{margin:10px 12px;border-radius:12px;overflow:hidden}.menu-title{width:100%;border:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#22252b,#1b1e24);color:#eef2f7;padding:15px 14px;font-size:15px;font-weight:1000;cursor:pointer;text-align:left;border-radius:12px}.menu-title:hover{background:linear-gradient(135deg,#2b2f36,#23272f)}.menu-group.force-open .menu-title{background:linear-gradient(135deg,var(--yellow2),var(--yellow));color:#181a1f;box-shadow:0 14px 30px rgba(255,210,63,.20)}.menu-title .chev{margin-left:auto;transition:.18s}.menu-group.closed .chev{transform:rotate(-90deg)}.submenu{background:transparent;padding:9px 0;max-height:720px;transition:max-height .28s ease,padding .18s ease}.menu-group.closed .submenu{max-height:0;padding:0;overflow:hidden}.menu-item{display:flex;align-items:center;gap:13px;padding:13px 18px 13px 40px;color:#dce3ed;font-weight:900;font-size:14px;border-left:4px solid transparent;transition:.13s;border-radius:10px;margin:2px 0}.menu-item:hover{background:#242830;border-left-color:var(--yellow)}.menu-item.active,.menu-title.active{background:linear-gradient(135deg,#34302a,#2a2926);border-left-color:var(--yellow);color:#fff}.side.collapsed .menu-title{justify-content:center;padding:18px 10px}.side.collapsed .menu-item{padding:16px 10px;justify-content:center}.side.collapsed .submenu{display:none}.main{min-width:0;padding:0 34px 50px;overflow:auto;background:radial-gradient(circle at 92% -8%,rgba(255,210,63,.22),transparent 22%),radial-gradient(circle at 100% 96%,rgba(255,210,63,.12),transparent 28%),#15181d}.hero{margin:0 -34px 24px;padding:26px 34px 28px;background:radial-gradient(circle at 72% 0%,rgba(255,210,63,.20),transparent 32%),linear-gradient(120deg,#15181d 0%,#111418 62%,#24282d 100%);border-bottom:1px solid #31363d}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.topbar h1{margin:0;font-size:34px;letter-spacing:-1px;color:#fff}.topbar h1 .accent{color:var(--yellow)}.subtitle{color:#aeb7c3;font-size:16px;margin-top:7px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}.card{background:linear-gradient(145deg,#202329,#181b20);border:1px solid #303640;border-radius:18px;box-shadow:0 22px 55px rgba(0,0,0,.25);padding:22px;color:#eef2f7}.mini{grid-column:span 4;display:flex;align-items:center;justify-content:space-between}.mini b{font-size:28px;color:var(--yellow)}.ico{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,var(--yellow),var(--yellow2));font-size:24px;color:#17191e;box-shadow:0 12px 26px rgba(255,210,63,.18)}.span-12{grid-column:span 12}.span-8{grid-column:span 8}.span-4{grid-column:span 4}.span-6{grid-column:span 6}.span-3{grid-column:span 3}.doc-grid{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px}.doc-card{background:linear-gradient(145deg,#24272d,#1b1f25);border:1px solid #343a43;border-radius:16px;padding:18px;min-height:158px;transition:.16s;position:relative;overflow:hidden}.doc-card:before{content:"";position:absolute;right:-34px;top:-34px;width:86px;height:86px;background:rgba(255,210,63,.17);border-radius:50%}.doc-card h3{margin:0 0 12px;font-size:17px;color:#fff}.doc-card p{margin:0 0 14px;color:#c0c8d2;font-weight:500;line-height:1.45}.doc-card:hover{transform:translateY(-2px);border-color:var(--yellow);box-shadow:0 16px 30px rgba(0,0,0,.25)}.table-wrap{overflow:auto;border:1px solid #343a43;border-radius:14px}table{width:100%;border-collapse:collapse;background:#171a20;color:#eaf3ff}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid #2c323a;vertical-align:top}th{background:#111418;color:var(--yellow);font-size:13px;text-transform:uppercase}tr:hover td{background:#20242b}.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:end}.detail-box{background:linear-gradient(135deg,#202329,#171a20);border:1px solid #343a43;border-radius:16px;padding:15px}.detail-box small{display:block;color:#aeb7c3;margin-bottom:4px}.period-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.mobile-head{display:none}.side-user{margin:26px 14px 14px;padding-top:20px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px;color:#e5e7eb}.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--yellow);color:#15181d;font-weight:1000}
+.app{display:grid;grid-template-columns:320px 1fr;min-height:100vh;background:#15181d;transition:grid-template-columns .22s ease}.app.side-collapsed{grid-template-columns:86px 1fr}.side{background:linear-gradient(180deg,#1e2024,#171a1f 72%,#111318);color:#f2f4f8;position:sticky;top:0;height:100vh;overflow:auto;transition:.25s;width:320px;z-index:5;box-shadow:12px 0 35px rgba(0,0,0,.34);border-right:1px solid #33373d}.side.collapsed{width:86px}.side-top{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#17191e;border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:3}.toggle{cursor:pointer;background:transparent;border:0;color:white;font-size:21px}.brand{padding:28px 16px 22px;text-align:center}.brand img{max-width:150px;max-height:95px;background:rgba(255,255,255,.90);border-radius:16px;object-fit:contain;padding:8px;box-shadow:0 14px 30px rgba(0,0,0,.35);border:1px solid rgba(255,210,63,.28)}.brand p{color:#c8cdd6;font-size:14px;margin-top:18px}.side.collapsed .brand p,.side.collapsed .label,.side.collapsed .chev,.side.collapsed .subtxt,.side.collapsed .side-user{display:none}.side.collapsed .brand{padding:20px 8px}.side.collapsed .brand img{max-width:55px;max-height:55px;border-radius:14px;padding:4px}.menu-group{margin:10px 12px;border-radius:12px;overflow:hidden}.menu-title{width:100%;border:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#22252b,#1b1e24);color:#eef2f7;padding:15px 14px;font-size:15px;font-weight:1000;cursor:pointer;text-align:left;border-radius:12px}.menu-title:hover{background:linear-gradient(135deg,#2b2f36,#23272f)}.menu-group.force-open>.menu-title{background:linear-gradient(135deg,#22252b,#1b1e24);color:#eef2f7;box-shadow:none}.menu-group.force-open>.menu-title.active{background:linear-gradient(135deg,var(--yellow2),var(--yellow));color:#181a1f;box-shadow:0 14px 30px rgba(255,210,63,.20)}.menu-title .chev{margin-left:auto;transition:.18s}.menu-group.closed .chev{transform:rotate(-90deg)}.submenu{background:transparent;padding:9px 0;max-height:720px;transition:max-height .28s ease,padding .18s ease}.menu-group.closed .submenu{max-height:0;padding:0;overflow:hidden}.menu-item{display:flex;align-items:center;gap:13px;padding:13px 18px 13px 40px;color:#dce3ed;font-weight:900;font-size:14px;border-left:4px solid transparent;transition:.13s;border-radius:10px;margin:2px 0}.menu-item:hover{background:#242830;border-left-color:var(--yellow)}.menu-item.active,.menu-title.active{background:linear-gradient(135deg,#34302a,#2a2926);border-left-color:var(--yellow);color:#fff}.side.collapsed .menu-title{justify-content:center;padding:18px 10px}.side.collapsed .menu-item{padding:16px 10px;justify-content:center}.side.collapsed .submenu{display:none}.main{min-width:0;padding:0 34px 50px;overflow:auto;background:radial-gradient(circle at 92% -8%,rgba(255,210,63,.22),transparent 22%),radial-gradient(circle at 100% 96%,rgba(255,210,63,.12),transparent 28%),#15181d}.hero{margin:0 -34px 24px;padding:26px 34px 28px;background:radial-gradient(circle at 72% 0%,rgba(255,210,63,.20),transparent 32%),linear-gradient(120deg,#15181d 0%,#111418 62%,#24282d 100%);border-bottom:1px solid #31363d}.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}.topbar h1{margin:0;font-size:34px;letter-spacing:-1px;color:#fff}.topbar h1 .accent{color:var(--yellow)}.subtitle{color:#aeb7c3;font-size:16px;margin-top:7px}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}.card{background:linear-gradient(145deg,#202329,#181b20);border:1px solid #303640;border-radius:18px;box-shadow:0 22px 55px rgba(0,0,0,.25);padding:22px;color:#eef2f7}.mini{grid-column:span 4;display:flex;align-items:center;justify-content:space-between}.mini b{font-size:28px;color:var(--yellow)}.ico{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,var(--yellow),var(--yellow2));font-size:24px;color:#17191e;box-shadow:0 12px 26px rgba(255,210,63,.18)}.span-12{grid-column:span 12}.span-8{grid-column:span 8}.span-4{grid-column:span 4}.span-6{grid-column:span 6}.span-3{grid-column:span 3}.doc-grid{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px}.doc-card{background:linear-gradient(145deg,#24272d,#1b1f25);border:1px solid #343a43;border-radius:16px;padding:18px;min-height:158px;transition:.16s;position:relative;overflow:hidden}.doc-card:before{content:"";position:absolute;right:-34px;top:-34px;width:86px;height:86px;background:rgba(255,210,63,.17);border-radius:50%}.doc-card h3{margin:0 0 12px;font-size:17px;color:#fff}.doc-card p{margin:0 0 14px;color:#c0c8d2;font-weight:500;line-height:1.45}.doc-card:hover{transform:translateY(-2px);border-color:var(--yellow);box-shadow:0 16px 30px rgba(0,0,0,.25)}.table-wrap{overflow:auto;border:1px solid #343a43;border-radius:14px}table{width:100%;border-collapse:collapse;background:#171a20;color:#eaf3ff}th,td{text-align:left;padding:13px 14px;border-bottom:1px solid #2c323a;vertical-align:top}th{background:#111418;color:var(--yellow);font-size:13px;text-transform:uppercase}tr:hover td{background:#20242b}.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:end}.detail-box{background:linear-gradient(135deg,#202329,#171a20);border:1px solid #343a43;border-radius:16px;padding:15px}.detail-box small{display:block;color:#aeb7c3;margin-bottom:4px}.period-row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.mobile-head{display:none}.side-user{margin:26px 14px 14px;padding-top:20px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px;color:#e5e7eb}.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--yellow);color:#15181d;font-weight:1000}
 @media(max-width:1000px){.app,.app.side-collapsed{grid-template-columns:1fr}.side{position:fixed;left:-335px;width:315px}.side.open{left:0}.side.collapsed{left:-335px}.mobile-head{display:flex;position:sticky;top:0;z-index:20;background:#17191e;color:white;padding:12px 14px;align-items:center;justify-content:space-between;border-bottom:1px solid #343a43}.main{padding:0 14px 30px}.hero{margin:0 -14px 18px;padding:20px 16px}.doc-grid{grid-template-columns:1fr}.mini,.span-8,.span-4,.span-3{grid-column:span 12}.form-grid{grid-template-columns:1fr}.topbar{align-items:flex-start;flex-direction:column}.topbar h1{font-size:24px}.subtitle{font-size:13px}.card{border-radius:16px;padding:17px}.login-card{padding:32px 28px 0}.login-card .btn-green{width:100%}}@media(min-width:1001px) and (max-width:1350px){.doc-grid{grid-template-columns:repeat(2,1fr)}}
 
 /* === RETOQUE PRO ADMIN / FORMULARIOS === */
@@ -3962,6 +3962,27 @@ def admin_contratacion():
                     redir = url_for('contratacion_plantilla_detalle', pid=nuevo_id, tab='contenido')
                 con.commit()
             return redirect(redir)
+        if accion == 'firma_masiva':
+            ids_raw = request.form.get('documentos_lote') or ''
+            metodo = clean(request.form.get('metodo_masivo')) or 'FACIAL + FIRMA DIGITAL'
+            obs = clean(request.form.get('observacion_masiva')) or 'Envío masivo a firma facial/digital'
+            ids=[]
+            for x in re.split(r'[\n,; ]+', ids_raw):
+                x=str(x).strip()
+                if x.isdigit() and int(x) not in ids:
+                    ids.append(int(x))
+            creadas=0
+            with db() as con:
+                for doc_id in ids:
+                    doc=con.execute('SELECT * FROM contratacion_docs WHERE id=?',(doc_id,)).fetchone()
+                    if not doc: continue
+                    token=crear_token_firma()
+                    con.execute('INSERT INTO firma_solicitudes(documento_id,dni,trabajador,metodo,estado,evidencia_ref,fecha_envio,observacion,firma_token,validacion_estado) VALUES(?,?,?,?,?,?,?,?,?,?)',(doc['id'],doc['dni'],doc['trabajador'],metodo,'Pendiente de captura facial','',now_txt(),obs,token,'PENDIENTE'))
+                    con.execute("UPDATE contratacion_docs SET estado='ENVIADO A FIRMA' WHERE id=?",(doc['id'],))
+                    creadas += 1
+                con.commit()
+            flash(f'Solicitudes masivas creadas: {creadas}. Revisa la Bandeja de Firmas para copiar/enviar enlaces móviles.', 'ok' if creadas else 'error')
+            return redirect(url_for('admin_contratacion', sec='firma'))
         if accion == 'firma_solicitud':
             doc_id = request.form.get('documento_id')
             metodo = clean(request.form.get('metodo')) or 'FACIAL + FIRMA DIGITAL'
@@ -4273,7 +4294,10 @@ def admin_contratacion():
         <div class='c-card table-wrap'><table class='c-table plantilla-table'><tr><th>Proceso</th><th>Estado</th><th>Nombre Plantilla</th><th>Tipo Documento</th><th>Esquema</th><th>Descripción</th><th>Versión</th><th>Condición</th><th>Nombre Archivo</th></tr>{plantillas_rows or '<tr><td colspan=9>No hay plantillas registradas.</td></tr>'}</table></div>
         """)
     elif sec=='firma':
-        opt_docs = ''.join([f"<option value='{d['id']}'>ID {d['id']} - {h(d['dni'])} - {h(d['trabajador'])} - {h(d['tipo_doc'])}</option>" for d in docs])
+        opt_docs = ''.join([f"<option value='{d['id']}' data-dni='{h(d['dni'])}' data-trabajador='{h(d['trabajador'])}' data-tipo='{h(d['tipo_doc'])}'>ID {d['id']} - {h(d['dni'])} - {h(d['trabajador'])} - {h(d['tipo_doc'])}</option>" for d in docs])
+        rows_docs_lote = ''
+        for d in docs[:250]:
+            rows_docs_lote += f"""<tr><td><input type='checkbox' class='chk-doc-firma' value='{d['id']}' data-dni='{h(d['dni'])}' data-trabajador='{h(d['trabajador'])}' data-tipo='{h(d['tipo_doc'])}'></td><td>{d['id']}</td><td>{h(d['dni'])}</td><td>{h(d['trabajador'])}</td><td>{h(d['tipo_doc'])}</td><td><span class='estado-soft'>{h(d['estado'] or '')}</span></td></tr>"""
         rows_firma = ''
         for r in firma_sols:
             token = r['firma_token'] if 'firma_token' in r.keys() and r['firma_token'] else ''
@@ -4282,40 +4306,66 @@ def admin_contratacion():
             estado_val = r['validacion_estado'] if 'validacion_estado' in r.keys() and r['validacion_estado'] else ''
             rows_firma += f"""<tr>
               <td>{r['id']}</td><td>{h(r['dni'])}</td><td>{h(r['trabajador'])}</td><td>{h(r['metodo'])}</td>
-              <td><span class='status-pill'>{h(r['estado'])}</span><br><small>{h(estado_val)}</small></td>
+              <td><span class='estado-pill'>{h(r['estado'])}</span><br><small>{h(estado_val)}</small></td>
               <td>{h(r['fecha_envio'])}</td><td>{h(r['fecha_firma'] or '')}</td>
-              <td>{'<a class="c-btn gray mini-btn" href="'+h(link)+'" target="_blank">Abrir enlace</a>' if link else '-'}</td>
-              <td>{'<span class="state">Con evidencia</span>' if evidencia else '<span class="muted2">Pendiente</span>'}</td>
+              <td>{'<a class="c-btn gray mini-btn" href="'+h(link)+'" target="_blank">Abrir móvil/web</a>' if link else '-'}</td>
+              <td>{'<span class="ok-chip">Con evidencia</span>' if evidencia else '<span class="pend-chip">Pendiente</span>'}</td>
               <td>{h(r['observacion'] or '')}</td>
             </tr>"""
         camara_demo_url = url_for('firma_camara_demo')
         content=wrap(f"""
-        <h2 class='c-title'>Reconocimiento facial / firma digital de contratos</h2>
-        <div class='c-card firma-hero' style='padding:18px'>
-          <div>
-            <h3>✅ Pestaña activa para cámara laptop y celular</h3>
-            <p class='muted2'>Desde aquí se envía el contrato a firma, se genera un enlace para abrirlo desde celular o laptop, se activa la cámara con permiso del trabajador y se guarda evidencia, IP, navegador, fecha y hash.</p>
-            <p class='muted2'><b>Importante:</b> el sistema guarda evidencia y trazabilidad. La comparación biométrica/RENIEC real queda lista para integrarse con proveedor autorizado/API oficial en configuración.</p>
-            <a class='c-btn' href='{camara_demo_url}' target='_blank'>📷 Probar cámara ahora</a>
-            <a class='c-btn gray' href='/admin/firma/configuracion'>⚙ Configurar proveedor / API</a>
+        <div class='firma-page'>
+          <div class='firma-head'>
+            <div><h2>📸 Firma / Facial / Digital</h2><p>Control de firma de contratos con cámara de laptop/celular, envío individual o masivo y trazabilidad completa.</p></div>
+            <div class='firma-head-actions'><a class='c-btn' href='{camara_demo_url}' target='_blank'>Probar cámara</a><a class='c-btn gray' href='/admin/firma/configuracion'>Configurar proveedor/API</a></div>
           </div>
-          <div class='firma-flow'>
-            <span>1 Generar contrato</span><span>2 Enviar link</span><span>3 Cámara facial</span><span>4 Aceptar/firma</span><span>5 Archivar</span>
+          <div class='firma-kpis'>
+            <div><b>{len(firma_sols)}</b><span>Solicitudes generadas</span></div>
+            <div><b>{sum(1 for x in firma_sols if 'Firmado' in (x['estado'] or ''))}</b><span>Firmadas</span></div>
+            <div><b>{sum(1 for x in firma_sols if 'Pendiente' in (x['estado'] or ''))}</b><span>Pendientes</span></div>
+            <div><b>{len(docs)}</b><span>Docs. disponibles</span></div>
           </div>
+          <div class='firma-grid'>
+            <div class='firma-card'>
+              <h3>Activación de cámara</h3><p class='muted2'>Vista previa real usando permisos del navegador. En celular requiere HTTPS o localhost.</p>
+              <div class='cam-wrap'><video id='firmaVideo' autoplay playsinline muted></video><canvas id='firmaCanvas' style='display:none'></canvas><img id='firmaPreview' style='display:none'></div>
+              <div class='firma-actions'><button type='button' class='c-btn' onclick='firmaStartCam()'>Activar cámara</button><button type='button' class='c-btn green' onclick='firmaCapture()'>Capturar evidencia</button><button type='button' class='c-btn gray' onclick='firmaStopCam()'>Detener</button></div><p id='firmaCamMsg' class='muted2'></p>
+            </div>
+            <div class='firma-card'>
+              <h3>Flujo entendido</h3><div class='flow-steps'><span>1. Seleccionar contrato</span><span>2. Generar enlace</span><span>3. Trabajador abre desde celular/laptop</span><span>4. Captura facial + aceptación</span><span>5. Trazabilidad y archivo</span></div>
+            </div>
+          </div>
+          <form method='post' class='firma-card firma-form'>
+            <input type='hidden' name='accion' value='firma_solicitud'><h3>Envío individual a firma</h3>
+            <div class='form-row'><label>Documento de contratación</label><select name='documento_id' required>{opt_docs}</select></div>
+            <div class='form-row'><label>Método</label><select name='metodo'><option>FACIAL + FIRMA DIGITAL</option><option>RECONOCIMIENTO FACIAL</option><option>FIRMA DIGITAL</option><option>OTP + ACEPTACIÓN</option><option>CARGA MANUAL RRHH</option></select></div>
+            <div class='form-row wide'><label>Observación</label><input name='observacion' placeholder='Ej: Enviar contrato por WhatsApp/correo'></div>
+            <button class='c-btn'>Generar enlace individual</button>
+          </form>
+          <form method='post' class='firma-card firma-form' onsubmit='return prepararFirmaMasiva()'>
+            <input type='hidden' name='accion' value='firma_masiva'><input type='hidden' id='documentos_lote' name='documentos_lote'>
+            <h3>Envío masivo / lote</h3><div class='mass-alert'><b id='firmaMassCounter'>0 seleccionados</b><span>Selecciona contratos y genera enlaces de firma en lote.</span></div>
+            <div class='form-row'><label>Método masivo</label><select name='metodo_masivo'><option>FACIAL + FIRMA DIGITAL</option><option>RECONOCIMIENTO FACIAL</option><option>FIRMA DIGITAL</option></select></div>
+            <div class='form-row'><label>Observación masiva</label><input name='observacion_masiva' placeholder='Envío masivo de contratos a firma'></div>
+            <div class='firma-actions'><button type='button' class='c-btn gray' onclick='marcarTodosFirma(true)'>Marcar visibles</button><button type='button' class='c-btn gray' onclick='marcarTodosFirma(false)'>Limpiar</button><button class='c-btn green'>Generar enlaces masivos</button></div>
+            <div class='table-wrap'><table class='c-table firma-table'><tr><th></th><th>ID</th><th>DNI</th><th>Trabajador</th><th>Documento</th><th>Estado</th></tr>{rows_docs_lote or '<tr><td colspan=6>No hay documentos de contratación disponibles. Primero carga contratos en Archivos Trabajador.</td></tr>'}</table></div>
+          </form>
+          <div id='bandeja' class='firma-card'><h3>🧾 Bandeja de Firmas</h3><div class='table-wrap'><table class='c-table firma-table'><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Método</th><th>Estado</th><th>Fecha envío</th><th>Fecha firma</th><th>Link cámara</th><th>Evidencia</th><th>Observación</th></tr>{rows_firma or '<tr><td colspan=10>No hay solicitudes de firma.</td></tr>'}</table></div></div>
+          <div class='firma-card'><h3>🔐 Trazabilidad</h3><div class='trace-grid'><span>IP y navegador</span><span>Fecha / hora</span><span>Hash de evidencia</span><span>Selfie/captura</span><span>Estado RENIEC/API</span><span>Documento archivado</span></div></div>
         </div>
-        <form method='post' class='c-card c-form' style='padding:18px'>
-          <input type='hidden' name='accion' value='firma_solicitud'>
-          <b>Documento de contratación</b><select name='documento_id' required>{opt_docs}</select>
-          <b>Método</b><select name='metodo'><option>FACIAL + FIRMA DIGITAL</option><option>RECONOCIMIENTO FACIAL</option><option>FIRMA DIGITAL</option><option>OTP + ACEPTACIÓN</option><option>CARGA MANUAL RRHH</option></select>
-          <b>Observación</b><input name='observacion' placeholder='Ej: Enviar contrato por WhatsApp/correo'>
-          <span></span><button class='c-btn'>Generar enlace y enviar a firma</button>
-        </form>
-        <div class='c-card' style='padding:18px'>
-          <h3>📌 ¿Dónde veo lo implementado?</h3>
-          <p class='muted2'>Menú izquierdo → <b>Gestión Contratación</b> → <b>Gestión documentaria</b> → <b>Firma / Facial / Digital</b>. Cada solicitud muestra su enlace para abrir desde celular o laptop.</p>
-        </div>
-        <div class='c-card table-wrap'><table class='c-table'><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Método</th><th>Estado</th><th>Fecha envío</th><th>Fecha firma</th><th>Link cámara</th><th>Evidencia</th><th>Observación</th></tr>{rows_firma or '<tr><td colspan=10>No hay solicitudes de firma. Primero sube/genera un contrato en Archivos Trabajador y luego envíalo a firma.</td></tr>'}</table></div>
-        <style>.firma-hero{{display:grid;grid-template-columns:1.4fr .8fr;gap:18px;align-items:center}}.firma-flow{{display:grid;gap:10px}}.firma-flow span{{background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;font-weight:900;color:#9a3412}}@media(max-width:900px){{.firma-hero{{grid-template-columns:1fr}}}}</style>
+        <style>
+        .firma-page{{color:#102033;background:#eef3f8;margin:-10px -12px 0;padding:20px;min-height:calc(100vh - 90px)}}.firma-head{{display:flex;justify-content:space-between;gap:16px;align-items:center;background:linear-gradient(135deg,#073552,#0c745f);color:white;border-radius:24px;padding:24px;box-shadow:0 18px 40px #0f172a22}}.firma-head h2{{font-size:34px;margin:0 0 6px}}.firma-head p{{margin:0;color:#dff7ff;font-weight:800}}.firma-head-actions,.firma-actions{{display:flex;gap:10px;flex-wrap:wrap}}.firma-kpis{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:16px 0}}.firma-kpis div{{background:white;border-radius:20px;padding:18px;border:1px solid #d8e4ef;box-shadow:0 12px 28px #0f172a12}}.firma-kpis b{{display:block;font-size:30px;color:#03735f}}.firma-kpis span{{color:#64748b;font-weight:900}}.firma-grid{{display:grid;grid-template-columns:1.35fr .8fr;gap:16px}}.firma-card{{background:white;border:1px solid #d8e4ef;border-radius:22px;padding:20px;margin:16px 0;box-shadow:0 12px 28px #0f172a12;color:#111827}}.firma-card h3{{margin:0 0 12px;font-size:23px;color:#07182e}}.cam-wrap{{background:#07182e;border-radius:20px;min-height:300px;display:grid;place-items:center;overflow:hidden;border:4px solid #dbeafe}}.cam-wrap video,.cam-wrap img{{width:100%;max-height:380px;object-fit:contain;background:#000}}.flow-steps{{display:grid;gap:10px}}.flow-steps span,.trace-grid span{{background:#e0f2fe;border:1px solid #7dd3fc;color:#075985;padding:12px;border-radius:14px;font-weight:950}}.firma-form{{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:end}}.firma-form h3,.firma-form .wide,.firma-form .mass-alert,.firma-form .table-wrap,.firma-form .firma-actions{{grid-column:1/-1}}.form-row label{{display:block;font-weight:950;margin-bottom:6px;color:#334155}}.form-row input,.form-row select{{background:#f8fafc;color:#0f172a;border:1px solid #cbd5e1;border-radius:14px;padding:13px;width:100%}}.mass-alert{{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#dcfce7;border:2px solid #22c55e;color:#166534;border-radius:18px;padding:14px 16px;font-weight:950}}.firma-table th{{background:#073552!important;color:white!important}}.firma-table td{{color:#1f2937!important;background:white!important}}.estado-pill,.estado-soft,.ok-chip,.pend-chip{{display:inline-flex;border-radius:999px;padding:7px 10px;font-weight:950}}.estado-pill{{background:#fef3c7;color:#92400e}}.estado-soft{{background:#e0f2fe;color:#075985}}.ok-chip{{background:#dcfce7;color:#166534}}.pend-chip{{background:#fee2e2;color:#991b1b}}.trace-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}.c-btn.green{{background:linear-gradient(135deg,#16a34a,#22c55e)!important;color:white!important}}@media(max-width:900px){{.firma-head,.firma-grid{{grid-template-columns:1fr;display:grid}}.firma-kpis{{grid-template-columns:repeat(2,1fr)}}.firma-form{{grid-template-columns:1fr}}.trace-grid{{grid-template-columns:1fr}}}}
+        </style>
+        <script>
+        let firmaStream=null;
+        async function firmaStartCam(){{const msg=document.getElementById('firmaCamMsg');try{{firmaStream=await navigator.mediaDevices.getUserMedia({{video:{{facingMode:'user'}},audio:false}});document.getElementById('firmaVideo').srcObject=firmaStream;msg.textContent='Cámara activa correctamente.';}}catch(e){{msg.textContent='No se pudo activar cámara. Revisa permisos, HTTPS o localhost.';}}}}
+        function firmaCapture(){{const v=document.getElementById('firmaVideo'),c=document.getElementById('firmaCanvas'),img=document.getElementById('firmaPreview'),msg=document.getElementById('firmaCamMsg');if(!v.videoWidth){{msg.textContent='Primero activa la cámara.';return;}}c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);img.src=c.toDataURL('image/png');img.style.display='block';msg.textContent='Evidencia capturada en vista previa.';}}
+        function firmaStopCam(){{if(firmaStream){{firmaStream.getTracks().forEach(t=>t.stop());firmaStream=null;}}document.getElementById('firmaCamMsg').textContent='Cámara detenida.';}}
+        function updateFirmaCounter(){{const n=[...document.querySelectorAll('.chk-doc-firma:checked')].length;const el=document.getElementById('firmaMassCounter');if(el)el.textContent=n+' seleccionados';}}
+        function marcarTodosFirma(on){{document.querySelectorAll('.chk-doc-firma').forEach(x=>x.checked=on);updateFirmaCounter();}}
+        function prepararFirmaMasiva(){{const ids=[...document.querySelectorAll('.chk-doc-firma:checked')].map(x=>x.value);if(ids.length===0){{alert('Selecciona al menos un contrato para envío masivo.');return false;}}document.getElementById('documentos_lote').value=ids.join('\n');return confirm('Se generarán '+ids.length+' enlace(s) de firma. ¿Continuar?');}}
+        document.addEventListener('change',e=>{{if(e.target.classList&&e.target.classList.contains('chk-doc-firma'))updateFirmaCounter();}});
+        </script>
         """)
     elif sec=='nisira':
         content=wrap("<h2 class='c-title'>Contratación NISIRA</h2><div class='c-card' style='padding:22px'><p class='muted2'>Sección preparada para importar contratos / altas desde NISIRA y cruzar por DNI.</p><button class='c-btn'>Sincronizar NISIRA</button></div>")
@@ -4436,72 +4486,12 @@ def api_boleta(dni):
     t = get_trabajador(dni)
     return jsonify({'ok': bool(t), 'trabajador': dict(t) if t else None, 'documentos': [dict(x) for x in docs]})
 
+
+@app.route('/admin/firma_digital')
+@admin_required
+def admin_firma_digital():
+    return redirect(url_for('admin_contratacion', sec='firma'))
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '5000'))
     app.run(host='0.0.0.0', port=port, debug=False)
-
-
-@app.route('/admin/firma_digital')
-def admin_firma_digital():
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta name='viewport' content='width=device-width, initial-scale=1'>
-    <title>Firma Facial y Digital</title>
-    <style>
-    body{background:#06152b;color:white;font-family:Arial;padding:20px}
-    .card{background:#0d223f;border-radius:18px;padding:20px;margin-bottom:20px;border:2px solid #ffc72c}
-    button{background:#ffc72c;color:black;border:none;padding:12px 18px;border-radius:12px;font-weight:bold;cursor:pointer}
-    video,canvas{width:100%;max-width:500px;border-radius:14px;background:black}
-    .badge{display:inline-block;background:#1d8f3f;padding:8px 12px;border-radius:20px}
-    </style>
-    </head>
-    <body>
-    <h1>📸 Firma / Facial / Digital</h1>
-    <div class='card'>
-      <h2>Activación de Cámara</h2>
-      <p>Compatible con laptop y celular.</p>
-      <video id='video' autoplay playsinline></video><br><br>
-      <button onclick='activarCamara()'>Activar Cámara</button>
-      <button onclick='capturar()'>Capturar Evidencia</button>
-      <canvas id='canvas' style='display:none'></canvas>
-    </div>
-
-    <div class='card' id='bandeja'>
-      <h2>🧾 Bandeja de Firmas</h2>
-      <p class='badge'>Contrato pendiente de validación biométrica</p>
-      <ul>
-        <li>Contrato Intermitente - Pendiente</li>
-        <li>Renovación Contrato - Firmado</li>
-        <li>Adenda Salarial - En validación</li>
-      </ul>
-    </div>
-
-    <div class='card'>
-      <h2>🔐 Trazabilidad</h2>
-      <p>✔ Fecha y hora</p>
-      <p>✔ IP/Navegador</p>
-      <p>✔ Evidencia facial</p>
-      <p>✔ Hash documental</p>
-      <p>✔ Integración RENIEC/API lista</p>
-    </div>
-
-    <script>
-    async function activarCamara(){
-        const stream = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
-        document.getElementById('video').srcObject = stream;
-    }
-    function capturar(){
-        const video=document.getElementById('video');
-        const canvas=document.getElementById('canvas');
-        canvas.style.display='block';
-        canvas.width=video.videoWidth;
-        canvas.height=video.videoHeight;
-        canvas.getContext('2d').drawImage(video,0,0);
-        alert('Evidencia facial capturada correctamente');
-    }
-    </script>
-    </body>
-    </html>
-    """)
