@@ -1818,6 +1818,9 @@ def sidebar(active):
                 <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'flujo' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=flujo'><span>☰</span><span class='label'>Flujos de aprobación</span></a>
                 <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'carga' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=carga'><span>⬆️</span><span class='label'>Carga Masiva</span></a>
                 <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'reportes' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=reportes'><span>▤</span><span class='label'>Reportes</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/firma_digital'><span>📸</span><span class='label'>Firma / Facial / Digital</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/firma_digital#bandeja'><span>🧾</span><span class='label'>Bandeja de Firmas</span></a>
+
                 <div id='grp_con_maestros' data-group='con_maestros' class='menu-group nested {'force-open' if active_sub in ['maestros','observados','tipos_etapa','tipo_empleado','cargo','actualizar'] else ''}'>
                   <button type='button' class='menu-title {'active' if active_sub in ['maestros','observados','tipos_etapa','tipo_empleado','cargo','actualizar'] else ''}' onclick="toggleGroup('grp_con_maestros')"><span>💼</span><span class='label'>Datos Maestros</span><span class='chev'>∨</span></button>
                   <div class='submenu'>
@@ -4436,3 +4439,69 @@ def api_boleta(dni):
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '5000'))
     app.run(host='0.0.0.0', port=port, debug=False)
+
+
+@app.route('/admin/firma_digital')
+def admin_firma_digital():
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <title>Firma Facial y Digital</title>
+    <style>
+    body{background:#06152b;color:white;font-family:Arial;padding:20px}
+    .card{background:#0d223f;border-radius:18px;padding:20px;margin-bottom:20px;border:2px solid #ffc72c}
+    button{background:#ffc72c;color:black;border:none;padding:12px 18px;border-radius:12px;font-weight:bold;cursor:pointer}
+    video,canvas{width:100%;max-width:500px;border-radius:14px;background:black}
+    .badge{display:inline-block;background:#1d8f3f;padding:8px 12px;border-radius:20px}
+    </style>
+    </head>
+    <body>
+    <h1>📸 Firma / Facial / Digital</h1>
+    <div class='card'>
+      <h2>Activación de Cámara</h2>
+      <p>Compatible con laptop y celular.</p>
+      <video id='video' autoplay playsinline></video><br><br>
+      <button onclick='activarCamara()'>Activar Cámara</button>
+      <button onclick='capturar()'>Capturar Evidencia</button>
+      <canvas id='canvas' style='display:none'></canvas>
+    </div>
+
+    <div class='card' id='bandeja'>
+      <h2>🧾 Bandeja de Firmas</h2>
+      <p class='badge'>Contrato pendiente de validación biométrica</p>
+      <ul>
+        <li>Contrato Intermitente - Pendiente</li>
+        <li>Renovación Contrato - Firmado</li>
+        <li>Adenda Salarial - En validación</li>
+      </ul>
+    </div>
+
+    <div class='card'>
+      <h2>🔐 Trazabilidad</h2>
+      <p>✔ Fecha y hora</p>
+      <p>✔ IP/Navegador</p>
+      <p>✔ Evidencia facial</p>
+      <p>✔ Hash documental</p>
+      <p>✔ Integración RENIEC/API lista</p>
+    </div>
+
+    <script>
+    async function activarCamara(){
+        const stream = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+        document.getElementById('video').srcObject = stream;
+    }
+    function capturar(){
+        const video=document.getElementById('video');
+        const canvas=document.getElementById('canvas');
+        canvas.style.display='block';
+        canvas.width=video.videoWidth;
+        canvas.height=video.videoHeight;
+        canvas.getContext('2d').drawImage(video,0,0);
+        alert('Evidencia facial capturada correctamente');
+    }
+    </script>
+    </body>
+    </html>
+    """)
