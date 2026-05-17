@@ -1,0 +1,39 @@
+VERSIÓN ULTRAMEJORADA - PLANTILLA GENERAL TRABAJADORES
+
+Cambios aplicados:
+1. Se agregó plantilla Excel general para la pestaña Trabajadores:
+   - PLANTILLA_GENERAL_TRABAJADORES_GESTION_RRHH.xlsx
+   - También se descarga desde: Admin > Trabajadores > Descargar plantilla.
+
+2. La plantilla sirve como base general para:
+   - Gestión documental
+   - Gestión vacacional
+   - Gestión contratos
+   - Datos laborales, jefe inmediato, contacto de emergencia, contrato, ubicación, CONADIS e indumentaria.
+
+3. La importación de trabajadores ahora acepta encabezados más flexibles:
+   - TRABAJADOR / NOMBRE / APELLIDOS Y NOMBRES
+   - JEFE INMEDIATO / JEFE DNI / DNI JEFE
+   - CORREO / EMAIL / MAIL
+   - FECHA NACIMIENTO / FECHA NAC / NACIMIENTO
+   - FECHA INGRESO / FECHA ING / INGRESO
+
+4. Se agregaron columnas persistentes en base de datos para:
+   - celular
+   - contacto_emergencia
+   - telefono_emergencia
+   - tipo_contrato
+   - fecha_fin_contrato
+   - remuneracion_basica
+   - direccion
+   - departamento / provincia / distrito
+   - nivel_educativo
+   - procedencia
+   - indumentaria
+   - carnet_conadis
+   - observacion
+
+5. La carga masiva omite filas incompletas y muestra cuántas filas fueron omitidas.
+
+IMPORTANTE SOBRE EL PORTAL ADAPTA:
+No pude entrar a la sesión privada del portal desde aquí porque el acceso está protegido por autenticación/redirección segura. Para copiar pantallas exactas o campos internos, exporta/copia la información visible o adjunta capturas del portal.

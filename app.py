@@ -27,7 +27,8 @@ from flask import Flask, request, redirect, url_for, session, send_file, render_
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from openpyxl import load_workbook, Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.worksheet.datavalidation import DataValidation
 try:
     from docx import Document
 except Exception:
@@ -302,7 +303,7 @@ def exportar_tabla_excel(nombre_archivo, tabla, columnas):
 
 def respaldar_exceles_locales():
     exportar_tabla_excel('01_TRABAJADORES_LOCAL.xlsx', 'trabajadores', [
-        ('EMPRESA','empresa'),('DNI','dni'),('TRABAJADOR','nombre'),('CARGO','cargo'),('AREA','area'),('JEFE INMEDIATO','jefe_dni'),('JEFE NOMBRE','jefe_nombre'),('PLANILLA','planilla'),('CORREO','correo'),('FECHA NACIMIENTO','fecha_nacimiento'),('FECHA INGRESO','fecha_ingreso'),('USUARIO','usuario_portal'),('CLAVE','clave_portal'),('ACTIVO','activo'),('FECHA REGISTRO','fecha_registro')])
+        ('EMPRESA','empresa'),('DNI','dni'),('TRABAJADOR','nombre'),('CARGO','cargo'),('AREA','area'),('JEFE INMEDIATO','jefe_dni'),('JEFE NOMBRE','jefe_nombre'),('PLANILLA','planilla'),('CORREO','correo'),('FECHA NACIMIENTO','fecha_nacimiento'),('FECHA INGRESO','fecha_ingreso'),('CELULAR','celular'),('CONTACTO EMERGENCIA','contacto_emergencia'),('TELEFONO EMERGENCIA','telefono_emergencia'),('TIPO CONTRATO','tipo_contrato'),('FECHA FIN CONTRATO','fecha_fin_contrato'),('REMUNERACION BASICA','remuneracion_basica'),('DIRECCION','direccion'),('DEPARTAMENTO','departamento'),('PROVINCIA','provincia'),('DISTRITO','distrito'),('NIVEL EDUCATIVO','nivel_educativo'),('PROCEDENCIA','procedencia'),('INDUMENTARIA','indumentaria'),('CARNET CONADIS','carnet_conadis'),('OBSERVACION','observacion'),('USUARIO','usuario_portal'),('CLAVE','clave_portal'),('ACTIVO','activo'),('FECHA REGISTRO','fecha_registro')])
     exportar_tabla_excel('02_VACACIONES_SALDOS_LOCAL.xlsx', 'vacaciones_saldos', [
         ('DNI','dni'),('TRABAJADOR','trabajador'),('EMPRESA','empresa'),('AREA','area'),('JEFE','jefe'),('JEFE DNI','jefe_dni'),('FECHA INGRESO','fecha_ingreso'),('I_PERIODO','periodo_inicio'),('F_PERIODO','periodo_fin'),('DIAS GANADOS','dias_ganados'),('DIAS GOZADOS','dias_gozados'),('SALDO','saldo'),('PERIODO','periodo'),('FECHA CARGA','fecha_carga')])
     exportar_tabla_excel('03_VACACIONES_SOLICITUDES_LOCAL.xlsx', 'vacaciones_solicitudes', [
@@ -559,6 +560,21 @@ def init_db():
             ('clave_portal', 'ALTER TABLE trabajadores ADD COLUMN clave_portal TEXT'),
             ('jefe_dni', 'ALTER TABLE trabajadores ADD COLUMN jefe_dni TEXT'),
             ('jefe_nombre', 'ALTER TABLE trabajadores ADD COLUMN jefe_nombre TEXT'),
+            ('celular', 'ALTER TABLE trabajadores ADD COLUMN celular TEXT'),
+            ('contacto_emergencia', 'ALTER TABLE trabajadores ADD COLUMN contacto_emergencia TEXT'),
+            ('telefono_emergencia', 'ALTER TABLE trabajadores ADD COLUMN telefono_emergencia TEXT'),
+            ('tipo_contrato', 'ALTER TABLE trabajadores ADD COLUMN tipo_contrato TEXT'),
+            ('fecha_fin_contrato', 'ALTER TABLE trabajadores ADD COLUMN fecha_fin_contrato TEXT'),
+            ('remuneracion_basica', 'ALTER TABLE trabajadores ADD COLUMN remuneracion_basica TEXT'),
+            ('direccion', 'ALTER TABLE trabajadores ADD COLUMN direccion TEXT'),
+            ('departamento', 'ALTER TABLE trabajadores ADD COLUMN departamento TEXT'),
+            ('provincia', 'ALTER TABLE trabajadores ADD COLUMN provincia TEXT'),
+            ('distrito', 'ALTER TABLE trabajadores ADD COLUMN distrito TEXT'),
+            ('nivel_educativo', 'ALTER TABLE trabajadores ADD COLUMN nivel_educativo TEXT'),
+            ('procedencia', 'ALTER TABLE trabajadores ADD COLUMN procedencia TEXT'),
+            ('indumentaria', 'ALTER TABLE trabajadores ADD COLUMN indumentaria TEXT'),
+            ('carnet_conadis', 'ALTER TABLE trabajadores ADD COLUMN carnet_conadis TEXT'),
+            ('observacion', 'ALTER TABLE trabajadores ADD COLUMN observacion TEXT'),
         ]:
             try: con.execute(ddl)
             except Exception: pass
@@ -742,6 +758,31 @@ def init_db():
             activo INTEGER DEFAULT 1,
             fecha_registro TEXT,
             creado_por TEXT
+        )''')
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS firma_configuracion(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            proveedor TEXT DEFAULT 'INTERNO',
+            modo TEXT DEFAULT 'RECONOCIMIENTO FACIAL / FIRMA DIGITAL',
+            reniec_activo INTEGER DEFAULT 0,
+            firma_digital_activo INTEGER DEFAULT 0,
+            url_api TEXT,
+            token_ref TEXT,
+            observacion TEXT,
+            fecha_registro TEXT
+        )''')
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS firma_solicitudes(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            documento_id INTEGER,
+            dni TEXT,
+            trabajador TEXT,
+            metodo TEXT DEFAULT 'PENDIENTE',
+            estado TEXT DEFAULT 'Pendiente',
+            evidencia_ref TEXT,
+            fecha_envio TEXT,
+            fecha_firma TEXT,
+            observacion TEXT
         )''')
         if not con.execute("SELECT 1 FROM contratacion_plantillas LIMIT 1").fetchone():
             semillas=[
@@ -1187,7 +1228,7 @@ def generar_docx_desde_plantilla(pid, dni=''):
 def docx_to_preview_html(path, valores=None):
     """Vista previa simple de Word en HTML: párrafos y tablas con campos reemplazados."""
     if Document is None:
-        return '<div class="preview-empty">No se puede previsualizar Word porque falta python-docx.</div>'
+        return '<div class="preview-empty"><b>No se puede previsualizar Word porque falta python-docx.</b><br>Solución: el ZIP ya incluye <code>python-docx==1.1.2</code> en requirements.txt. En Render usa <b>Clear build cache & deploy</b>; en local ejecuta <code>pip install -r requirements.txt</code>.</div>'
     doc = Document(str(path))
     if valores:
         reemplazar_texto_docx(doc, valores)
@@ -1775,6 +1816,7 @@ def sidebar(active):
                     <a class='menu-item sub-mini {'active' if active_sub == 'documentaria' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=documentaria'><span>•</span><span class='label'>Archivos Trabajador</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'ficha' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=ficha'><span>•</span><span class='label'>Ficha Trabajador</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'plantillas' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=plantillas'><span>•</span><span class='label'>Plantilla Documentos</span></a>
+                    <a class='menu-item sub-mini' onclick='saveSideScroll()' href='/admin/firma/configuracion'><span>•</span><span class='label'>Firma / Facial / Digital</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'nisira' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=nisira'><span>•</span><span class='label'>Contratación NISIRA</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'descargas' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=descargas'><span>•</span><span class='label'>Descargas</span></a>
                   </div>
@@ -2322,6 +2364,107 @@ def admin():
     """
     return render_page(content, active='Admin')
 
+
+def normalizar_header_excel(valor):
+    """Normaliza encabezados de Excel para que el usuario pueda cargar plantillas amplias sin errores."""
+    txt = clean(valor).upper()
+    txt = re.sub(r"[ÁÀÂÄ]", "A", txt)
+    txt = re.sub(r"[ÉÈÊË]", "E", txt)
+    txt = re.sub(r"[ÍÌÎÏ]", "I", txt)
+    txt = re.sub(r"[ÓÒÔÖ]", "O", txt)
+    txt = re.sub(r"[ÚÙÛÜ]", "U", txt)
+    txt = txt.replace("Ñ", "N")
+    txt = re.sub(r"[^A-Z0-9]+", "_", txt).strip("_")
+    aliases = {
+        'TRABAJADOR':'NOMBRE','APELLIDOS_Y_NOMBRES':'NOMBRE','NOMBRES_Y_APELLIDOS':'NOMBRE','NOMBRE_TRABAJADOR':'NOMBRE','NOMBRE_COMPLETO':'NOMBRE',
+        'FECHA_NAC':'FECHA_NACIMIENTO','F_NACIMIENTO':'FECHA_NACIMIENTO','NACIMIENTO':'FECHA_NACIMIENTO',
+        'FECHA_ING':'FECHA_INGRESO','F_INGRESO':'FECHA_INGRESO','INGRESO':'FECHA_INGRESO',
+        'JEFE_INMEDIATO':'JEFE_DNI','JEFE':'JEFE_DNI','DNI_JEFE':'JEFE_DNI','JEFE_INMEDIATO_DNI':'JEFE_DNI',
+        'JEFE_NOMBRE':'JEFE_NOMBRE','NOMBRE_JEFE':'JEFE_NOMBRE',
+        'EMAIL':'CORREO','MAIL':'CORREO','CORREO_ELECTRONICO':'CORREO',
+        'TELEFONO':'CELULAR','NRO_TELEFONO_MOVIL':'CELULAR','NUMERO_CELULAR':'CELULAR',
+        'TELEFONO_EMERGENCIA':'TELEFONO_EMERGENCIA','NUMERO_TELEFONICO_DE_EMERGENCIA':'TELEFONO_EMERGENCIA',
+        'CONTACTO_DE_EMERGENCIA':'CONTACTO_EMERGENCIA','CONTACTO_EMERGENCIA':'CONTACTO_EMERGENCIA',
+        'TIPO_CONTRATO':'TIPO_CONTRATO','FECHA_FIN_CONTRATO':'FECHA_FIN_CONTRATO','REMUNERACION_BASICA':'REMUNERACION_BASICA',
+        'DIRECCION_SIMPLE':'DIRECCION','DIRECCION_ACTUAL':'DIRECCION',
+        'NIVEL_EDUCACION':'NIVEL_EDUCATIVO','CARNET_CONADIS':'CARNET_CONADIS','CONADIS':'CARNET_CONADIS'
+    }
+    return aliases.get(txt, txt)
+
+def valor_fila(row, idx_map, *names, default=''):
+    for name in names:
+        k = normalizar_header_excel(name)
+        i = idx_map.get(k, -1)
+        if i >= 0 and i < len(row) and row[i] is not None:
+            return row[i]
+    return default
+
+def construir_plantilla_trabajadores_xlsx(path):
+    """Plantilla maestra para la pestaña Trabajadores: sirve para gestión documental, vacaciones y contratos."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'TRABAJADORES'
+    headers = [
+        'EMPRESA','DNI','TRABAJADOR','CARGO','AREA','GERENCIA','SEDE','JEFE INMEDIATO','JEFE NOMBRE','PLANILLA','CORREO','CELULAR',
+        'CONTACTO EMERGENCIA','TELEFONO EMERGENCIA','FECHA NACIMIENTO','FECHA INGRESO','TIPO CONTRATO','FECHA FIN CONTRATO','REMUNERACION BASICA',
+        'DIRECCION','DEPARTAMENTO','PROVINCIA','DISTRITO','NIVEL EDUCATIVO','PROCEDENCIA','INDUMENTARIA','CARNET CONADIS','ACTIVO','OBSERVACION'
+    ]
+    ws.append(headers)
+    ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','ANALISTA DE RRHH','GESTION DEL TALENTO HUMANO','ADMINISTRACION','TRUJILLO','43043999','JEFE DIRECTO','MENSUAL','correo@empresa.com','999999999','FAMILIAR DIRECTO','988888888','01/01/1990','01/05/2024','INTERMITENTE','31/12/2026','1200','AV. EJEMPLO 123','LA LIBERTAD','TRUJILLO','TRUJILLO','TECNICO','COSTA','SI','NO','SI','FILA DE EJEMPLO, BORRAR ANTES DE CARGAR'])
+    ws.append(['AQUANCA II','00123456','OTRO TRABAJADOR','OPERARIO','OPERACIONES','PLANTA','CHAO','43043999','JEFE DIRECTO','SEMANAL','correo2@empresa.com','977777777','MADRE/PADRE','966666666','15/03/1995','10/02/2025','TEMPORAL','10/08/2026','1130','DIRECCION REFERENCIAL','LA LIBERTAD','VIRU','CHAO','SECUNDARIA COMPLETA','SIERRA','NO','SI','SI','FILA DE EJEMPLO, BORRAR ANTES DE CARGAR'])
+    ws.freeze_panes = 'A2'
+    dark = PatternFill('solid', fgColor='111827')
+    green = PatternFill('solid', fgColor='22C55E')
+    thin = Side(style='thin', color='D1D5DB')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = dark
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = border
+    for row in ws.iter_rows(min_row=2, max_row=500, max_col=len(headers)):
+        for cell in row:
+            cell.border = border
+            cell.alignment = Alignment(vertical='center', wrap_text=True)
+    for col in range(1, len(headers)+1):
+        letter = ws.cell(1, col).column_letter
+        ws.column_dimensions[letter].width = 22
+    for c in ['B','H','L','N']:
+        ws.column_dimensions[c].width = 16
+    for c in ['C','T','AC']:
+        ws.column_dimensions[c].width = 34
+    # Resalta campos mínimos obligatorios
+    for col in [1,2,3,11,15]:
+        ws.cell(1, col).fill = green
+    # Validaciones
+    def add_list(col, values):
+        dv = DataValidation(type='list', formula1='"' + ','.join(values) + '"', allow_blank=True)
+        ws.add_data_validation(dv); dv.add(f'{col}2:{col}5000')
+    add_list('A', ['AQUANQA','AQUANCA II'])
+    add_list('J', ['MENSUAL','SEMANAL','QUINCENAL','OTROS'])
+    add_list('Q', ['INDETERMINADO','INTERMITENTE','TEMPORAL','SUPLENCIA','PRACTICANTE','OTROS'])
+    add_list('X', ['PRIMARIA','SECUNDARIA COMPLETA','TECNICO','UNIVERSITARIO','BACHILLER','TITULADO','OTROS'])
+    add_list('Z', ['SI','NO'])
+    add_list('AA', ['SI','NO'])
+    add_list('AB', ['SI','NO'])
+    # Hoja instrucciones
+    ins = wb.create_sheet('INSTRUCCIONES')
+    ins.append(['USO DE LA PLANTILLA'])
+    ins.append(['1. Cargar este Excel desde Admin > Trabajadores > Importar Excel.'])
+    ins.append(['2. Campos obligatorios marcados en verde: EMPRESA, DNI, TRABAJADOR, CORREO y FECHA NACIMIENTO.'])
+    ins.append(['3. DNI debe tener 8 dígitos. La clave del trabajador se genera con su fecha de nacimiento: ddmmaaaa.'])
+    ins.append(['4. Las columnas extra quedan preparadas para gestión documental, vacacional y contratos.'])
+    ins.append(['5. Puede borrar las filas de ejemplo antes de importar.'])
+    ins.column_dimensions['A'].width = 120
+    ins['A1'].font = Font(bold=True, size=14, color='FFFFFF')
+    ins['A1'].fill = dark
+    for row in ins.iter_rows(min_row=1, max_row=6, max_col=1):
+        for cell in row:
+            cell.alignment = Alignment(wrap_text=True, vertical='top')
+            cell.border = border
+    wb.save(path)
+    return path
+
 @app.route('/admin/trabajadores', methods=['GET','POST'])
 @admin_required
 def admin_trabajadores():
@@ -2329,31 +2472,53 @@ def admin_trabajadores():
         if 'excel' in request.files and request.files['excel'].filename:
             f = request.files['excel']; path = UPLOAD_DIR / f"base_{now_file()}_{secure_filename(f.filename)}"; f.save(path)
             wb = load_workbook(path, data_only=True); ws = wb.active
-            headers = [clean(c.value).upper().replace('TRABAJADOR','NOMBRE').replace('FECHA NACIMIENTO','FECHA_NACIMIENTO').replace('FECHA INGRESO','FECHA_INGRESO').replace('JEFE INMEDIATO','JEFE_INMEDIATO').replace('JEFE DNI','JEFE_INMEDIATO') for c in ws[1]]
-            def idx(name):
-                return headers.index(name) if name in headers else -1
-            n=0
+            headers = [normalizar_header_excel(c.value) for c in ws[1]]
+            idx_map = {h:i for i,h in enumerate(headers) if h}
+            n=0; omitidos=0
+            extras_cols = ['celular','contacto_emergencia','telefono_emergencia','tipo_contrato','fecha_fin_contrato','remuneracion_basica','direccion','departamento','provincia','distrito','nivel_educativo','procedencia','indumentaria','carnet_conadis','observacion']
             with db() as con:
                 for row in ws.iter_rows(min_row=2, values_only=True):
-                    dni = normalizar_dni(row[idx('DNI')] if idx('DNI')>=0 else '')
-                    if not dni: continue
-                    nombre = clean(row[idx('NOMBRE')] if idx('NOMBRE')>=0 else '')
-                    correo = clean(row[idx('CORREO')] if idx('CORREO')>=0 else '').lower()
-                    cargo = clean(row[idx('CARGO')] if idx('CARGO')>=0 else '')
-                    area = clean(row[idx('AREA')] if idx('AREA')>=0 else '')
-                    jefe_dni = normalizar_dni(row[idx('JEFE_INMEDIATO')] if idx('JEFE_INMEDIATO')>=0 else '')
-                    jefe_nombre = ''
-                    empresa = clean(row[idx('EMPRESA')] if idx('EMPRESA')>=0 else 'AQUANQA')
-                    fecha_nac_raw = row[idx('FECHA_NACIMIENTO')] if idx('FECHA_NACIMIENTO')>=0 else ''
-                    fecha_nac = excel_cell_fecha(fecha_nac_raw)
-                    planilla = clean(row[idx('PLANILLA')] if idx('PLANILLA')>=0 else '')
-                    fecha_ing = excel_cell_fecha(row[idx('FECHA_INGRESO')] if idx('FECHA_INGRESO')>=0 else '')
+                    if not any(row):
+                        continue
+                    dni = normalizar_dni(valor_fila(row, idx_map, 'DNI'))
+                    nombre = clean(valor_fila(row, idx_map, 'NOMBRE','TRABAJADOR'))
+                    correo = clean(valor_fila(row, idx_map, 'CORREO','EMAIL')).lower()
+                    if not dni or not nombre:
+                        omitidos += 1
+                        continue
+                    cargo = clean(valor_fila(row, idx_map, 'CARGO','PUESTO'))
+                    area = clean(valor_fila(row, idx_map, 'AREA'))
+                    jefe_dni = normalizar_dni(valor_fila(row, idx_map, 'JEFE_DNI','JEFE INMEDIATO'))
+                    jefe_nombre = clean(valor_fila(row, idx_map, 'JEFE_NOMBRE'))
+                    empresa = clean(valor_fila(row, idx_map, 'EMPRESA', default='AQUANQA')) or 'AQUANQA'
+                    fecha_nac = excel_cell_fecha(valor_fila(row, idx_map, 'FECHA_NACIMIENTO'))
+                    planilla = clean(valor_fila(row, idx_map, 'PLANILLA'))
+                    fecha_ing = excel_cell_fecha(valor_fila(row, idx_map, 'FECHA_INGRESO'))
                     clave = generar_clave_trabajador(dni, fecha_nac)
                     con.execute("INSERT OR REPLACE INTO trabajadores(dni,nombre,correo,cargo,area,jefe_dni,jefe_nombre,empresa,planilla,fecha_nacimiento,fecha_ingreso,usuario_portal,clave_portal,activo,fecha_registro) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)", (dni,nombre,correo,cargo,area,jefe_dni,jefe_nombre,empresa,planilla,fecha_nac,fecha_ing,dni,clave,now_txt()))
+                    extra_values = {
+                        'celular': clean(valor_fila(row, idx_map, 'CELULAR')),
+                        'contacto_emergencia': clean(valor_fila(row, idx_map, 'CONTACTO_EMERGENCIA')),
+                        'telefono_emergencia': clean(valor_fila(row, idx_map, 'TELEFONO_EMERGENCIA')),
+                        'tipo_contrato': clean(valor_fila(row, idx_map, 'TIPO_CONTRATO')),
+                        'fecha_fin_contrato': excel_cell_fecha(valor_fila(row, idx_map, 'FECHA_FIN_CONTRATO')),
+                        'remuneracion_basica': clean(valor_fila(row, idx_map, 'REMUNERACION_BASICA')),
+                        'direccion': clean(valor_fila(row, idx_map, 'DIRECCION')),
+                        'departamento': clean(valor_fila(row, idx_map, 'DEPARTAMENTO')),
+                        'provincia': clean(valor_fila(row, idx_map, 'PROVINCIA')),
+                        'distrito': clean(valor_fila(row, idx_map, 'DISTRITO')),
+                        'nivel_educativo': clean(valor_fila(row, idx_map, 'NIVEL_EDUCATIVO')),
+                        'procedencia': clean(valor_fila(row, idx_map, 'PROCEDENCIA')),
+                        'indumentaria': clean(valor_fila(row, idx_map, 'INDUMENTARIA')),
+                        'carnet_conadis': clean(valor_fila(row, idx_map, 'CARNET_CONADIS')),
+                        'observacion': clean(valor_fila(row, idx_map, 'OBSERVACION'))
+                    }
+                    set_sql = ','.join([f"{c}=?" for c in extras_cols])
+                    con.execute(f"UPDATE trabajadores SET {set_sql} WHERE dni=?", [extra_values[c] for c in extras_cols] + [dni])
                     n+=1
                 con.commit()
             respaldar_exceles_locales()
-            flash(f'Base cargada correctamente: {n} trabajadores. Respaldo actualizado en REGISTROS_EXCEL_LOCAL.', 'ok')
+            flash(f'Base cargada correctamente: {n} trabajadores. Omitidos por falta de DNI/NOMBRE: {omitidos}. Respaldo actualizado en REGISTROS_EXCEL_LOCAL.', 'ok')
         else:
             dni=normalizar_dni(request.form.get('dni'))
             with db() as con:
@@ -2368,23 +2533,16 @@ def admin_trabajadores():
     content = f"""
     <div class='topbar'><div><h1>Trabajadores</h1><div class='subtitle'>Carga manual o masiva por Excel.</div><div class='local-note'>Respaldo local automático: REGISTROS_EXCEL_LOCAL / 01_TRABAJADORES_LOCAL.xlsx</div></div></div><section class='grid'>
     <div class='card span-12'><h2>Nuevo trabajador</h2><form method='post' class='form-grid'><div class='field'><label>DNI</label><input name='dni' required></div><div class='field'><label>Trabajador</label><input name='nombre' required></div><div class='field'><label>Correo</label><input name='correo' type='email' required></div><div class='field'><label>Cargo</label><input name='cargo'></div><div class='field'><label>Área</label><input name='area'></div><div class='field'><label>Empresa</label><select name='empresa'><option>AQUANQA</option><option>AQUANCA II</option></select></div><div class='field'><label>Jefe inmediato DNI</label><input name='jefe_dni' placeholder='DNI del jefe'></div><div class='field'><label>Jefe nombre</label><input name='jefe_nombre' placeholder='Opcional'></div><div class='field'><label>Planilla</label><input name='planilla'></div><div class='field'><label>Fecha nacimiento</label><input name='fecha_nacimiento' placeholder='dd/mm/aaaa'></div><div class='field'><label>Fecha de ingreso</label><input name='fecha_ingreso' placeholder='dd/mm/aaaa'></div><button class='btn-green'>Guardar + crear usuario</button></form></div>
-    <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial: EMPRESA / DNI / TRABAJADOR / CARGO / AREA / JEFE INMEDIATO / PLANILLA / CORREO / FECHA NACIMIENTO. Crea usuario masivo con DNI y clave automática.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Descargar plantilla</a></form></div>
+    <div class='card span-12'><h2>Carga Excel</h2><p class='muted'>Plantilla oficial maestra para Gestión Documental, Vacacional y Contratos. Acepta columnas amplias: datos laborales, jefe inmediato, emergencia, contrato, ubicación, CONADIS e indumentaria. Crea usuario masivo con DNI y clave automática.</p><form method='post' enctype='multipart/form-data' class='form-grid'><div class='field'><label>Excel plantilla masiva</label><input type='file' name='excel' accept='.xlsx' required></div><button class='btn-blue'>Importar Excel</button><a class='btn-green' href='/admin/plantilla_trabajadores'>Descargar plantilla</a></form></div>
     <div class='card span-12'><h2>Listado</h2><div class='table-wrap'><table><tr><th>DNI</th><th>Nombre</th><th>Correo</th><th>Cargo</th><th>Empresa</th><th>Jefe DNI</th><th>Planilla</th></tr>{table}</table></div></div></section>"""
     return render_page(content, active='Trabajadores')
 
 @app.route('/admin/plantilla_trabajadores')
 @admin_required
 def plantilla_trabajadores():
-    path = PERSIST_DIR / 'PLANTILLA_CARGA_MASIVA_TRABAJADORES.xlsx'
-    wb = Workbook(); ws = wb.active; ws.title = 'TRABAJADORES'
-    headers = ['EMPRESA','DNI','TRABAJADOR','CARGO','AREA','JEFE INMEDIATO','PLANILLA','CORREO','FECHA NACIMIENTO','FECHA INGRESO']
-    ws.append(headers)
-    ws.append(['AQUANQA','74324033','APELLIDOS Y NOMBRES','Analista','RR.HH.','43043999','PLANILLA 01','correo@empresa.com','01/01/1990','01/05/2024'])
-    for i, h in enumerate(headers, 1):
-        font = copy(ws.cell(1, i).font); font.bold = True; ws.cell(1, i).font = font
-        ws.column_dimensions[chr(64+i)].width = 24
-    wb.save(path)
-    return send_file(path, as_attachment=True, download_name='PLANTILLA_CARGA_MASIVA_TRABAJADORES.xlsx')
+    path = PERSIST_DIR / 'PLANTILLA_GENERAL_TRABAJADORES_GESTION_RRHH.xlsx'
+    construir_plantilla_trabajadores_xlsx(path)
+    return send_file(path, as_attachment=True, download_name='PLANTILLA_GENERAL_TRABAJADORES_GESTION_RRHH.xlsx')
 
 @app.route('/foto/<dni>')
 def foto_trabajador(dni):
@@ -3133,8 +3291,17 @@ def contratacion_condicion_editar(pid, cid=None):
     valores=sorted(set(valores))
     data_values=''.join([f"<option value='{html.escape(v)}'></option>" for v in valores])
     valores_js = {k:v for k,v in VALORES_CONDICION.items()}
+    # Permite que el desplegable funcione por nombre visible y por CampoOrigen Word.
+    for nom, ori, td in CONTRATACION_CAMPOS_CORRESPONDENCIA:
+        if nom in VALORES_CONDICION and ori not in valores_js:
+            valores_js[ori] = VALORES_CONDICION[nom]
+        if ori in VALORES_CONDICION and nom not in valores_js:
+            valores_js[nom] = VALORES_CONDICION[ori]
+    tipos_js = {nom:td for nom,ori,td in CONTRATACION_CAMPOS_CORRESPONDENCIA}
+    tipos_js.update({ori:td for nom,ori,td in CONTRATACION_CAMPOS_CORRESPONDENCIA})
     import json
     valores_json = json.dumps(valores_js, ensure_ascii=False)
+    tipos_json = json.dumps(tipos_js, ensure_ascii=False)
     disabled_attr = '' if condicion_habilitada else 'disabled'
     content=f"""
     <style>
@@ -3167,12 +3334,19 @@ def contratacion_condicion_editar(pid, cid=None):
       </form>
       <script>
         const valoresPorCampo = {valores_json};
+        const tiposPorCampo = {tipos_json};
         const campo = document.getElementById('nombre_campo');
         const dl = document.getElementById('valores_condicion');
+        const valorInput = document.getElementById('valor_condicion');
         function cargarValores(){{
-          if(!campo || !dl) return;
+          if(!campo || !dl || !valorInput) return;
           const vals = valoresPorCampo[campo.value] || [];
-          if(vals.length) dl.innerHTML = vals.map(v => `<option value="${{v}}"></option>`).join('');
+          dl.innerHTML = vals.map(v => `<option value="${{v}}"></option>`).join('');
+          const tipo = (tiposPorCampo[campo.value] || '').toLowerCase();
+          if(tipo.includes('number') || tipo.includes('numeric')){{ valorInput.type='number'; valorInput.removeAttribute('list'); }}
+          else if(tipo.includes('date')){{ valorInput.type='date'; valorInput.removeAttribute('list'); }}
+          else {{ valorInput.type='text'; valorInput.setAttribute('list','valores_condicion'); }}
+          valorInput.placeholder = vals.length ? 'Seleccione del desplegable o escriba manualmente' : 'Escriba valor manual';
         }}
         if(campo) campo.addEventListener('change', cargarValores);
         cargarValores();
@@ -3190,6 +3364,53 @@ def contratacion_condicion_eliminar(pid, cid):
     flash('Condición eliminada correctamente.', 'ok')
     return redirect(url_for('contratacion_plantilla_detalle', pid=pid, tab='condiciones'))
 
+
+
+@app.route('/admin/firma/configuracion', methods=['GET','POST'])
+@admin_required
+def firma_configuracion():
+    """Panel base para dejar preparada la integración con reconocimiento facial, RENIEC o firma digital."""
+    if request.method == 'POST':
+        proveedor = clean(request.form.get('proveedor')) or 'INTERNO'
+        modo = clean(request.form.get('modo')) or 'RECONOCIMIENTO FACIAL / FIRMA DIGITAL'
+        reniec_activo = 1 if request.form.get('reniec_activo') == '1' else 0
+        firma_digital_activo = 1 if request.form.get('firma_digital_activo') == '1' else 0
+        url_api = clean(request.form.get('url_api'))
+        token_ref = clean(request.form.get('token_ref'))
+        observacion = clean(request.form.get('observacion'))
+        with db() as con:
+            con.execute("INSERT INTO firma_configuracion(proveedor,modo,reniec_activo,firma_digital_activo,url_api,token_ref,observacion,fecha_registro) VALUES(?,?,?,?,?,?,?,?)", (proveedor,modo,reniec_activo,firma_digital_activo,url_api,token_ref,observacion,now_txt()))
+            con.commit()
+        flash('Configuración de firma guardada. Para RENIEC o firma digital real se debe colocar proveedor autorizado/API oficial.', 'ok')
+        return redirect(url_for('firma_configuracion'))
+    with db() as con:
+        cfg = con.execute('SELECT * FROM firma_configuracion ORDER BY id DESC LIMIT 1').fetchone()
+    content=f"""
+    <section class='grid'>
+      <div class='card span-12'><h1>Firma / Reconocimiento Facial</h1>
+        <p class='muted'>Panel preparado para controlar documentos que serán firmados por celular. La conexión RENIEC o firma digital debe realizarse con proveedor autorizado y credenciales oficiales.</p>
+        <form method='post' class='form-grid'>
+          <div class='field'><label>Proveedor</label><select name='proveedor'><option>INTERNO</option><option>RENIEC / PROVEEDOR AUTORIZADO</option><option>FIRMA DIGITAL CERTIFICADA</option><option>BIOMETRÍA TERCERO</option></select></div>
+          <div class='field'><label>Modo</label><select name='modo'><option>RECONOCIMIENTO FACIAL / FIRMA DIGITAL</option><option>SOLO RECONOCIMIENTO FACIAL</option><option>SOLO FIRMA DIGITAL</option><option>FIRMA CON OTP + EVIDENCIA</option></select></div>
+          <div class='field'><label>RENIEC activo</label><select name='reniec_activo'><option value='0'>NO</option><option value='1'>SI</option></select></div>
+          <div class='field'><label>Firma digital activa</label><select name='firma_digital_activo'><option value='0'>NO</option><option value='1'>SI</option></select></div>
+          <div class='field span-6'><label>URL API / Endpoint</label><input name='url_api' value='{html.escape(row_get(cfg,'url_api'))}' placeholder='https://api.proveedor.com/...'></div>
+          <div class='field span-6'><label>Token / referencia segura</label><input name='token_ref' value='{html.escape(row_get(cfg,'token_ref'))}' placeholder='Guardar token real como variable de entorno'></div>
+          <div class='field span-12'><label>Observación / flujo</label><textarea name='observacion' rows='4'>{html.escape(row_get(cfg,'observacion'))}</textarea></div>
+          <button class='btn-yellow'>Guardar configuración</button>
+        </form>
+      </div>
+      <div class='card span-12'><h2>Flujo recomendado</h2>
+        <div class='table-wrap'><table><tr><th>Paso</th><th>Control</th><th>Resultado</th></tr>
+        <tr><td>1</td><td>Generar Word/PDF combinado</td><td>Documento con campos «CampoOrigen» llenos</td></tr>
+        <tr><td>2</td><td>Enviar enlace al celular</td><td>Trabajador revisa documento</td></tr>
+        <tr><td>3</td><td>Validación biométrica / OTP / firma digital</td><td>Evidencia y fecha de firma</td></tr>
+        <tr><td>4</td><td>Archivado automático</td><td>Ficha del trabajador y renovaciones</td></tr>
+        </table></div>
+      </div>
+    </section>
+    """
+    return render_page(content, active='Gestion Contratacion')
 
 @app.route('/admin/contratacion/plantilla/<int:pid>/campos_esquema')
 @admin_required
