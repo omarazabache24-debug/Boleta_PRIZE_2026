@@ -751,6 +751,13 @@ def init_db():
             requerido TEXT DEFAULT 'SI',
             activo INTEGER DEFAULT 1
         )''')
+        for col, ddl in [
+            ('valor_default', 'ALTER TABLE contratacion_plantilla_campos ADD COLUMN valor_default TEXT'),
+            ('opciones', 'ALTER TABLE contratacion_plantilla_campos ADD COLUMN opciones TEXT'),
+            ('editable_admin', 'ALTER TABLE contratacion_plantilla_campos ADD COLUMN editable_admin INTEGER DEFAULT 1'),
+        ]:
+            try: con.execute(ddl)
+            except Exception: pass
         con.execute('''
         CREATE TABLE IF NOT EXISTS contratacion_plantilla_condiciones(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1221,7 +1228,16 @@ def generar_docx_desde_plantilla(pid, dni=''):
     valores = mapa_campos_trabajador(trabajador)
     # Asegura que todos los campos registrados existan, aunque no haya dato en trabajador.
     for c in campos:
-        valores.setdefault(c['campo_origen'] or c['nombre_campo'], '')
+        key = c['campo_origen'] or c['nombre_campo']
+        try:
+            tipo_campo = (c['tipo_campo'] or '').upper()
+            valor_default = c['valor_default'] if 'valor_default' in c.keys() else ''
+        except Exception:
+            tipo_campo, valor_default = '', ''
+        if tipo_campo in ('MANUAL','DESPLEGABLE') and valor_default:
+            valores[key] = valor_default
+        else:
+            valores.setdefault(key, '')
     cumple, detalle = plantilla_cumple_condiciones(pl, condiciones, trabajador)
     ruta = Path(pl['ruta_archivo']) if pl['ruta_archivo'] else None
     if ruta and ruta.exists() and ruta.suffix.lower() == '.docx':
@@ -1698,6 +1714,7 @@ body{background:#0f141a!important;color:var(--ink)!important;font-family:Inter,S
 .edit-overlay .modal-head h1,.edit-overlay label,.edit-overlay .actual-file{color:#111827!important;}
 .edit-overlay input,.edit-overlay select,.edit-overlay textarea{color:#111827!important;background:#fff!important;}
 
+.menu-item.doc-loaded{background:linear-gradient(135deg,#0f5132,#16a34a)!important;color:#fff!important;border-left:4px solid #86efac!important}.menu-item.doc-loaded .label,.menu-item.doc-loaded span{color:#fff!important}
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -1807,6 +1824,13 @@ def sidebar(active):
         docs_head = 'menu-title' + (' active' if active_type in docs_mod_keys else '')
         vac_head = 'menu-title' + (' active' if active == 'Gestion Vacacional' else '')
         con_head = 'menu-title' + (' active' if active_type == 'Gestion Contratacion' else '')
+        docs_count_con = 0
+        try:
+            with db() as _conx:
+                docs_count_con = _conx.execute('SELECT COUNT(*) FROM contratacion_docs').fetchone()[0]
+        except Exception:
+            docs_count_con = 0
+        archivos_cls = 'menu-item sub-mini doc-loaded ' + ('active' if active_sub == 'documentaria' else '') if docs_count_con else 'menu-item sub-mini ' + ('active' if active_sub == 'documentaria' else '')
         admin = f"""
         <div id='grp_admin' data-group='admin' class='{admin_cls}'>
           <button type='button' class='menu-title' onclick="toggleGroup('grp_admin')"><span>⚙️</span><span class='label'>Administrador</span><span class='chev'>∨</span></button>
@@ -1849,8 +1873,6 @@ def sidebar(active):
                 <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'flujo' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=flujo'><span>☰</span><span class='label'>Flujos de aprobación</span></a>
                 <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'carga' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=carga'><span>⬆️</span><span class='label'>Carga Masiva</span></a>
                 <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'reportes' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=reportes'><span>▤</span><span class='label'>Reportes</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/firma_digital'><span>📸</span><span class='label'>Firma / Facial / Digital</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/firma_digital#bandeja'><span>🧾</span><span class='label'>Bandeja de Firmas</span></a>
 
                 <div id='grp_con_maestros' data-group='con_maestros' class='menu-group nested {'force-open' if active_sub in ['maestros','observados','tipos_etapa','tipo_empleado','cargo','actualizar'] else ''}'>
                   <button type='button' class='menu-title {'active' if active_sub in ['maestros','observados','tipos_etapa','tipo_empleado','cargo','actualizar'] else ''}' onclick="toggleGroup('grp_con_maestros')"><span>💼</span><span class='label'>Datos Maestros</span><span class='chev'>∨</span></button>
@@ -1868,7 +1890,7 @@ def sidebar(active):
                   <button type='button' class='menu-title {'active' if active_sub in ['renovacion','documentaria','ficha','plantillas','nisira','descargas','firma'] else ''}' onclick="toggleGroup('grp_con_documentaria')"><span>🪪</span><span class='label'>Gestión Documentaria</span><span class='chev'>∨</span></button>
                   <div class='submenu'>
                     <a class='menu-item sub-mini {'active' if active_sub == 'renovacion' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=renovacion'><span>•</span><span class='label'>Renovación Contrato</span></a>
-                    <a class='menu-item sub-mini {'active' if active_sub == 'documentaria' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=documentaria'><span>•</span><span class='label'>Archivos Trabajador</span></a>
+                    <a class='{archivos_cls}' onclick='saveSideScroll()' href='/admin/contratacion?sec=documentaria'><span>•</span><span class='label'>Archivos Trabajador {'OK' if docs_count_con else ''}</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'ficha' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=ficha'><span>•</span><span class='label'>Ficha Trabajador</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'plantillas' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=plantillas'><span>•</span><span class='label'>Plantilla Documentos</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'firma' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=firma'><span>•</span><span class='label'>Firma / Facial / Digital</span></a>
@@ -3295,8 +3317,8 @@ def contratacion_plantilla_detalle(pid):
       <a class='tpl-tab {'active' if tab=='condiciones' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='condiciones')}'>Condiciones</a>
     </div>"""
     if tab=='campos':
-        rows=''.join([f"<tr><td><span class='state-pill {'ok' if c['activo'] else 'bad'}'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{html.escape(c['descripcion'] or '')}</td><td>{html.escape(c['tipo_campo'] or '')}</td><td>{html.escape(c['nombre_campo'] or '')}</td><td><code>{{{{{html.escape(c['campo_origen'] or '')}}}}}</code></td><td>{html.escape(c['tipo_dato'] or '')}</td><td>{html.escape(c['requerido'] or '')}</td></tr>" for c in campos])
-        body=f"""<div class='tpl-toolbar schema-toolbar'><span>Campos de correspondencia para usar en Word como <b>«CampoOrigen»</b> o <b>{{{{CampoOrigen}}}}</b>.</span><span><a class='c-btn gray' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕ Campos de Esquema</a> <a class='c-btn gray' href='{url_for('contratacion_campos_esquema_excel',pid=pid)}'>⬇ Descargar campos</a></span></div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="7">Sin campos registrados.</td></tr>'}</table></div>"""
+        rows=''.join([f"<tr><td><a class='icon-btn small' href='{url_for('contratacion_campo_editar',pid=pid,campo_id=c['id'])}'>Editar</a></td><td><span class='state-pill {'ok' if c['activo'] else 'bad'}'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{html.escape(c['descripcion'] or '')}</td><td>{html.escape(c['tipo_campo'] or '')}</td><td>{html.escape(c['nombre_campo'] or '')}</td><td><code>{{{{{html.escape(c['campo_origen'] or '')}}}}}</code></td><td>{html.escape(c['tipo_dato'] or '')}</td><td>{html.escape(c['requerido'] or '')}</td></tr>" for c in campos])
+        body=f"""<div class='tpl-toolbar schema-toolbar'><span>Campos de correspondencia para usar en Word como <b>«CampoOrigen»</b> o <b>{{{{CampoOrigen}}}}</b>.</span><span><a class='c-btn' href='{url_for('contratacion_campo_editar',pid=pid)}'>+ Crear Campo</a> <a class='c-btn gray' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕ Campos de Esquema</a> <a class='c-btn gray' href='{url_for('contratacion_campos_esquema_excel',pid=pid)}'>⬇ Descargar campos</a></span></div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Editar</th><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="8">Sin campos registrados.</td></tr>'}</table></div>"""
     elif tab=='condiciones':
         crear_btn = f"<a class='c-btn' href='{url_for('contratacion_condicion_editar',pid=pid)}'>⊕ Crear Condición</a>" if condicion_habilitada else "<span class='c-btn gray disabled'>Condiciones deshabilitadas</span>"
         info = "" if condicion_habilitada else "<div class='notice'>Para crear o editar condiciones primero entra al lápiz de <b>Editar Plantilla</b> y cambia el campo <b>Condición</b> a <b>CONDICIONES</b>.</div>"
@@ -3408,6 +3430,38 @@ def contratacion_plantilla_detalle(pid):
     return render_page(content, active='Gestion Contratacion:plantillas')
 
 
+@app.route('/admin/contratacion/plantilla/<int:pid>/campo', defaults={'campo_id': None}, methods=['GET','POST'])
+@app.route('/admin/contratacion/plantilla/<int:pid>/campo/<int:campo_id>', methods=['GET','POST'])
+@admin_required
+def contratacion_campo_editar(pid, campo_id=None):
+    with db() as con:
+        pl=con.execute('SELECT * FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
+        campo=con.execute('SELECT * FROM contratacion_plantilla_campos WHERE id=? AND plantilla_id=?',(campo_id,pid)).fetchone() if campo_id else None
+    if not pl: abort(404)
+    if request.method == 'POST':
+        nombre=clean(request.form.get('nombre_campo')) or 'Campo Manual'
+        origen=clean(request.form.get('campo_origen')) or re.sub(r'[^A-Za-z0-9_]','',nombre.replace(' ',''))
+        tipo_campo=clean(request.form.get('tipo_campo')) or 'Origen de Datos'
+        tipo_dato=clean(request.form.get('tipo_dato')) or 'Text'
+        requerido=clean(request.form.get('requerido')) or 'SI'
+        activo=1 if request.form.get('activo','1')=='1' else 0
+        descripcion=clean(request.form.get('descripcion'))
+        valor_default=clean(request.form.get('valor_default'))
+        opciones=clean(request.form.get('opciones'))
+        with db() as con:
+            if campo_id:
+                con.execute("UPDATE contratacion_plantilla_campos SET descripcion=?, tipo_campo=?, nombre_campo=?, campo_origen=?, tipo_dato=?, requerido=?, activo=?, valor_default=?, opciones=? WHERE id=? AND plantilla_id=?", (descripcion,tipo_campo,nombre,origen,tipo_dato,requerido,activo,valor_default,opciones,campo_id,pid))
+            else:
+                con.execute("INSERT INTO contratacion_plantilla_campos(plantilla_id,descripcion,tipo_campo,nombre_campo,campo_origen,tipo_dato,requerido,activo,valor_default,opciones) VALUES(?,?,?,?,?,?,?,?,?,?)", (pid,descripcion,tipo_campo,nombre,origen,tipo_dato,requerido,activo,valor_default,opciones))
+            con.commit()
+        flash('Campo guardado y enlazado a la plantilla Word.', 'ok')
+        return redirect(url_for('contratacion_plantilla_detalle',pid=pid,tab='campos'))
+    def cv(k, default=''):
+        try: return campo[k] if campo and k in campo.keys() else default
+        except Exception: return default
+    campo_options=''.join([f"<option value='{html.escape(n)}' data-origen='{html.escape(o)}' data-tipo='{html.escape(td)}'>{html.escape(n)} / {{{{{html.escape(o)}}}}}</option>" for n,o,td in CONTRATACION_CAMPOS_CORRESPONDENCIA])
+    content=f"""<div class='cond-overlay'><div class='cond-modal'><h2>Campo de Plantilla</h2><p class='muted2'>Configura campos automaticos desde Excel, manuales o desplegables. En Word usa {{{{CampoOrigen}}}}.</p><form method='post' class='cond-form'><label>Campo base</label><input list='campos_base' id='campoBase' oninput='autoCampoBase()'><datalist id='campos_base'>{campo_options}</datalist><label>Nombre visible</label><input name='nombre_campo' id='nombreCampo' value='{html.escape(cv('nombre_campo'))}' required><label>Campo origen Word</label><input name='campo_origen' id='campoOrigen' value='{html.escape(cv('campo_origen'))}' required><label>Tipo campo</label><select name='tipo_campo'><option>Origen de Datos</option><option>Manual</option><option>Desplegable</option></select><label>Tipo dato</label><select name='tipo_dato' id='tipoDato'><option>Text</option><option>Number</option><option>DateTime</option></select><label>Valor manual/default</label><input name='valor_default' value='{html.escape(cv('valor_default'))}'><label>Opciones desplegable</label><textarea name='opciones'>{html.escape(cv('opciones'))}</textarea><label>Requerido</label><select name='requerido'><option>SI</option><option>NO</option></select><label>Estado</label><select name='activo'><option value='1'>ACTIVO</option><option value='0'>INACTIVO</option></select><label>Descripcion</label><textarea name='descripcion'>{html.escape(cv('descripcion'))}</textarea><div class='modal-actions'><a class='c-btn gray' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='campos')}'>Cancelar</a><button class='c-btn'>Guardar campo</button></div></form></div></div><script>function autoCampoBase(){{const inp=document.getElementById('campoBase'); const op=[...document.querySelectorAll('#campos_base option')].find(o=>o.value===inp.value); if(!op)return; document.getElementById('nombreCampo').value=op.value.split(' / ')[0]; document.getElementById('campoOrigen').value=op.dataset.origen; document.getElementById('tipoDato').value=op.dataset.tipo||'Text';}}</script>"""
+    return render_page(content, active='Gestion Contratacion:plantillas')
 @app.route('/admin/contratacion/plantilla/<int:pid>/condicion', defaults={'cid': None}, methods=['GET','POST'])
 @app.route('/admin/contratacion/plantilla/<int:pid>/condicion/<int:cid>', methods=['GET','POST'])
 @admin_required
@@ -3751,7 +3805,7 @@ def contratacion_plantilla_historial(pid):
       <div class='hist-info'>Historial de cargas de contratos relacionado con: <b>{h(pl['nombre_plantilla'])}</b>. Desde esta ventana puedes descargar cada plantilla en Word.</div>
       <div class='hist-table-wrap'><table class='hist-table'>
         <tr><th>Fecha Registro</th><th>Creado por</th><th>Nombre Archivo</th><th>Tipo Documento</th><th>Identificador</th><th>Estado</th><th>Descarga</th></tr>
-        {rows or '<tr><td colspan="7">No hay historial de cargas.</td></tr>'}
+        {rows or '<tr><td colspan="8">No hay historial de cargas.</td></tr>'}
       </table></div>
     </div></div>
     """
@@ -4405,8 +4459,8 @@ def admin_contratacion():
         </style>
         <script>
         let firmaStream=null;
-        async function firmaStartCam(){{const msg=document.getElementById('firmaCamMsg');try{{if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){{msg.textContent='Tu navegador no permite cámara en este contexto. Usa Chrome/Edge actualizado con HTTPS o localhost.';return;}}if(location.protocol!=='https:' && location.hostname!=='localhost' && location.hostname!=='127.0.0.1'){{msg.textContent='Para celular/navegador real, publica en HTTPS o prueba en localhost. Intentando activar cámara...';}}let constraints={{video:{{facingMode:'user',width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}};try{{firmaStream=await navigator.mediaDevices.getUserMedia(constraints);}}catch(e1){{firmaStream=await navigator.mediaDevices.getUserMedia({{video:true,audio:false}});}}const v=document.getElementById('firmaVideo');v.srcObject=firmaStream;v.muted=true;await v.play();msg.textContent='Cámara activa correctamente. Ahora captura evidencia.';}}catch(e){{msg.textContent='No se pudo activar cámara: '+(e&&e.name?e.name:'permiso denegado')+'. Revisa permisos del navegador, usa HTTPS/localhost y cierra Zoom/Teams u otras apps que usen la cámara.';}}}}
-        function firmaCapture(){{const v=document.getElementById('firmaVideo'),c=document.getElementById('firmaCanvas'),img=document.getElementById('firmaPreview'),msg=document.getElementById('firmaCamMsg');if(!v.videoWidth){{msg.textContent='Primero activa la cámara.';return;}}c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);img.src=c.toDataURL('image/png');img.style.display='block';msg.textContent='Evidencia capturada en vista previa.';}}
+        async function firmaStartCam(){{const msg=document.getElementById('firmaCamMsg');try{{if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){{msg.textContent='Tu navegador no permite cámara en este contexto. Usa Chrome/Edge actualizado con HTTPS o localhost.';return;}}if(location.protocol!=='https:' && location.hostname!=='localhost' && location.hostname!=='127.0.0.1'){{msg.textContent='Para celular/navegador real, publica en HTTPS o prueba en localhost. Intentando activar cámara...';}}let constraints={{video:{{facingMode:'user',width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}};try{{firmaStream=await navigator.mediaDevices.getUserMedia(constraints);}}catch(e1){{firmaStream=await navigator.mediaDevices.getUserMedia({{video:true,audio:false}});}}const v=document.getElementById('firmaVideo');v.srcObject=firmaStream;v.muted=true;await v.play();msg.textContent='Cámara activa. Buscando rostro y preparando captura automática...';setTimeout(()=>{{firmaCapture();}},1800);}}catch(e){{msg.textContent='No se pudo activar cámara: '+(e&&e.name?e.name:'permiso denegado')+'. Revisa permisos del navegador, usa HTTPS/localhost y cierra Zoom/Teams u otras apps que usen la cámara.';}}}}
+        function firmaCapture(){{const v=document.getElementById('firmaVideo'),c=document.getElementById('firmaCanvas'),img=document.getElementById('firmaPreview'),msg=document.getElementById('firmaCamMsg');if(!v.videoWidth){{msg.textContent='Primero activa la cámara.';return;}}c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);img.src=c.toDataURL('image/png');img.style.display='block';msg.textContent='Evidencia facial capturada automáticamente. Lista para firma masiva/individual.';}}
         function firmaStopCam(){{if(firmaStream){{firmaStream.getTracks().forEach(t=>t.stop());firmaStream=null;}}document.getElementById('firmaCamMsg').textContent='Cámara detenida.';}}
         function updateFirmaCounter(){{const n=[...document.querySelectorAll('.chk-doc-firma:checked')].length;const el=document.getElementById('firmaMassCounter');if(el)el.textContent=n+' seleccionados';}}
         function marcarTodosFirma(on){{document.querySelectorAll('.chk-doc-firma').forEach(x=>x.checked=on);updateFirmaCounter();}}
