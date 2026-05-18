@@ -1,0 +1,14 @@
+MEJORAS IMPLEMENTADAS - GESTIÓN CONTRATACIÓN / FIRMA
+
+1. Se habilitó flujo automático: Plantillas Word -> generar documentos por trabajador -> check masivo -> envío a firma facial/digital.
+2. En Firma / Facial / Digital ahora se visualizan las plantillas Word cargadas y se puede marcarlas para generar documentos.
+3. Los documentos generados pasan a la bandeja de lote para firma individual o masiva.
+4. Se mejoró la activación de cámara: usa getUserMedia, intenta FaceDetector cuando el navegador lo permite, captura evidencia automáticamente y valida de respaldo.
+5. Se mejoró la edición de campos de plantilla: Origen de Datos, Manual, Desplegable, tipo de dato, requerido, activo/inactivo, valor default y opciones.
+6. Archivos Trabajador se resalta en verde cuando existe documento cargado.
+7. Se reforzó visibilidad del menú lateral y estados activos para evitar textos oscuros.
+8. Se deja un único flujo operativo de firma dentro de Gestión Documentaria / Firma / Facial / Digital.
+
+IMPORTANTE:
+- En celular la cámara requiere HTTPS o localhost.
+- Para reconocimiento facial RENIEC real se debe conectar API/proveedor autorizado; esta versión deja el flujo listo, con evidencia y trazabilidad.
