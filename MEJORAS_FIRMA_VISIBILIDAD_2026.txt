@@ -1,0 +1,24 @@
+MEJORAS APLICADAS - FIRMA / FACIAL / DIGITAL
+
+1. Panel lateral mejorado:
+   - Menú más ancho y legible.
+   - Scroll visible para que no se oculten pestañas.
+   - Submenús con mayor contraste y texto multilínea.
+
+2. Cámara mejorada:
+   - Validación de navegador compatible.
+   - Mensajes claros si falta permiso, HTTPS/localhost o si otra app usa la cámara.
+   - Cámara frontal en celular/laptop cuando el navegador lo permite.
+
+3. Firma de contratos:
+   - RRHH puede generar enlaces individuales o masivos.
+   - El trabajador ve botón "Firmar ahora" desde su aplicativo cuando tenga contrato pendiente.
+   - Al firmar, el contrato queda con estado FIRMADO CON EVIDENCIA FACIAL.
+
+4. Trazabilidad:
+   - Guarda fecha, IP, navegador, evidencia/selfie y hash.
+   - Genera notificaciones al trabajador: contrato pendiente y contrato firmado disponible.
+
+5. Contrato firmado visible:
+   - En el portal del trabajador, sección Gestión Contrato / Mis documentos contractuales,
+     se visualiza el contrato y su estado actualizado.
