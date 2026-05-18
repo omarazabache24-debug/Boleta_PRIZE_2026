@@ -3839,7 +3839,7 @@ def firma_camara_demo():
     <style>.camera-box{background:#0f172a;border-radius:18px;padding:16px;display:grid;place-items:center;min-height:360px}.camera-box video,.camera-box img{max-width:100%;border-radius:14px;background:#000}</style>
     <script>
     let stream=null;
-    async function startCamera(){const st=document.getElementById('camStatus');try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});document.getElementById('video').srcObject=stream;st.textContent='Cámara activa correctamente.';}catch(e){st.textContent='No se pudo activar la cámara. Revisa permisos del navegador o usa HTTPS/localhost.';}}
+    async function startCamera(){const st=document.getElementById('camStatus');try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});document.getElementById('video').srcObject=stream;st.textContent='Cámara activa correctamente.';}catch(e){st.textContent='No se pudo activar la cámara. Revisa permisos del navegador o usa HTTPS/localhost.';}}
     function capturePhoto(){const v=document.getElementById('video'),c=document.getElementById('canvas'),img=document.getElementById('preview');if(!v.videoWidth){document.getElementById('camStatus').textContent='Primero activa la cámara.';return;}c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);img.src=c.toDataURL('image/png');img.style.display='block';}
     </script>
     """
@@ -4479,7 +4479,7 @@ def contratacion_doc_log(doc_id):
 
 # API compatibles
 @app.route('/api/health')
-def api_health(): return jsonify({'ok': True, 'mensaje': 'Portal PRIZE activo'})
+def api_health(): return jsonify({'ok': True, 'mensaje': 'Portal PRIZE activo - optimizado Render Free'})
 @app.route('/api/boleta/<dni>')
 def api_boleta(dni):
     docs = listar_documentos(dni=dni, categoria='pago', limit=20)
