@@ -106,6 +106,38 @@ ALL_TIPOS.update({k: (label, icon, "personal") for k, label, icon in TIPOS_PERSO
 EXT_ALLOWED = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx", ".xls", ".xlsx"}
 
 
+# =============================
+# TRABAJADORES OBSERVADOS - CATÁLOGOS GENÉRICOS
+# =============================
+MOTIVOS_TRABAJADOR_OBSERVADO = [
+    'AGRESIÓN',
+    'ANTECEDENTES GRADO I',
+    'ANTECEDENTES GRADO II',
+    'BAJO RENDIMIENTO COSECHA',
+    'CASO INTERNO',
+    'DAÑO DE ACTIVO',
+    'DENUNCIA SUNAFIL',
+    'DROGA',
+    'ESTADO DE EBRIEDAD',
+    'FALSIFICACIÓN DE DM',
+    'FALTA DE COMPROMISO',
+    'FALTA DE RESPETO AL EVALUADOR',
+    'HURTO EN LA EMPRESA',
+    'HURTO Y CONSUMO DE DROGA',
+    'INCUMPLIMIENTO DE PROCEDIMIENTO DE INGRESO',
+    'INCUMPLIMIENTO DEL RIT',
+    'MAL COMPORTAMIENTO',
+    'EXTORSION',
+    'RESTRICCIÓN FÍSICA',
+    'SINDICALISTA',
+    'SUSTRACCION DE ARANDANO',
+    'SUSTRAER BIENES',
+    'HOSTIGAMIENTO',
+    'OTROS MOTIVOS'
+]
+NIVELES_RESTRICCION_OBSERVADO = ['NIVEL 1', 'NIVEL 2', 'NIVEL 3']
+
+
 # Campos disponibles para correspondencia de contratos (plantillas Word/PDF).
 # El texto de "nombre" es el que verá el usuario; "origen" sirve como llave para anexar al documento.
 CONTRATACION_CAMPOS_CORRESPONDENCIA = [
@@ -825,6 +857,31 @@ def init_db():
             ('fecha_captura', 'ALTER TABLE firma_solicitudes ADD COLUMN fecha_captura TEXT'),
             ('validacion_estado', 'ALTER TABLE firma_solicitudes ADD COLUMN validacion_estado TEXT'),
             ('proveedor_respuesta', 'ALTER TABLE firma_solicitudes ADD COLUMN proveedor_respuesta TEXT'),
+        ]:
+            try: con.execute(ddl)
+            except Exception: pass
+
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS trabajadores_observados(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo_persona TEXT DEFAULT 'Trabajador',
+            tipo_documento TEXT DEFAULT 'DNI',
+            numero_documento TEXT,
+            nombre TEXT,
+            motivo TEXT,
+            nivel_restriccion TEXT,
+            comentario TEXT,
+            estado TEXT DEFAULT 'Active',
+            creado_por TEXT,
+            fecha_creacion TEXT,
+            editor_por TEXT,
+            fecha_edicion TEXT
+        )''')
+        for col, ddl in [
+            ('tipo_persona', "ALTER TABLE trabajadores_observados ADD COLUMN tipo_persona TEXT DEFAULT 'Trabajador'"),
+            ('tipo_documento', "ALTER TABLE trabajadores_observados ADD COLUMN tipo_documento TEXT DEFAULT 'DNI'"),
+            ('editor_por', 'ALTER TABLE trabajadores_observados ADD COLUMN editor_por TEXT'),
+            ('fecha_edicion', 'ALTER TABLE trabajadores_observados ADD COLUMN fecha_edicion TEXT'),
         ]:
             try: con.execute(ddl)
             except Exception: pass
@@ -4092,6 +4149,42 @@ def admin_contratacion():
                 con.execute('UPDATE trabajadores SET activo=? WHERE dni=?', (nuevo_estado, dni_estado)); con.commit()
             flash(('Trabajador reactivado.' if nuevo_estado else 'Trabajador cesado/inactivado. Sus documentos se mantienen archivados.'), 'ok')
             return redirect(url_for('admin_contratacion', sec='actualizar'))
+        if accion == 'crear_observado':
+            tipo_persona = clean(request.form.get('tipo_persona')) or 'Trabajador'
+            trabajador_sel = clean(request.form.get('trabajador_sel'))
+            numero_documento = normalizar_dni(request.form.get('numero_documento') or trabajador_sel)
+            nombre = clean(request.form.get('nombre_externo'))
+            if tipo_persona.lower() == 'trabajador' and numero_documento:
+                tr = get_trabajador(numero_documento)
+                if tr:
+                    nombre = tr['nombre']
+            motivo_lista = clean(request.form.get('motivo'))
+            motivo_otro = clean(request.form.get('motivo_otro'))
+            motivo = motivo_otro.upper() if motivo_otro else motivo_lista.upper()
+            nivel = clean(request.form.get('nivel_restriccion')) or 'NIVEL 3'
+            comentario = clean(request.form.get('comentario'))
+            if not numero_documento or not nombre or not motivo:
+                flash('Completa trabajador/DNI, nombre y motivo para registrar observado.', 'error')
+                return redirect(url_for('admin_contratacion', sec='observados'))
+            with db() as con:
+                con.execute('''INSERT INTO trabajadores_observados(tipo_persona,tipo_documento,numero_documento,nombre,motivo,nivel_restriccion,comentario,estado,creado_por,fecha_creacion,fecha_edicion)
+                               VALUES(?,?,?,?,?,?,?,?,?,?,?)''', (tipo_persona, 'DNI', numero_documento, nombre.upper(), motivo, nivel, comentario.upper(), 'Active', marca_carga(session.get('admin_user','admin')), now_txt(), ''))
+                con.commit()
+            flash('Trabajador observado registrado correctamente.', 'ok')
+            return redirect(url_for('admin_contratacion', sec='observados'))
+        if accion == 'estado_observado':
+            oid = request.form.get('observado_id')
+            estado = 'Inactive' if request.form.get('estado') == 'Inactive' else 'Active'
+            with db() as con:
+                con.execute('UPDATE trabajadores_observados SET estado=?, editor_por=?, fecha_edicion=? WHERE id=?', (estado, marca_carga(session.get('admin_user','admin')), now_txt(), oid)); con.commit()
+            flash('Estado de trabajador observado actualizado.', 'ok')
+            return redirect(url_for('admin_contratacion', sec='observados'))
+        if accion == 'eliminar_observado':
+            oid = request.form.get('observado_id')
+            with db() as con:
+                con.execute('DELETE FROM trabajadores_observados WHERE id=?', (oid,)); con.commit()
+            flash('Registro observado eliminado.', 'ok')
+            return redirect(url_for('admin_contratacion', sec='observados'))
         if accion == 'estado_plantilla':
             pid_estado = request.form.get('plantilla_id')
             nuevo_estado = 1 if request.form.get('activo') == '1' else 0
@@ -4217,6 +4310,8 @@ def admin_contratacion():
         docs=con.execute('SELECT * FROM contratacion_docs ORDER BY id DESC LIMIT 300').fetchall()
         firma_sols=con.execute('SELECT * FROM firma_solicitudes ORDER BY id DESC LIMIT 300').fetchall()
         trabajadores=con.execute('SELECT dni,nombre,empresa,cargo,area,correo,activo,fecha_registro FROM trabajadores ORDER BY nombre LIMIT 700').fetchall()
+        observados=con.execute('SELECT * FROM trabajadores_observados ORDER BY id DESC LIMIT 500').fetchall()
+
         # Filtros reales de Plantilla Documentos
         f_nombre = clean(request.args.get('f_nombre'))
         f_tipo = clean(request.args.get('f_tipo'))
@@ -4267,7 +4362,22 @@ def admin_contratacion():
           <td><a class='tpl-link' href='{url_for('contratacion_plantilla_detalle', pid=r['id'])}'>{h(r['nombre_plantilla'])}</a></td>
           <td>{h(r['tipo_documento'])}</td><td>{h(r['esquema'])}</td><td>{h(r['descripcion'])}</td><td>{h(r['version'])}</td><td>{h(r['condicion'])}</td><td>{h(r['archivo_nombre'])}</td>
         </tr>""" for r in plantillas])
-    obs_rows=''.join([f"<tr><td><input type='checkbox'></td><td>🔗 ✎ 🗑</td><td><span class='state'>Activo</span></td><td>DNI</td><td>{t['dni']}</td><td>{t['nombre']}</td><td>SINDICALISTA</td><td>NIVEL 3</td></tr>" for t in trabajadores[:10]])
+    if not observados:
+        with db() as con:
+            for t in trabajadores[:10]:
+                con.execute('''INSERT INTO trabajadores_observados(tipo_persona,tipo_documento,numero_documento,nombre,motivo,nivel_restriccion,comentario,estado,creado_por,fecha_creacion,fecha_edicion)
+                               VALUES(?,?,?,?,?,?,?,?,?,?,?)''', ('Trabajador','DNI',t['dni'],t['nombre'],'SINDICALISTA','NIVEL 3','SINDICALISTA','Active','Sistema',now_txt(),''))
+            con.commit()
+            observados=con.execute('SELECT * FROM trabajadores_observados ORDER BY id DESC LIMIT 500').fetchall()
+    obs_activos=[r for r in observados if (r['estado'] or 'Active') == 'Active']
+    obs_inactivos=[r for r in observados if (r['estado'] or 'Active') != 'Active']
+    def estado_observado_form(r):
+        return f"<form method='post' class='state-form'><input type='hidden' name='accion' value='estado_observado'><input type='hidden' name='observado_id' value='{r['id']}'><select name='estado' class='state-select {'inactive' if (r['estado'] or '')!='Active' else ''}' onchange='this.form.submit()'><option value='Active' {'selected' if (r['estado'] or '')=='Active' else ''}>🟢 Active</option><option value='Inactive' {'selected' if (r['estado'] or '')=='Inactive' else ''}>🔴 Inactive</option></select></form>"
+    obs_rows=''.join([f"<tr><td><input type='checkbox'></td><td class='tpl-actions'><a class='icon-btn' title='Log'>🔗</a><a class='icon-btn' title='Editar'>✎</a><form method='post' style='display:inline' onsubmit=\"return confirm('¿Eliminar registro observado?');\"><input type='hidden' name='accion' value='eliminar_observado'><input type='hidden' name='observado_id' value='{r['id']}'><button class='icon-btn' type='submit'>🗑</button></form></td><td>{estado_observado_form(r)}</td><td>{h(r['tipo_documento'] or 'DNI')}</td><td>{h(r['numero_documento'])}</td><td>{h(r['nombre'])}</td><td>{h(r['motivo'])}</td><td>{h(r['nivel_restriccion'])}</td><td>{h(r['comentario'])}</td><td>{h(r['creado_por'])}</td><td>{h(r['fecha_creacion'])}</td><td>{h(r['editor_por'])}</td><td>{h(r['fecha_edicion'])}</td></tr>" for r in obs_activos]) or "<tr><td colspan='13'>No hay trabajadores observados activos.</td></tr>"
+    obs_anulados_rows=''.join([f"<tr><td>🔗</td><td>{h(r['tipo_documento'] or 'DNI')}</td><td>{h(r['numero_documento'])}</td><td>{h(r['nombre'])}</td><td>{h(r['motivo'])}</td><td>{h(r['nivel_restriccion'])}</td><td>{h(r['comentario'])}</td><td>{h(r['creado_por'])}</td><td>{h(r['fecha_creacion'])}</td><td>{h(r['editor_por'])}</td><td>{h(r['fecha_edicion'])}</td></tr>" for r in obs_inactivos]) or "<tr><td colspan='11'>No hay registros anulados/inactivos.</td></tr>"
+    motivo_options=''.join([f"<option value='{h(x)}'>{h(x)}</option>" for x in MOTIVOS_TRABAJADOR_OBSERVADO])
+    nivel_options=''.join([f"<option value='{h(x)}'>{h(x)}</option>" for x in NIVELES_RESTRICCION_OBSERVADO])
+
     report_rows="<tr><td>✎ ⬇</td><td>RHTR01</td><td>Reporte Datos Trabajador</td><td>Reporte Datos Trabajador</td><td>TR_REPORT_1</td><td>Admin</td></tr>"
     trabajadores_estado_rows=''.join([f"<tr><td>{t['dni']}</td><td>{t['nombre']}</td><td>{t['empresa']}</td><td>{t['cargo'] or ''}</td><td><span class='state'>{'ACTIVO' if t['activo'] else 'CESADO/INACTIVO'}</span></td><td><form method='post' style='display:flex;gap:8px'><input type='hidden' name='accion' value='estado_trabajador'><input type='hidden' name='dni' value='{t['dni']}'><button class='c-btn {'gray' if t['activo'] else ''}' name='nuevo_estado' value='0'>Cesar</button><button class='c-btn green' name='nuevo_estado' value='1'>Reactivar</button></form></td></tr>" for t in trabajadores])
     # CSS local de contenido: se eliminó el segundo menú blanco tipo Adapta.
@@ -4291,7 +4401,51 @@ def admin_contratacion():
     elif sec=='actualizar':
         content=wrap(f"<h2 class='c-title'>Actualizar Trabajador / Estado laboral</h2><div class='c-card' style='padding:16px'><p class='muted2'>Aquí se controla la base de trabajadores activos. Al cesar se cambia el estado a inactivo, pero NO se elimina ningún documento ni contrato archivado.</p><div class='c-filter' style='grid-template-columns:1fr 1fr'><input placeholder='Buscar por DNI o apellidos'><button class='c-btn'>⌕ Buscar</button></div></div><div class='c-card table-wrap'><table class='c-table'><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Cargo</th><th>Estado</th><th>Acción</th></tr>{trabajadores_estado_rows}</table></div>")
     elif sec in ['maestros','observados','tipos_etapa','tipo_empleado','cargo']:
-        content=wrap(f"<h2 class='c-title'>Listas de trabajadores observados</h2><div class='c-bar'><div><input class='input' style='background:#fff!important;color:#111!important;max-width:520px' placeholder='Nombre / Num. Documento'><br><br><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button></div><a class='c-btn'>+ Crear trabajador observado</a></div><div class='toolbar'>⚙ Acción ▾ &nbsp; ⬇ Descargar ▾</div><div class='c-card'><div class='tabs'><div class='tab active'>Trabajadores observados</div><div class='tab'>Lista de anulados</div></div><div class='table-wrap'><table class='c-table'><tr><th></th><th></th><th>Estado</th><th>Tipo Documento</th><th>Número Documento</th><th>Nombre</th><th>Motivo</th><th>Nivel Restricción</th></tr>{obs_rows}</table></div></div><div class='c-card'><div class='tabs'><div class='tab active'>Tipos de Documento por Etapa</div></div><div class='table-wrap'><table class='c-table'><tr><th></th><th>Estado</th><th>Código</th><th>Tipo Documento</th><th>Etapa</th><th>Esquema</th><th>Descripción</th></tr>{tipos_rows}</table></div></div>")
+        content=wrap(f"""
+        <h2 class='c-title'>Listas de trabajadores observados</h2>
+        <div class='c-bar'>
+          <div>
+            <input class='input' style='background:#fff!important;color:#111!important;max-width:520px' placeholder='Nombre / Num. Documento' onkeyup='filtrarObs(this.value)'>
+            <br><br><button class='c-btn' type='button'>⌕ Buscar</button> <button class='c-btn gray' type='button' onclick='location.href=location.pathname+"?sec=observados"'>Limpiar</button>
+          </div>
+          <button type='button' class='c-btn' onclick='abrirObsModal()'>+ Crear trabajador observado</button>
+        </div>
+        <div class='toolbar'>⚙ Acción ▾ &nbsp; ⬇ Descargar ▾</div>
+
+        <div id='obsModal' class='obs-modal'>
+          <div class='obs-box'>
+            <div class='obs-head'><h2>Crear trabajador observado</h2><button type='button' onclick='cerrarObsModal()'>×</button></div>
+            <form method='post' class='obs-form'>
+              <input type='hidden' name='accion' value='crear_observado'>
+              <label>Tipo Persona:</label><div class='radio-line'><label><input type='radio' name='tipo_persona' value='Trabajador' checked onchange='toggleObsTipo()'> Trabajador</label><label><input type='radio' name='tipo_persona' value='Externo' onchange='toggleObsTipo()'> Externo</label></div>
+              <label>Trabajador:</label><input name='trabajador_sel' id='obsTrabajador' list='obsTrabajadores' placeholder='Buscar trabajador / DNI' oninput='copiarDniObs(this.value)'><datalist id='obsTrabajadores'>{opt_trab}</datalist>
+              <label>DNI / Documento:</label><input name='numero_documento' id='obsDni' placeholder='DNI obligatorio'>
+              <label>Nombre:</label><input name='nombre_externo' id='obsNombre' placeholder='Nombre externo o se toma de trabajador'>
+              <label>Motivo:</label><select name='motivo' id='obsMotivo'><option value=''>Motivos</option>{motivo_options}</select>
+              <label>Motivo digitado:</label><input name='motivo_otro' placeholder='Opcional: digitar motivo personalizado'>
+              <label>Nivel Restricción:</label><select name='nivel_restriccion'><option value=''>Niveles</option>{nivel_options}</select>
+              <label>Comentario:</label><input name='comentario' placeholder='Comentario / detalle'>
+              <div></div><div class='obs-actions'><button class='c-btn'>Guardar</button><button type='reset' class='c-btn gray'>Limpiar</button><button type='button' onclick='cerrarObsModal()' class='c-btn gray'>Cerrar</button></div>
+            </form>
+          </div>
+        </div>
+
+        <div class='c-card'>
+          <div class='tabs'><div class='tab active' onclick='showObsTab("activos",this)'>Trabajadores observados</div><div class='tab' onclick='showObsTab("anulados",this)'>Lista de anulados</div></div>
+          <div id='tabObsActivos' class='table-wrap obs-tab'><table id='tablaObs' class='c-table'><tr><th></th><th>Acción</th><th>Estado</th><th>Tipo Documento</th><th>Número Documento</th><th>Nombre</th><th>Motivo</th><th>Nivel Restricción</th><th>Comentario</th><th>Creado Por</th><th>Fecha/Hora Creación</th><th>Editor Por</th><th>Fecha/Hora Edición</th></tr>{obs_rows}</table></div>
+          <div id='tabObsAnulados' class='table-wrap obs-tab' style='display:none'><table class='c-table'><tr><th>Log</th><th>Tipo Documento</th><th>Número Documento</th><th>Nombre</th><th>Motivo</th><th>Nivel Restricción</th><th>Comentario</th><th>Creado Por</th><th>Fecha/Hora Creación</th><th>Editor Por</th><th>Fecha/Hora Edición</th></tr>{obs_anulados_rows}</table></div>
+        </div>
+        <div class='c-card'><div class='tabs'><div class='tab active'>Tipos de Documento por Etapa</div></div><div class='table-wrap'><table class='c-table'><tr><th></th><th>Estado</th><th>Código</th><th>Tipo Documento</th><th>Etapa</th><th>Esquema</th><th>Descripción</th></tr>{tipos_rows}</table></div></div>
+        <style>.obs-modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;align-items:center;justify-content:center;padding:18px}}.obs-modal.show{{display:flex}}.obs-box{{width:min(760px,96vw);background:#fff;color:#111827;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden}}.obs-head{{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #dce2ea}}.obs-head h2{{color:#111827!important;margin:0}}.obs-head button{{border:0;background:transparent;font-size:32px;color:#8a8f98;cursor:pointer}}.obs-form{{display:grid;grid-template-columns:190px 1fr;gap:14px 12px;padding:24px;align-items:center}}.obs-form label{{color:#374151!important;font-weight:700;text-align:right}}.obs-form input,.obs-form select{{background:#fff!important;color:#111827!important;border:1px solid #cdd5df!important;border-radius:8px!important;padding:10px!important}}.radio-line{{display:flex;gap:24px}}.radio-line label{{text-align:left!important;font-weight:500!important}}.obs-actions{{display:flex;gap:10px;justify-content:flex-end}}@media(max-width:760px){{.obs-form{{grid-template-columns:1fr}}.obs-form label{{text-align:left}}}}</style>
+        <script>
+        function abrirObsModal(){{document.getElementById('obsModal').classList.add('show');}}
+        function cerrarObsModal(){{document.getElementById('obsModal').classList.remove('show');}}
+        function showObsTab(tipo,el){{document.getElementById('tabObsActivos').style.display=tipo==='activos'?'block':'none';document.getElementById('tabObsAnulados').style.display=tipo==='anulados'?'block':'none';document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');}}
+        function copiarDniObs(v){{const m=(v||'').match(/(\d{{8}})/); if(m) document.getElementById('obsDni').value=m[1];}}
+        function toggleObsTipo(){{const tipo=document.querySelector('input[name=tipo_persona]:checked').value;document.getElementById('obsTrabajador').disabled=(tipo==='Externo');}}
+        function filtrarObs(q){{q=(q||'').toLowerCase();document.querySelectorAll('#tablaObs tr').forEach((tr,i)=>{{if(i===0)return;tr.style.display=tr.innerText.toLowerCase().includes(q)?'':'none';}});}}
+        </script>
+        """)
     elif sec=='anuncios':
         content=wrap("<h2 class='c-title'>Anuncios de la empresa</h2><div class='c-bar'><div class='c-form'><b>Fecha Registro</b><span><input placeholder='Desde'> - <input placeholder='Hasta'></span><b>Nombre</b><input></div><a class='c-btn'>+ Crear Anuncio</a></div><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button><br><br><form class='anuncio-upload' method='post' enctype='multipart/form-data'><input type='hidden' name='accion' value='anuncio'><h2>Subir anuncio multimedia</h2><p class='muted2'>Acepta video MP4, PDF, imagen o documento para comunicar a trabajadores.</p><input name='titulo' placeholder='Título del anuncio'><br><br><input type='file' name='archivo' accept='.mp4,.pdf,.png,.jpg,.jpeg,.doc,.docx' required><br><br><button class='c-btn'>Subir anuncio</button><div class='video-box'><b>Vista previa MP4</b><video controls></video></div></form>")
     elif sec=='renovacion':
