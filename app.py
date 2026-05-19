@@ -4551,7 +4551,12 @@ def admin_contratacion():
               <h2>Activación de cámara</h2><p class='b-muted'>Captura facial en tiempo real. Al detectar rostro se tomará captura automática y sonará confirmación.</p>
               <div class='cam-wrap cam-boceto'><video id='firmaVideo' autoplay playsinline muted></video><canvas id='firmaCanvas' style='display:none'></canvas><img id='firmaPreview' style='display:none'><div class='face-frame'></div><div class='face-mesh'></div><div id='liveBadge' class='live-badge'>● APAGADA</div><div id='captureToast' class='capture-toast'>✅ Rostro reconocido correctamente<br><small>Captura realizada automáticamente</small></div></div>
               <div id='soundBox' class='sound-ok'><span class='sound-icon'>🔊</span><div><b>¡Captura exitosa!</b><small>Rostro reconocido correctamente</small></div><span class='wave'>▂▃▄▅▆▇▆▅▄▃▂▃▄▅▆▇</span></div>
-              <div class='firma-actions boceto-actions'><button type='button' class='btn-green' onclick='firmaCapture()'>📸 Capturar evidencia</button><button type='button' class='btn-yellow' onclick='firmaStartCam(event)'>🔄 Reintentar cámara</button><button type='button' class='btn-dark' onclick='firmaStopCam()'>■ Detener</button><label class='btn-dark filecam-label'>📁 Cámara/archivo<input id='firmaFileCam' type='file' accept='image/*' capture='user' onchange='firmaLoadFileCam(this)' style='display:none'></label></div><p id='firmaCamMsg' class='b-muted'></p>
+              <div class='firma-actions boceto-actions'>
+                <button type='button' id='btnActivarCamara' class='btn-green' onclick='return firmaStartCam(event)'>🎥 Activar cámara</button>
+                <button type='button' class='btn-yellow' onclick='return firmaCapture()'>📸 Capturar evidencia</button>
+                <button type='button' class='btn-dark' onclick='return firmaStopCam()'>■ Detener</button>
+                <label class='btn-dark filecam-label'>📁 Cámara/archivo<input id='firmaFileCam' type='file' accept='image/*' capture='user' onchange='firmaLoadFileCam(this)' style='display:none'></label>
+              </div><p id='firmaCamMsg' class='b-muted'></p>
             </div>
             <div class='firma-card-b docs-panel-b'>
               <h2>Documentos a firmar <span id='docsBadge' class='badge-green'>0</span></h2><p class='b-muted'>Se firmarán automáticamente los siguientes documentos:</p>
@@ -4592,34 +4597,90 @@ def admin_contratacion():
         function firmaEsContextoSeguro(){{ return window.isSecureContext || location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname); }}
         async function firmaEsperarVideo(video, ms=12000){{ const inicio=Date.now(); while(Date.now()-inicio < ms){{ if(video && video.videoWidth && video.videoHeight && video.readyState>=2) return true; await new Promise(r=>setTimeout(r,150)); }} return false; }}
         async function firmaStartCam(ev){{
-          if(ev) ev.preventDefault(); if(firmaStarting) return false; firmaStarting=true;
-          const wrap=document.querySelector('.cam-wrap'); const btns=document.querySelectorAll('.boceto-actions button'); const v=document.getElementById('firmaVideo');
+          if(ev) ev.preventDefault();
+          if(firmaStarting) return false;
+          firmaStarting=true;
+
+          const wrap=document.querySelector('.cam-wrap');
+          const btnActivar=document.getElementById('btnActivarCamara');
+          const v=document.getElementById('firmaVideo');
+
           try{{
-            btns.forEach(b=>b.disabled=true); firmaCaptured=false; firmaResetVisual(); firmaBadge('● ACTIVANDO','#f59e0b'); firmaSetMsg('Activando cámara real... acepta el permiso del navegador.');
+            if(btnActivar){{ btnActivar.disabled=true; btnActivar.innerHTML='⏳ Activando...'; }}
+            firmaCaptured=false;
+            firmaResetVisual();
+            firmaBadge('● ACTIVANDO','#f59e0b');
+            firmaSetMsg('Activando cámara real... cuando el navegador pregunte, presiona <b>Permitir</b>.');
+
             if(!firmaEsContextoSeguro()) throw new Error('CONTEXTO_NO_SEGURO');
             if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('MEDIADEVICES_NO_DISPONIBLE');
+
             if(firmaStream){{ firmaStream.getTracks().forEach(t=>t.stop()); firmaStream=null; }}
             if(!v) throw new Error('VIDEO_NO_ENCONTRADO');
-            v.pause(); v.removeAttribute('src'); v.srcObject=null; v.autoplay=true; v.muted=true; v.playsInline=true; v.setAttribute('playsinline','playsinline'); v.setAttribute('webkit-playsinline','webkit-playsinline'); v.style.display='block'; v.style.background='#000';
-            const intentos=[{{video:{{facingMode:{{ideal:'user'}},width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}},{{video:{{facingMode:'user'}},audio:false}},{{video:{{width:{{ideal:640}},height:{{ideal:480}}}},audio:false}},{{video:true,audio:false}}];
-            let ultimoError=null; for(const cfg of intentos){{ try{{ firmaStream=await navigator.mediaDevices.getUserMedia(cfg); break; }}catch(e){{ ultimoError=e; }} }}
+
+            v.pause();
+            v.removeAttribute('src');
+            v.removeAttribute('poster');
+            v.srcObject=null;
+            v.autoplay=true;
+            v.muted=true;
+            v.playsInline=true;
+            v.setAttribute('playsinline','');
+            v.setAttribute('webkit-playsinline','');
+            v.style.display='block';
+            v.style.background='#000';
+
+            const intentos=[
+              {{video:{{facingMode:{{ideal:'user'}},width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}},
+              {{video:{{facingMode:'user'}},audio:false}},
+              {{video:{{width:{{ideal:960}},height:{{ideal:540}}}},audio:false}},
+              {{video:true,audio:false}}
+            ];
+
+            let ultimoError=null;
+            for(const cfg of intentos){{
+              try{{
+                firmaStream=await navigator.mediaDevices.getUserMedia(cfg);
+                break;
+              }}catch(e){{
+                ultimoError=e;
+              }}
+            }}
             if(!firmaStream) throw (ultimoError || new Error('SIN_CAMARA'));
-            v.srcObject=firmaStream; try{{ await v.play(); }}catch(e){{}}
-            if(!await firmaEsperarVideo(v,12000)) throw new Error('VIDEO_NEGRO_O_SIN_IMAGEN');
-            if(wrap) wrap.classList.add('cam-live'); firmaBadge('● EN VIVO','#16a34a'); firmaSetMsg('✅ Cámara encendida. Si ves tu rostro, presiona <b>Capturar evidencia</b>.',true); return true;
+
+            v.srcObject=firmaStream;
+            await new Promise(r=>setTimeout(r,250));
+            try{{ await v.play(); }}catch(e){{ await v.play().catch(()=>{{}}); }}
+
+            if(!await firmaEsperarVideo(v,15000)) throw new Error('VIDEO_NEGRO_O_SIN_IMAGEN');
+
+            if(wrap){{ wrap.classList.add('cam-live'); wrap.classList.remove('cam-error'); }}
+            firmaBadge('● EN VIVO','#16a34a');
+            firmaSetMsg('✅ Cámara activada correctamente. Ya puedes presionar <b>Capturar evidencia</b>.',true);
+            if(btnActivar) btnActivar.innerHTML='✅ Cámara activa';
+            return true;
           }}catch(e){{
-            if(firmaStream){{ firmaStream.getTracks().forEach(t=>t.stop()); firmaStream=null; }} if(v) v.srcObject=null; if(wrap) wrap.classList.add('cam-error');
-            const nombre=(e&&e.name)?e.name:((e&&e.message)?e.message:'Error'); let ayuda='';
-            if(nombre==='CONTEXTO_NO_SEGURO') ayuda=' Abre en http://127.0.0.1:5000, localhost o HTTPS. En celular con IP local el navegador bloquea cámara si no es HTTPS.';
-            else if(nombre==='NotAllowedError'||nombre==='PermissionDeniedError') ayuda=' Permite Cámara desde el candado del navegador.';
+            if(firmaStream){{ firmaStream.getTracks().forEach(t=>t.stop()); firmaStream=null; }}
+            if(v) v.srcObject=null;
+            if(wrap) wrap.classList.add('cam-error');
+            const nombre=(e&&e.name)?e.name:((e&&e.message)?e.message:'Error');
+            let ayuda='';
+            if(nombre==='CONTEXTO_NO_SEGURO') ayuda=' Abre el sistema en http://127.0.0.1:5000, localhost o en HTTPS. En celular con IP local HTTP el navegador bloquea la cámara.';
+            else if(nombre==='NotAllowedError'||nombre==='PermissionDeniedError') ayuda=' Permite Cámara desde el candado del navegador y vuelve a presionar Activar cámara.';
             else if(nombre==='NotFoundError'||nombre==='DevicesNotFoundError') ayuda=' No se encontró cámara conectada.';
             else if(nombre==='NotReadableError'||nombre==='TrackStartError') ayuda=' La cámara está ocupada por otra app. Cierra Zoom/Meet/Teams/Cámara de Windows.';
             else if(nombre==='VIDEO_NEGRO_O_SIN_IMAGEN') ayuda=' El permiso fue aceptado, pero no llegó imagen. Cierra otras apps de cámara y vuelve a intentar.';
             else ayuda=' Revisa permisos de Windows/Android/iPhone y del navegador.';
-            firmaBadge('● SIN CÁMARA','#dc2626'); firmaSetMsg('❌ No se pudo activar la cámara: '+nombre+'.'+ayuda+' Puedes usar <b>Cámara/archivo</b> como respaldo.',false,true); return false;
-          }}finally{{ firmaStarting=false; btns.forEach(b=>b.disabled=false); }}
+            firmaBadge('● APAGADA','#dc2626');
+            firmaSetMsg('❌ No se pudo activar cámara: '+nombre+'.'+ayuda+' Como respaldo puedes usar <b>Cámara/archivo</b>.',false,true);
+            if(btnActivar) btnActivar.innerHTML='🎥 Activar cámara';
+            return false;
+          }}finally{{
+            firmaStarting=false;
+            if(btnActivar) btnActivar.disabled=false;
+          }}
         }}
-        function firmaCapture(){{ const v=document.getElementById('firmaVideo'), c=document.getElementById('firmaCanvas'), img=document.getElementById('firmaPreview'), wrap=document.querySelector('.cam-wrap'), sound=document.getElementById('soundBox'); if(!v || !v.srcObject || !v.videoWidth){{ firmaSetMsg('La cámara aún no tiene imagen. Presiona Reintentar cámara o usa Cámara/archivo como respaldo.',false,true); return false; }} c.width=v.videoWidth; c.height=v.videoHeight; c.getContext('2d').drawImage(v,0,0,c.width,c.height); const data=c.toDataURL('image/jpeg',0.88); img.src=data; img.style.display='block'; firmaCaptured=true; if(wrap){{ wrap.classList.add('capture-ok','cam-live'); wrap.classList.remove('cam-error'); }} if(sound) sound.style.display='flex'; firmaBeep(); firmaSetMsg('✅ Evidencia facial capturada correctamente. Lista para firmar los documentos seleccionados.',true); return true; }}
+                async function firmaCapture(){{ const v=document.getElementById('firmaVideo'), c=document.getElementById('firmaCanvas'), img=document.getElementById('firmaPreview'), wrap=document.querySelector('.cam-wrap'), sound=document.getElementById('soundBox'); if(!v || !v.srcObject || !v.videoWidth){{ firmaSetMsg('Primero se activará la cámara. Acepta el permiso del navegador.',false,false); const ok=await firmaStartCam(); if(!ok || !v || !v.videoWidth){{ firmaSetMsg('No hay imagen de cámara. Presiona Activar cámara o usa Cámara/archivo como respaldo.',false,true); return false; }} }} c.width=v.videoWidth; c.height=v.videoHeight; c.getContext('2d').drawImage(v,0,0,c.width,c.height); const data=c.toDataURL('image/jpeg',0.88); img.src=data; img.style.display='block'; firmaCaptured=true; if(wrap){{ wrap.classList.add('capture-ok','cam-live'); wrap.classList.remove('cam-error'); }} if(sound) sound.style.display='flex'; firmaBeep(); firmaSetMsg('✅ Evidencia facial capturada correctamente. Lista para firmar los documentos seleccionados.',true); return true; }}
         function firmaLoadFileCam(input){{ const file=input && input.files ? input.files[0] : null; if(!file) return; const img=document.getElementById('firmaPreview'), wrap=document.querySelector('.cam-wrap'), sound=document.getElementById('soundBox'); const reader=new FileReader(); reader.onload=function(){{ if(img){{ img.src=reader.result; img.style.display='block'; }} firmaCaptured=true; if(wrap){{ wrap.classList.add('cam-live','capture-ok'); wrap.classList.remove('cam-error'); }} if(sound) sound.style.display='flex'; firmaBadge('● EVIDENCIA','#16a34a'); firmaSetMsg('✅ Evidencia cargada correctamente desde cámara/archivo.',true); firmaBeep(); }}; reader.readAsDataURL(file); }}
         function firmaStopCam(){{ if(firmaStream){{ firmaStream.getTracks().forEach(t=>t.stop()); firmaStream=null; }} const v=document.getElementById('firmaVideo'); if(v){{ v.pause(); v.srcObject=null; }} const wrap=document.querySelector('.cam-wrap'); if(wrap) wrap.classList.remove('cam-live'); firmaBadge('● DETENIDA','#334155'); firmaSetMsg('Cámara detenida.'); }}
         function updateFirmaCounter(){{ const checks=[...document.querySelectorAll('.doc-sign-list .chk-doc-firma:checked')]; const n=checks.length; const el=document.getElementById('firmaMassCounter'); if(el) el.textContent='Se firmarán '+n+' documentos'; const b=document.getElementById('docsBadge'); if(b) b.textContent=n; const first=checks[0]; if(first){{ const dni=document.getElementById('stripDni'), trab=document.getElementById('stripTrabajador'); if(dni) dni.textContent=first.dataset.dni||''; if(trab) trab.textContent=(first.dataset.trabajador||'').toUpperCase(); }} const f=document.getElementById('stripFecha'); if(f){{ const d=new Date(); f.textContent=d.toLocaleDateString('es-PE')+' '+d.toLocaleTimeString('es-PE'); }} }}
@@ -4627,7 +4688,7 @@ def admin_contratacion():
         function prepararFirmaMasiva(){{ const ids=[...new Set([...document.querySelectorAll('.doc-sign-list .chk-doc-firma:checked')].map(x=>x.value))]; if(ids.length===0){{ alert('Selecciona al menos un contrato para firmar.'); return false; }} if(!firmaCaptured){{ const continuar=confirm('Aún no se capturó evidencia facial. ¿Deseas continuar igual?'); if(!continuar) return false; }} const lote=document.getElementById('documentos_lote'); if(lote) lote.value=ids.join('
 '); return confirm('Se firmarán/generarán '+ids.length+' documento(s). ¿Continuar?'); }}
         document.addEventListener('change',e=>{{ if(e.target.classList && e.target.classList.contains('chk-doc-firma')) updateFirmaCounter(); }});
-        document.addEventListener('DOMContentLoaded',()=>{{ updateFirmaCounter(); firmaResetVisual(); firmaSetMsg('Cámara en primer plano: se encenderá automáticamente. Acepta el permiso del navegador. Debe abrirse en localhost/127.0.0.1 o HTTPS.'); setTimeout(()=>{{ firmaStartCam(); }},350); }});
+        document.addEventListener('DOMContentLoaded',()=>{{ updateFirmaCounter(); firmaResetVisual(); firmaSetMsg('Presiona <b>🎥 Activar cámara</b>. Cuando el navegador pregunte, elige <b>Permitir</b>. Debe abrirse en localhost/127.0.0.1 o HTTPS.'); }});
         </script>
         """)
     elif sec=='nisira':
