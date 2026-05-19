@@ -4745,8 +4745,9 @@ def admin_contratacion():
         function marcarTodosFirma(on){{document.querySelectorAll('.chk-doc-firma').forEach(x=>x.checked=on);updateFirmaCounter();}}
         function prepararFirmaMasiva(){{const ids=[...new Set([...document.querySelectorAll('.doc-sign-list .chk-doc-firma:checked')].map(x=>x.value))];if(ids.length===0){{alert('Selecciona al menos un contrato para firmar.');return false;}}if(!firmaCaptured){{const continuar=confirm('Aún no se capturó evidencia facial. ¿Deseas continuar igual?'); if(!continuar) return false;}}document.getElementById('documentos_lote').value=ids.join('\n');return confirm('Se firmarán/generarán '+ids.length+' documento(s). ¿Continuar?');}}
         document.addEventListener('change',e=>{{if(e.target.classList&&e.target.classList.contains('chk-doc-firma'))updateFirmaCounter();}});
-        document.addEventListener('DOMContentLoaded',()=>{{updateFirmaCounter(); firmaResetVisual(); firmaSetMsg('Cámara lista en primer plano. Presiona Activar cámara o acepta el permiso si se abre automáticamente. Debe abrirse en localhost/127.0.0.1 o HTTPS.'); setTimeout(()=>{{firmaStartCam();}},800);}});
+        document.addEventListener('DOMContentLoaded',()=>{{updateFirmaCounter(); firmaResetVisual(); firmaSetMsg('Cámara lista en primer plano. Presiona Activar cámara. En PC abre http://127.0.0.1:5000; en celular usa HTTPS.');}});
         </script>
+        <script src='/static/camera_fix_final.js?v=20260519'></script>
         """)
     elif sec=='nisira':
         content=wrap("<h2 class='c-title'>Contratación NISIRA</h2><div class='c-card' style='padding:22px'><p class='muted2'>Sección preparada para importar contratos / altas desde NISIRA y cruzar por DNI.</p><button class='c-btn'>Sincronizar NISIRA</button></div>")
