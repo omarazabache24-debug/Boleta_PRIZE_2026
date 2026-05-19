@@ -56,8 +56,9 @@ app = Flask(__name__)
 
 @app.after_request
 def permitir_camara_firma(response):
-    # Permite que el navegador use cámara/micrófono en la propia página del sistema.
-    response.headers['Permissions-Policy'] = 'camera=(self), microphone=(self)'
+    # Permite cámara/micrófono en la propia página del sistema.
+    # IMPORTANTE: Chrome/Edge solo habilitan getUserMedia en HTTPS o localhost/127.0.0.1.
+    response.headers['Permissions-Policy'] = 'camera=(self), microphone=(self), fullscreen=(self)'
     response.headers['Feature-Policy'] = "camera 'self'; microphone 'self'"
     return response
 app.secret_key = os.getenv("SECRET_KEY", "prize_documentos_ultra_2026")
@@ -4483,9 +4484,9 @@ def admin_contratacion():
           <div class='firma-grid-boceto-main'>
             <div class='firma-card-b camera-card-b'>
               <h2>Activación de cámara</h2><p class='b-muted'>Captura facial en tiempo real. Al detectar rostro se tomará captura automática y sonará confirmación.</p>
-              <div class='cam-wrap cam-boceto'><video id='firmaVideo' autoplay playsinline muted></video><canvas id='firmaCanvas' style='display:none'></canvas><img id='firmaPreview' style='display:none'><div class='face-frame'></div><div class='face-mesh'></div><div id='liveBadge' class='live-badge'>● EN VIVO</div><div id='captureToast' class='capture-toast'>✅ Rostro reconocido correctamente<br><small>Captura realizada automáticamente</small></div></div>
+              <div class='cam-wrap cam-boceto'><video id='firmaVideo' autoplay playsinline muted></video><canvas id='firmaCanvas' style='display:none'></canvas><img id='firmaPreview' style='display:none'><div class='face-frame'></div><div class='face-mesh'></div><div id='liveBadge' class='live-badge'>● APAGADA</div><div id='captureToast' class='capture-toast'>✅ Rostro reconocido correctamente<br><small>Captura realizada automáticamente</small></div></div>
               <div id='soundBox' class='sound-ok'><span class='sound-icon'>🔊</span><div><b>¡Captura exitosa!</b><small>Rostro reconocido correctamente</small></div><span class='wave'>▂▃▄▅▆▇▆▅▄▃▂▃▄▅▆▇</span></div>
-              <div class='firma-actions boceto-actions'><button type='button' class='btn-yellow' onclick='firmaStartCam()'>📷 Activar cámara</button><button type='button' class='btn-green' onclick='firmaCapture()'>📸 Capturar evidencia</button><button type='button' class='btn-dark' onclick='firmaStopCam()'>■ Detener</button></div><p id='firmaCamMsg' class='b-muted'></p>
+              <div class='firma-actions boceto-actions'><button type='button' class='btn-yellow' onclick='firmaStartCam(event)'>📷 Activar cámara</button><button type='button' class='btn-green' onclick='firmaCapture()'>📸 Capturar evidencia</button><button type='button' class='btn-dark' onclick='firmaStopCam()'>■ Detener</button><label class='btn-dark filecam-label'>📁 Cámara/archivo<input id='firmaFileCam' type='file' accept='image/*' capture='user' onchange='firmaLoadFileCam(this)' style='display:none'></label></div><p id='firmaCamMsg' class='b-muted'></p>
             </div>
             <div class='firma-card-b docs-panel-b'>
               <h2>Documentos a firmar <span id='docsBadge' class='badge-green'>0</span></h2><p class='b-muted'>Se firmarán automáticamente los siguientes documentos:</p>
@@ -4510,117 +4511,176 @@ def admin_contratacion():
           <div class='firma-card'><h3>🔐 Trazabilidad</h3><div class='trace-grid'><span>IP y navegador</span><span>Fecha / hora</span><span>Hash de evidencia</span><span>Selfie/captura</span><span>Estado RENIEC/API</span><span>Documento archivado</span></div></div>
         </div>
         <style>
-        .firma-boceto-final{{background:#f5f7fb!important;margin:-10px -12px 0;padding:18px 26px 26px;min-height:calc(100vh - 80px);color:#0f172a!important;font-family:Inter,Segoe UI,Arial,sans-serif!important}}.firma-boceto-final *{{box-sizing:border-box!important;text-shadow:none!important}}.firma-topbar{{display:flex;justify-content:space-between;align-items:center;margin:0 0 18px}}.title-wrap{{display:flex;align-items:center;gap:12px}}.title-icon{{width:42px;height:42px;border-radius:12px;background:#edf2f7;display:grid;place-items:center;font-size:22px;box-shadow:inset 0 0 0 1px #e2e8f0}}.firma-topbar h1{{margin:0;font-size:30px;line-height:1;color:#0b1220;font-weight:1000}}.firma-topbar p{{margin:8px 0 0;color:#64748b;font-weight:800}}.btn-back{{background:#eef1f6;border:1px solid #dce3eb;border-radius:10px;color:#111827;text-decoration:none;font-weight:950;padding:12px 18px;box-shadow:0 6px 16px #0f172a0d}}.person-strip{{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:#fff;border:1px solid #dfe7ef;border-radius:12px;box-shadow:0 10px 26px #0f172a10;margin-bottom:14px;overflow:hidden}}.strip-item{{display:flex;gap:14px;align-items:center;padding:20px 26px;border-right:1px solid #e5eaf0}}.strip-item:last-child{{border-right:0}}.strip-ico{{font-size:28px;color:#3b82f6}}.strip-item small{{display:block;color:#111827;font-size:12px;font-weight:950;margin-bottom:8px}}.strip-item b{{font-size:13px;color:#020617;font-weight:1000}}.firma-grid-boceto-main{{display:grid;grid-template-columns:1fr 1.12fr;gap:16px}}.firma-card-b{{background:#fff;border:1px solid #e0e6ee;border-radius:12px;box-shadow:0 10px 26px #0f172a10;padding:18px}}.firma-card-b h2{{margin:0 0 8px;color:#0b1220;font-size:22px;font-weight:1000}}.b-muted{{color:#64748b;font-weight:750;line-height:1.45;margin:0 0 14px}}.cam-wrap{{position:relative;overflow:hidden;background:#000;border-radius:15px;min-height:525px;display:grid;place-items:center}}.cam-wrap video,.cam-wrap img{{width:100%;height:525px;object-fit:cover;background:#000;position:relative;z-index:3;display:block}}.face-frame{{position:absolute;z-index:4;inset:17% 26%;border:3px solid #22c55e;border-radius:22px;pointer-events:none;display:none}}.face-frame:before,.face-frame:after{{content:'';position:absolute;inset:-3px;border-color:#22c55e;border-style:solid;border-width:0}}.face-mesh{{position:absolute;z-index:5;inset:23% 32%;opacity:.58;pointer-events:none;background:radial-gradient(circle,#34d399 1.4px,transparent 2px) 0 0/34px 34px,linear-gradient(32deg,transparent 49%,rgba(52,211,153,.55) 50%,transparent 51%) 0 0/70px 70px,linear-gradient(145deg,transparent 49%,rgba(52,211,153,.38) 50%,transparent 51%) 0 0/80px 80px;border-radius:50%;display:none}}.live-badge{{position:absolute;right:18px;top:18px;z-index:6;background:#11823b;color:#fff;border-radius:999px;padding:8px 16px;font-weight:1000;font-size:12px}}.capture-toast{{position:absolute;left:18px;right:18px;bottom:18px;z-index:7;background:linear-gradient(90deg,#0f5132,#0b5d34);color:#fff;border-radius:12px;padding:16px 22px;font-weight:1000;box-shadow:0 8px 22px #0006;display:none}}.capture-toast small{{display:block;color:#dcfce7;font-weight:800;margin-top:4px}}.sound-ok{{margin:16px 0 14px;background:#eafff1;border:1px solid #b9edcc;border-radius:10px;color:#16a34a;display:none;align-items:center;gap:12px;padding:12px 14px;font-weight:1000}}.sound-icon{{font-size:27px}}.sound-ok small{{display:block;color:#16a34a;font-weight:700}}.wave{{margin-left:auto;letter-spacing:2px}}.boceto-actions{{display:flex;gap:10px;flex-wrap:wrap}}.btn-yellow,.btn-green,.btn-dark{{border:0;border-radius:8px;padding:13px 18px;font-weight:1000;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 8px 16px #0f172a18}}.btn-yellow{{background:#ffbd00;color:#111827}}.btn-green{{background:#10b84e;color:#fff!important}}.btn-dark{{background:#334155;color:#fff!important}}.doc-sign-list{{display:grid;gap:12px;margin:18px 0;max-height:505px;overflow:auto;padding:0 4px 0 0}}.doc-sign-card{{display:grid;grid-template-columns:32px 56px 1fr;align-items:center;gap:14px;border:1px solid #dbe3ec;border-radius:12px;background:#fafcff;padding:17px;min-height:88px;box-shadow:0 6px 18px #0f172a08;cursor:pointer}}.doc-sign-card input{{width:20px;height:20px;accent-color:#10b84e}}.doc-icon{{width:45px;height:50px;border-radius:8px;background:#2f67c7;color:#fff;display:grid;place-items:center;font-size:20px;font-weight:1000;box-shadow:inset 0 -8px 0 rgba(0,0,0,.08)}}.doc-info b{{display:block;color:#0f172a;font-size:14px;text-transform:uppercase;margin-bottom:7px}}.doc-info small{{display:block;color:#475569;font-weight:850;margin-top:3px}}.badge-green{{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:999px;background:#10b84e;color:#fff;font-size:14px;vertical-align:middle}}.switch-row{{display:flex;align-items:center;gap:10px;margin:18px 0;color:#111827;font-weight:950}}.switch-row input{{width:42px;height:22px;accent-color:#10b84e}}.info-dot{{width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;background:#111827;color:#fff;font-size:12px}}.ready-box{{display:flex;gap:12px;align-items:center;background:#eafff1;border:1px solid #b9edcc;border-radius:10px;color:#16a34a;padding:16px;font-weight:1000}}.ready-box small{{display:block;color:#16a34a;font-weight:700;margin-top:4px}}.firma-progress-bar{{display:grid;grid-template-columns:1fr 300px;gap:22px;align-items:center;background:#fff;border:1px solid #dfe7ef;border-radius:12px;box-shadow:0 10px 26px #0f172a10;margin-top:16px;padding:18px}}.progress-left>b{{display:block;font-size:16px;margin-bottom:14px;color:#0f172a}}.steps{{display:flex;align-items:flex-start;gap:10px}}.steps i{{height:1px;background:#cbd5e1;flex:1;margin-top:17px}}.steps span{{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#e5e7eb;color:#111827;font-weight:1000;position:relative;flex:0 0 auto}}.steps span.done{{background:#10b84e;color:#fff}}.steps small{{position:absolute;top:42px;left:50%;transform:translateX(-50%);width:130px;color:#475569;font-size:10px;text-align:center;line-height:1.35}}.steps .done small{{color:#10b84e}}.btn-firmar{{height:54px;font-size:15px;flex-direction:column}}.btn-firmar small{{font-size:11px;color:#eafff1;margin-top:4px}}.sr-only-form{{display:none!important}}.firma-card{{background:#fff;border:1px solid #e0e6ee;border-radius:12px;padding:18px;margin-top:16px;color:#0f172a}}.firma-table th{{background:#0b2135!important;color:#fff!important}}.firma-table td{{background:white!important;color:#1f2937!important}}.trace-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}.trace-grid span{{background:#e0f2fe;border:1px solid #7dd3fc;color:#075985;padding:12px;border-radius:10px;font-weight:950}}.estado-pill,.estado-soft,.ok-chip,.pend-chip{{display:inline-flex;border-radius:999px;padding:7px 10px;font-weight:950}}.estado-pill{{background:#fef3c7;color:#92400e}}.estado-soft{{background:#e0f2fe;color:#075985}}.ok-chip{{background:#dcfce7;color:#166534}}.pend-chip{{background:#fee2e2;color:#991b1b}}.docs-panel-b h2,.docs-panel-b p,.docs-panel-b label,.camera-card-b h2,.camera-card-b p{{color:#0f172a!important}}.doc-sign-card{{color:#0f172a!important}}.empty-docs{{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:14px;font-weight:900}}.plantilla-sign-card{{border-color:#bbf7d0!important;background:#f8fffb!important}}.cam-wrap.cam-live .face-frame,.cam-wrap.cam-live .face-mesh{{display:block}}.cam-wrap.capture-ok #captureToast{{display:block}}.boceto-actions button:disabled{{opacity:.65;cursor:wait}}@media(max-width:1180px){{.firma-grid-boceto-main,.firma-progress-bar{{grid-template-columns:1fr}}.person-strip{{grid-template-columns:1fr 1fr}}}}@media(max-width:720px){{.firma-boceto-final{{padding:14px}}.firma-topbar,.steps{{display:grid}}.person-strip{{grid-template-columns:1fr}}.strip-item{{border-right:0;border-bottom:1px solid #e5eaf0}}.cam-wrap,.cam-wrap video,.cam-wrap img{{min-height:360px;height:360px}}}}
+        .firma-boceto-final{{background:#f5f7fb!important;margin:-10px -12px 0;padding:18px 26px 26px;min-height:calc(100vh - 80px);color:#0f172a!important;font-family:Inter,Segoe UI,Arial,sans-serif!important}}.firma-boceto-final *{{box-sizing:border-box!important;text-shadow:none!important}}.firma-topbar{{display:flex;justify-content:space-between;align-items:center;margin:0 0 18px}}.title-wrap{{display:flex;align-items:center;gap:12px}}.title-icon{{width:42px;height:42px;border-radius:12px;background:#edf2f7;display:grid;place-items:center;font-size:22px;box-shadow:inset 0 0 0 1px #e2e8f0}}.firma-topbar h1{{margin:0;font-size:30px;line-height:1;color:#0b1220;font-weight:1000}}.firma-topbar p{{margin:8px 0 0;color:#64748b;font-weight:800}}.btn-back{{background:#eef1f6;border:1px solid #dce3eb;border-radius:10px;color:#111827;text-decoration:none;font-weight:950;padding:12px 18px;box-shadow:0 6px 16px #0f172a0d}}.person-strip{{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:#fff;border:1px solid #dfe7ef;border-radius:12px;box-shadow:0 10px 26px #0f172a10;margin-bottom:14px;overflow:hidden}}.strip-item{{display:flex;gap:14px;align-items:center;padding:20px 26px;border-right:1px solid #e5eaf0}}.strip-item:last-child{{border-right:0}}.strip-ico{{font-size:28px;color:#3b82f6}}.strip-item small{{display:block;color:#111827;font-size:12px;font-weight:950;margin-bottom:8px}}.strip-item b{{font-size:13px;color:#020617;font-weight:1000}}.firma-grid-boceto-main{{display:grid;grid-template-columns:1fr 1.12fr;gap:16px}}.firma-card-b{{background:#fff;border:1px solid #e0e6ee;border-radius:12px;box-shadow:0 10px 26px #0f172a10;padding:18px}}.firma-card-b h2{{margin:0 0 8px;color:#0b1220;font-size:22px;font-weight:1000}}.b-muted{{color:#64748b;font-weight:750;line-height:1.45;margin:0 0 14px}}.cam-wrap{{position:relative;overflow:hidden;background:#000;border-radius:15px;min-height:525px;display:grid;place-items:center}}.cam-wrap video,.cam-wrap img{{width:100%;height:525px;object-fit:cover;background:#000;position:relative;z-index:3;display:block}}.cam-wrap video{{transform:scaleX(-1)}}.cam-wrap:not(.cam-live) .face-frame,.cam-wrap:not(.cam-live) .face-mesh,.cam-wrap:not(.capture-ok) #captureToast{{display:none!important}}.cam-error{{background:#fff7ed!important;border-color:#fed7aa!important;color:#9a3412!important}}.filecam-label{{position:relative;overflow:hidden}}.face-frame{{position:absolute;z-index:4;inset:17% 26%;border:3px solid #22c55e;border-radius:22px;pointer-events:none;display:none}}.face-frame:before,.face-frame:after{{content:'';position:absolute;inset:-3px;border-color:#22c55e;border-style:solid;border-width:0}}.face-mesh{{position:absolute;z-index:5;inset:23% 32%;opacity:.58;pointer-events:none;background:radial-gradient(circle,#34d399 1.4px,transparent 2px) 0 0/34px 34px,linear-gradient(32deg,transparent 49%,rgba(52,211,153,.55) 50%,transparent 51%) 0 0/70px 70px,linear-gradient(145deg,transparent 49%,rgba(52,211,153,.38) 50%,transparent 51%) 0 0/80px 80px;border-radius:50%;display:none}}.live-badge{{position:absolute;right:18px;top:18px;z-index:6;background:#11823b;color:#fff;border-radius:999px;padding:8px 16px;font-weight:1000;font-size:12px}}.capture-toast{{position:absolute;left:18px;right:18px;bottom:18px;z-index:7;background:linear-gradient(90deg,#0f5132,#0b5d34);color:#fff;border-radius:12px;padding:16px 22px;font-weight:1000;box-shadow:0 8px 22px #0006;display:none}}.capture-toast small{{display:block;color:#dcfce7;font-weight:800;margin-top:4px}}.sound-ok{{margin:16px 0 14px;background:#eafff1;border:1px solid #b9edcc;border-radius:10px;color:#16a34a;display:none;align-items:center;gap:12px;padding:12px 14px;font-weight:1000}}.sound-icon{{font-size:27px}}.sound-ok small{{display:block;color:#16a34a;font-weight:700}}.wave{{margin-left:auto;letter-spacing:2px}}.boceto-actions{{display:flex;gap:10px;flex-wrap:wrap}}.btn-yellow,.btn-green,.btn-dark{{border:0;border-radius:8px;padding:13px 18px;font-weight:1000;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 8px 16px #0f172a18}}.btn-yellow{{background:#ffbd00;color:#111827}}.btn-green{{background:#10b84e;color:#fff!important}}.btn-dark{{background:#334155;color:#fff!important}}.doc-sign-list{{display:grid;gap:12px;margin:18px 0;max-height:505px;overflow:auto;padding:0 4px 0 0}}.doc-sign-card{{display:grid;grid-template-columns:32px 56px 1fr;align-items:center;gap:14px;border:1px solid #dbe3ec;border-radius:12px;background:#fafcff;padding:17px;min-height:88px;box-shadow:0 6px 18px #0f172a08;cursor:pointer}}.doc-sign-card input{{width:20px;height:20px;accent-color:#10b84e}}.doc-icon{{width:45px;height:50px;border-radius:8px;background:#2f67c7;color:#fff;display:grid;place-items:center;font-size:20px;font-weight:1000;box-shadow:inset 0 -8px 0 rgba(0,0,0,.08)}}.doc-info b{{display:block;color:#0f172a;font-size:14px;text-transform:uppercase;margin-bottom:7px}}.doc-info small{{display:block;color:#475569;font-weight:850;margin-top:3px}}.badge-green{{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:999px;background:#10b84e;color:#fff;font-size:14px;vertical-align:middle}}.switch-row{{display:flex;align-items:center;gap:10px;margin:18px 0;color:#111827;font-weight:950}}.switch-row input{{width:42px;height:22px;accent-color:#10b84e}}.info-dot{{width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;background:#111827;color:#fff;font-size:12px}}.ready-box{{display:flex;gap:12px;align-items:center;background:#eafff1;border:1px solid #b9edcc;border-radius:10px;color:#16a34a;padding:16px;font-weight:1000}}.ready-box small{{display:block;color:#16a34a;font-weight:700;margin-top:4px}}.firma-progress-bar{{display:grid;grid-template-columns:1fr 300px;gap:22px;align-items:center;background:#fff;border:1px solid #dfe7ef;border-radius:12px;box-shadow:0 10px 26px #0f172a10;margin-top:16px;padding:18px}}.progress-left>b{{display:block;font-size:16px;margin-bottom:14px;color:#0f172a}}.steps{{display:flex;align-items:flex-start;gap:10px}}.steps i{{height:1px;background:#cbd5e1;flex:1;margin-top:17px}}.steps span{{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#e5e7eb;color:#111827;font-weight:1000;position:relative;flex:0 0 auto}}.steps span.done{{background:#10b84e;color:#fff}}.steps small{{position:absolute;top:42px;left:50%;transform:translateX(-50%);width:130px;color:#475569;font-size:10px;text-align:center;line-height:1.35}}.steps .done small{{color:#10b84e}}.btn-firmar{{height:54px;font-size:15px;flex-direction:column}}.btn-firmar small{{font-size:11px;color:#eafff1;margin-top:4px}}.sr-only-form{{display:none!important}}.firma-card{{background:#fff;border:1px solid #e0e6ee;border-radius:12px;padding:18px;margin-top:16px;color:#0f172a}}.firma-table th{{background:#0b2135!important;color:#fff!important}}.firma-table td{{background:white!important;color:#1f2937!important}}.trace-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}.trace-grid span{{background:#e0f2fe;border:1px solid #7dd3fc;color:#075985;padding:12px;border-radius:10px;font-weight:950}}.estado-pill,.estado-soft,.ok-chip,.pend-chip{{display:inline-flex;border-radius:999px;padding:7px 10px;font-weight:950}}.estado-pill{{background:#fef3c7;color:#92400e}}.estado-soft{{background:#e0f2fe;color:#075985}}.ok-chip{{background:#dcfce7;color:#166534}}.pend-chip{{background:#fee2e2;color:#991b1b}}.docs-panel-b h2,.docs-panel-b p,.docs-panel-b label,.camera-card-b h2,.camera-card-b p{{color:#0f172a!important}}.doc-sign-card{{color:#0f172a!important}}.empty-docs{{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:14px;font-weight:900}}.plantilla-sign-card{{border-color:#bbf7d0!important;background:#f8fffb!important}}.cam-wrap.cam-live .face-frame,.cam-wrap.cam-live .face-mesh{{display:block}}.cam-wrap.capture-ok #captureToast{{display:block}}.boceto-actions button:disabled{{opacity:.65;cursor:wait}}@media(max-width:1180px){{.firma-grid-boceto-main,.firma-progress-bar{{grid-template-columns:1fr}}.person-strip{{grid-template-columns:1fr 1fr}}}}@media(max-width:720px){{.firma-boceto-final{{padding:14px}}.firma-topbar,.steps{{display:grid}}.person-strip{{grid-template-columns:1fr}}.strip-item{{border-right:0;border-bottom:1px solid #e5eaf0}}.cam-wrap,.cam-wrap video,.cam-wrap img{{min-height:360px;height:360px}}}}
         </style>
         <script>
         let firmaStream=null;
         let firmaCaptured=false;
-        function firmaSetMsg(txt, ok=false){{
+        let firmaStarting=false;
+
+        function firmaSetMsg(txt, ok=false, error=false){{
           const msg=document.getElementById('firmaCamMsg');
-          if(msg){{ msg.textContent=txt; msg.style.color=ok?'#059669':'#475569'; msg.style.fontWeight='800'; }}
+          if(msg){{
+            msg.textContent=txt;
+            msg.style.color=error?'#b91c1c':(ok?'#059669':'#475569');
+            msg.style.fontWeight='900';
+          }}
+        }}
+        function firmaBadge(txt,bg){{
+          const badge=document.getElementById('liveBadge');
+          if(badge){{ badge.textContent=txt; badge.style.background=bg; }}
         }}
         function firmaBeep(){{try{{const A=window.AudioContext||window.webkitAudioContext;const ctx=new A();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.type='sine';osc.frequency.value=880;gain.gain.setValueAtTime(0.001,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.25,ctx.currentTime+0.02);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.28);osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+0.30);}}catch(e){{}}}}
-        async function firmaStartCam(){{
+        function firmaResetVisual(){{
           const wrap=document.querySelector('.cam-wrap');
-          const badge=document.getElementById('liveBadge');
-          const btns=document.querySelectorAll('.boceto-actions button');
-          const v=document.getElementById('firmaVideo');
           const preview=document.getElementById('firmaPreview');
           const sound=document.getElementById('soundBox');
+          if(preview){{ preview.removeAttribute('src'); preview.style.display='none'; }}
+          if(sound) sound.style.display='none';
+          if(wrap){{ wrap.classList.remove('capture-ok'); wrap.classList.remove('cam-live'); wrap.classList.remove('cam-error'); }}
+          firmaBadge('● APAGADA','#334155');
+        }}
+        function firmaEsContextoSeguro(){{
+          return window.isSecureContext || location.protocol === 'https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
+        }}
+        async function firmaEsperarVideo(video, ms=12000){{
+          const inicio=Date.now();
+          while(Date.now()-inicio < ms){{
+            if(video.videoWidth && video.videoHeight) return true;
+            await new Promise(r=>setTimeout(r,150));
+          }}
+          return false;
+        }}
+        async function firmaStartCam(ev){{
+          if(ev) ev.preventDefault();
+          if(firmaStarting) return false;
+          firmaStarting=true;
+          const wrap=document.querySelector('.cam-wrap');
+          const btns=document.querySelectorAll('.boceto-actions button');
+          const v=document.getElementById('firmaVideo');
           try{{
             btns.forEach(b=>b.disabled=true);
             firmaCaptured=false;
-            if(preview){{ preview.removeAttribute('src'); preview.style.display='none'; }}
-            if(sound) sound.style.display='none';
-            if(wrap){{ wrap.classList.remove('capture-ok'); wrap.classList.remove('cam-live'); }}
-            if(badge){{ badge.textContent='● ACTIVANDO'; badge.style.background='#f59e0b'; }}
+            firmaResetVisual();
+            firmaBadge('● ACTIVANDO','#f59e0b');
             firmaSetMsg('Activando cámara real... acepta el permiso del navegador.');
 
+            if(!firmaEsContextoSeguro()){{
+              throw new Error('CONTEXTO_NO_SEGURO');
+            }}
             if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){{
               throw new Error('MEDIADEVICES_NO_DISPONIBLE');
             }}
             if(firmaStream){{ firmaStream.getTracks().forEach(t=>t.stop()); firmaStream=null; }}
 
-            v.autoplay=true; v.muted=true; v.playsInline=true; v.setAttribute('playsinline','playsinline');
-            v.style.display='block'; v.style.background='#000';
+            v.pause();
+            v.removeAttribute('src');
+            v.srcObject=null;
+            v.autoplay=true;
+            v.muted=true;
+            v.playsInline=true;
+            v.setAttribute('playsinline','playsinline');
+            v.setAttribute('webkit-playsinline','webkit-playsinline');
+            v.style.display='block';
+            v.style.background='#000';
 
             const intentos=[
-              {{video:{{facingMode:'user',width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}},
-              {{video:{{facingMode:'user'}},audio:false}},
-              {{video:{{width:{{ideal:960}},height:{{ideal:540}}}},audio:false}},
+              {{video:{{facingMode:{{ideal:'user'}},width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}},
+              {{video:{{facingMode:'user',width:{{ideal:640}},height:{{ideal:480}}}},audio:false}},
+              {{video:{{width:{{ideal:640}},height:{{ideal:480}}}},audio:false}},
               {{video:true,audio:false}}
             ];
             let ultimoError=null;
             for(const cfg of intentos){{
-              try{{ firmaStream=await navigator.mediaDevices.getUserMedia(cfg); break; }}
-              catch(e){{ ultimoError=e; }}
+              try{{
+                firmaStream=await navigator.mediaDevices.getUserMedia(cfg);
+                break;
+              }}catch(e){{ ultimoError=e; }}
             }}
-            if(!firmaStream){{ throw ultimoError || new Error('SIN_CAMARA'); }}
+            if(!firmaStream) throw (ultimoError || new Error('SIN_CAMARA'));
 
             v.srcObject=firmaStream;
-            await new Promise((resolve,reject)=>{{
-              let listo=false;
-              const ok=()=>{{ if(!listo){{ listo=true; resolve(); }} }};
-              const timer=setTimeout(()=>{{ if(!listo) reject(new Error('VIDEO_NO_INICIO')); }},9000);
-              v.onloadedmetadata=()=>{{ clearTimeout(timer); ok(); }};
-              v.oncanplay=()=>{{ clearTimeout(timer); ok(); }};
-              if(v.readyState>=2){{ clearTimeout(timer); ok(); }}
-            }});
-            await v.play();
+            try{{ await v.play(); }}catch(e){{ }}
+            const okVideo=await firmaEsperarVideo(v, 12000);
+            if(!okVideo) throw new Error('VIDEO_NEGRO_O_SIN_IMAGEN');
 
             if(wrap) wrap.classList.add('cam-live');
-            if(badge){{ badge.textContent='● EN VIVO'; badge.style.background='#16a34a'; }}
-            firmaSetMsg('✅ Cámara encendida. Ya debes ver tu rostro en pantalla. Presiona Capturar evidencia.', true);
+            firmaBadge('● EN VIVO','#16a34a');
+            firmaSetMsg('✅ Cámara encendida. Si ves tu rostro, presiona Capturar evidencia.', true);
+            return true;
           }}catch(e){{
+            if(firmaStream){{ firmaStream.getTracks().forEach(t=>t.stop()); firmaStream=null; }}
+            const vv=document.getElementById('firmaVideo'); if(vv) vv.srcObject=null;
+            const wrap2=document.querySelector('.cam-wrap'); if(wrap2) wrap2.classList.add('cam-error');
             let nombre=(e&&e.name)?e.name:((e&&e.message)?e.message:'Error');
             let ayuda='';
-            if(location.protocol==='http:' && !['localhost','127.0.0.1','::1'].includes(location.hostname)){{
-              ayuda=' El navegador bloquea cámara en HTTP. Ejecuta en http://127.0.0.1:5000 o publica en HTTPS.';
+            if(nombre==='CONTEXTO_NO_SEGURO'){{
+              ayuda=' Abre el sistema en http://127.0.0.1:5000 o en HTTPS. Chrome/Edge bloquean cámara en HTTP con IP/red.';
             }}else if(nombre==='NotAllowedError' || nombre==='PermissionDeniedError'){{
-              ayuda=' Dale PERMITIR al permiso de cámara desde el candado del navegador.';
+              ayuda=' Haz clic en el candado del navegador y cambia Cámara a PERMITIR.';
             }}else if(nombre==='NotFoundError' || nombre==='DevicesNotFoundError'){{
               ayuda=' No se encontró cámara conectada.';
             }}else if(nombre==='NotReadableError' || nombre==='TrackStartError'){{
-              ayuda=' La cámara está ocupada por Zoom/Meet/Teams u otra app. Ciérrala y vuelve a intentar.';
-            }}else if(nombre==='MEDIADEVICES_NO_DISPONIBLE'){{
-              ayuda=' Usa Chrome o Edge actualizado. La cámara solo funciona en HTTPS o localhost.';
+              ayuda=' La cámara está ocupada por otra app. Cierra Zoom/Meet/Teams/Cámara de Windows.';
+            }}else if(nombre==='OverconstrainedError' || nombre==='ConstraintNotSatisfiedError'){{
+              ayuda=' Tu cámara no soportó la configuración solicitada; vuelve a intentar.';
+            }}else if(nombre==='VIDEO_NEGRO_O_SIN_IMAGEN'){{
+              ayuda=' El permiso fue aceptado, pero no llegó imagen. Cierra otras apps de cámara y vuelve a intentar.';
             }}else{{
-              ayuda=' Revisa permisos de Windows/Chrome y vuelve a intentar.';
+              ayuda=' Revisa permisos de Windows: Configuración > Privacidad > Cámara > permitir aplicaciones de escritorio.';
             }}
-            if(badge){{ badge.textContent='● SIN CÁMARA'; badge.style.background='#dc2626'; }}
-            firmaSetMsg('❌ No se pudo activar la cámara: '+nombre+'.'+ayuda);
+            firmaBadge('● SIN CÁMARA','#dc2626');
+            firmaSetMsg('❌ No se pudo activar la cámara: '+nombre+'.'+ayuda+' También puedes usar el botón Cámara/archivo como respaldo.', false, true);
+            return false;
           }}finally{{
+            firmaStarting=false;
             btns.forEach(b=>b.disabled=false);
           }}
         }}
         function firmaCapture(){{
           const v=document.getElementById('firmaVideo'),c=document.getElementById('firmaCanvas'),img=document.getElementById('firmaPreview'),wrap=document.querySelector('.cam-wrap'),sound=document.getElementById('soundBox');
-          if(!v || !v.srcObject || !v.videoWidth){{ firmaSetMsg('Primero presiona Activar cámara y acepta el permiso.'); return false; }}
+          if(!v || !v.srcObject || !v.videoWidth){{ firmaSetMsg('Primero presiona Activar cámara y acepta el permiso.', false, true); return false; }}
           c.width=v.videoWidth; c.height=v.videoHeight;
           c.getContext('2d').drawImage(v,0,0,c.width,c.height);
-          img.src=c.toDataURL('image/png');
+          const data=c.toDataURL('image/png');
+          img.src=data;
           img.style.display='block';
           firmaCaptured=true;
-          if(wrap){{ wrap.classList.add('capture-ok'); wrap.classList.add('cam-live'); }}
+          if(wrap){{ wrap.classList.add('capture-ok'); wrap.classList.add('cam-live'); wrap.classList.remove('cam-error'); }}
           if(sound) sound.style.display='flex';
           firmaBeep();
           firmaSetMsg('✅ Evidencia facial capturada correctamente. Lista para firmar los documentos seleccionados.', true);
           return true;
         }}
+        function firmaLoadFileCam(input){{
+          const file=input && input.files ? input.files[0] : null;
+          if(!file) return;
+          const img=document.getElementById('firmaPreview'),wrap=document.querySelector('.cam-wrap'),sound=document.getElementById('soundBox');
+          const reader=new FileReader();
+          reader.onload=function(){{
+            if(img){{ img.src=reader.result; img.style.display='block'; }}
+            firmaCaptured=true;
+            if(wrap){{ wrap.classList.add('cam-live'); wrap.classList.add('capture-ok'); wrap.classList.remove('cam-error'); }}
+            if(sound) sound.style.display='flex';
+            firmaBadge('● EVIDENCIA','#16a34a');
+            firmaSetMsg('✅ Evidencia cargada correctamente desde cámara/archivo.', true);
+            firmaBeep();
+          }};
+          reader.readAsDataURL(file);
+        }}
         function firmaStopCam(){{
           if(firmaStream){{ firmaStream.getTracks().forEach(t=>t.stop()); firmaStream=null; }}
           const v=document.getElementById('firmaVideo');
-          if(v) v.srcObject=null;
+          if(v){{ v.pause(); v.srcObject=null; }}
           const wrap=document.querySelector('.cam-wrap'); if(wrap) wrap.classList.remove('cam-live');
-          const b=document.getElementById('liveBadge'); if(b){{ b.textContent='● DETENIDA'; b.style.background='#334155'; }}
+          firmaBadge('● DETENIDA','#334155');
           firmaSetMsg('Cámara detenida.');
         }}
         function updateFirmaCounter(){{const checks=[...document.querySelectorAll('.doc-sign-list .chk-doc-firma:checked')];const n=checks.length;const el=document.getElementById('firmaMassCounter');if(el)el.textContent='Se firmarán '+n+' documentos';const b=document.getElementById('docsBadge');if(b)b.textContent=n;const first=checks[0];if(first){{document.getElementById('stripDni').textContent=first.dataset.dni||'72244462';document.getElementById('stripTrabajador').textContent=(first.dataset.trabajador||'JOSE QUITO').toUpperCase();}}const f=document.getElementById('stripFecha');if(f){{const d=new Date();f.textContent=d.toLocaleDateString('es-PE')+' '+d.toLocaleTimeString('es-PE');}}}}
         function marcarTodosFirma(on){{document.querySelectorAll('.chk-doc-firma').forEach(x=>x.checked=on);updateFirmaCounter();}}
         function prepararFirmaMasiva(){{const ids=[...new Set([...document.querySelectorAll('.doc-sign-list .chk-doc-firma:checked')].map(x=>x.value))];if(ids.length===0){{alert('Selecciona al menos un contrato para firmar.');return false;}}if(!firmaCaptured){{const continuar=confirm('Aún no se capturó evidencia facial. ¿Deseas continuar igual?'); if(!continuar) return false;}}document.getElementById('documentos_lote').value=ids.join('\n');return confirm('Se firmarán/generarán '+ids.length+' documento(s). ¿Continuar?');}}
-        document.addEventListener('click',e=>{{const t=e.target.closest('button'); if(t && t.textContent.includes('Activar cámara')){{e.preventDefault(); firmaStartCam();}}}});
         document.addEventListener('change',e=>{{if(e.target.classList&&e.target.classList.contains('chk-doc-firma'))updateFirmaCounter();}});
-        document.addEventListener('DOMContentLoaded',()=>{{updateFirmaCounter(); firmaSetMsg('Presiona Activar cámara para encender la cámara.');}});
+        document.addEventListener('DOMContentLoaded',()=>{{updateFirmaCounter(); firmaResetVisual(); firmaSetMsg('Presiona Activar cámara para encender la cámara real. Debe abrirse en localhost/127.0.0.1 o HTTPS.');}});
         </script>
         """)
     elif sec=='nisira':
