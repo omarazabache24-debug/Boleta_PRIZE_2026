@@ -1,0 +1,14 @@
+MEJORAS APLICADAS - FIRMA / FACIAL / DIGITAL
+
+1. La pestaña Firma / Facial / Digital ahora también muestra las plantillas Word/PDF activas cargadas desde Plantilla Documentos.
+2. Estado automático de plantilla:
+   - Con archivo Word/PDF cargado: ACTIVO.
+   - Sin archivo cargado: INACTIVO.
+3. Se corrigieron colores/visibilidad del panel Documentos a firmar para que textos, iconos y tarjetas se vean como el boceto.
+4. Cámara mejorada:
+   - Activación automática al entrar a la pantalla.
+   - Botones Activar cámara / Capturar evidencia / Detener habilitados.
+   - Mensaje claro si el navegador bloquea cámara por usar HTTP; debe abrirse en HTTPS o localhost.
+   - Reintento con configuración genérica si falla cámara frontal.
+
+NOTA: Para registrar firma real de una plantilla, primero genera el Word combinado o cárgalo como documento del trabajador; la plantilla activa ya queda visible para validación visual en la bandeja de firma.
