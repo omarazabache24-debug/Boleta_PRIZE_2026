@@ -53,6 +53,24 @@ for d in (PERSIST_DIR, STATIC_DIR, UPLOAD_DIR, EXCEL_LOCAL_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
+
+@app.after_request
+def permitir_camara_firma(response):
+    # Permite cámara/micrófono en la propia página del sistema.
+    # IMPORTANTE: Chrome/Edge/Safari solo permiten cámara en HTTPS o en localhost/127.0.0.1.
+    # Para celular, publicar en Render/HTTPS o ejecutar local con APP_SSL=1 y abrir https://IP-DE-TU-PC:5000.
+    response.headers['Permissions-Policy'] = 'camera=(self), microphone=(self), fullscreen=(self)'
+    response.headers['Feature-Policy'] = "camera 'self'; microphone 'self'"
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
+
+
+def contexto_camara_seguro_texto():
+    return (
+        'La cámara web del navegador solo funciona en HTTPS o en localhost/127.0.0.1. '
+        'En PC local usa http://127.0.0.1:5000. En celular usa el enlace HTTPS de Render, '
+        'o ejecuta local con APP_SSL=1 y abre https://IP-DE-TU-PC:5000 aceptando el certificado.'
+    )
 app.secret_key = os.getenv("SECRET_KEY", "prize_documentos_ultra_2026")
 app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -751,6 +769,13 @@ def init_db():
             requerido TEXT DEFAULT 'SI',
             activo INTEGER DEFAULT 1
         )''')
+        for col, ddl in [
+            ('valor_default', 'ALTER TABLE contratacion_plantilla_campos ADD COLUMN valor_default TEXT'),
+            ('opciones', 'ALTER TABLE contratacion_plantilla_campos ADD COLUMN opciones TEXT'),
+            ('editable_admin', 'ALTER TABLE contratacion_plantilla_campos ADD COLUMN editable_admin INTEGER DEFAULT 1'),
+        ]:
+            try: con.execute(ddl)
+            except Exception: pass
         con.execute('''
         CREATE TABLE IF NOT EXISTS contratacion_plantilla_condiciones(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1221,7 +1246,16 @@ def generar_docx_desde_plantilla(pid, dni=''):
     valores = mapa_campos_trabajador(trabajador)
     # Asegura que todos los campos registrados existan, aunque no haya dato en trabajador.
     for c in campos:
-        valores.setdefault(c['campo_origen'] or c['nombre_campo'], '')
+        key = c['campo_origen'] or c['nombre_campo']
+        try:
+            tipo_campo = (c['tipo_campo'] or '').upper()
+            valor_default = c['valor_default'] if 'valor_default' in c.keys() else ''
+        except Exception:
+            tipo_campo, valor_default = '', ''
+        if tipo_campo in ('MANUAL','DESPLEGABLE') and valor_default:
+            valores[key] = valor_default
+        else:
+            valores.setdefault(key, '')
     cumple, detalle = plantilla_cumple_condiciones(pl, condiciones, trabajador)
     ruta = Path(pl['ruta_archivo']) if pl['ruta_archivo'] else None
     if ruta and ruta.exists() and ruta.suffix.lower() == '.docx':
@@ -1698,6 +1732,7 @@ body{background:#0f141a!important;color:var(--ink)!important;font-family:Inter,S
 .edit-overlay .modal-head h1,.edit-overlay label,.edit-overlay .actual-file{color:#111827!important;}
 .edit-overlay input,.edit-overlay select,.edit-overlay textarea{color:#111827!important;background:#fff!important;}
 
+.menu-item.doc-loaded{background:linear-gradient(135deg,#0f5132,#16a34a)!important;color:#fff!important;border-left:4px solid #86efac!important}.menu-item.doc-loaded .label,.menu-item.doc-loaded span{color:#fff!important}
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -1807,6 +1842,13 @@ def sidebar(active):
         docs_head = 'menu-title' + (' active' if active_type in docs_mod_keys else '')
         vac_head = 'menu-title' + (' active' if active == 'Gestion Vacacional' else '')
         con_head = 'menu-title' + (' active' if active_type == 'Gestion Contratacion' else '')
+        docs_count_con = 0
+        try:
+            with db() as _conx:
+                docs_count_con = _conx.execute('SELECT COUNT(*) FROM contratacion_docs').fetchone()[0]
+        except Exception:
+            docs_count_con = 0
+        archivos_cls = 'menu-item sub-mini doc-loaded ' + ('active' if active_sub == 'documentaria' else '') if docs_count_con else 'menu-item sub-mini ' + ('active' if active_sub == 'documentaria' else '')
         admin = f"""
         <div id='grp_admin' data-group='admin' class='{admin_cls}'>
           <button type='button' class='menu-title' onclick="toggleGroup('grp_admin')"><span>⚙️</span><span class='label'>Administrador</span><span class='chev'>∨</span></button>
@@ -1849,8 +1891,6 @@ def sidebar(active):
                 <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'flujo' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=flujo'><span>☰</span><span class='label'>Flujos de aprobación</span></a>
                 <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'carga' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=carga'><span>⬆️</span><span class='label'>Carga Masiva</span></a>
                 <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'reportes' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=reportes'><span>▤</span><span class='label'>Reportes</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/firma_digital'><span>📸</span><span class='label'>Firma / Facial / Digital</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/firma_digital#bandeja'><span>🧾</span><span class='label'>Bandeja de Firmas</span></a>
 
                 <div id='grp_con_maestros' data-group='con_maestros' class='menu-group nested {'force-open' if active_sub in ['maestros','observados','tipos_etapa','tipo_empleado','cargo','actualizar'] else ''}'>
                   <button type='button' class='menu-title {'active' if active_sub in ['maestros','observados','tipos_etapa','tipo_empleado','cargo','actualizar'] else ''}' onclick="toggleGroup('grp_con_maestros')"><span>💼</span><span class='label'>Datos Maestros</span><span class='chev'>∨</span></button>
@@ -1863,12 +1903,11 @@ def sidebar(active):
                     <a class='menu-item sub-mini {'active' if active_sub == 'actualizar' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=actualizar'><span>•</span><span class='label'>Actualizar Trabajador</span></a>
                   </div>
                 </div>
-                <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'anuncios' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=anuncios'><span>!</span><span class='label'>Anuncios</span></a>
                 <div id='grp_con_documentaria' data-group='con_documentaria' class='menu-group nested {'force-open' if active_sub in ['renovacion','documentaria','ficha','plantillas','nisira','descargas','firma'] else ''}'>
                   <button type='button' class='menu-title {'active' if active_sub in ['renovacion','documentaria','ficha','plantillas','nisira','descargas','firma'] else ''}' onclick="toggleGroup('grp_con_documentaria')"><span>🪪</span><span class='label'>Gestión Documentaria</span><span class='chev'>∨</span></button>
                   <div class='submenu'>
                     <a class='menu-item sub-mini {'active' if active_sub == 'renovacion' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=renovacion'><span>•</span><span class='label'>Renovación Contrato</span></a>
-                    <a class='menu-item sub-mini {'active' if active_sub == 'documentaria' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=documentaria'><span>•</span><span class='label'>Archivos Trabajador</span></a>
+                    <a class='{archivos_cls}' onclick='saveSideScroll()' href='/admin/contratacion?sec=documentaria'><span>•</span><span class='label'>Archivos Trabajador {'OK' if docs_count_con else ''}</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'ficha' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=ficha'><span>•</span><span class='label'>Ficha Trabajador</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'plantillas' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=plantillas'><span>•</span><span class='label'>Plantilla Documentos</span></a>
                     <a class='menu-item sub-mini {'active' if active_sub == 'firma' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=firma'><span>•</span><span class='label'>Firma / Facial / Digital</span></a>
@@ -1879,8 +1918,14 @@ def sidebar(active):
                 </div>
               </div>
             </div>
-            <a class='{cls_trab}' onclick='saveSideScroll()' href='/admin/trabajadores'><span>👥</span><span class='label'>Trabajadores</span></a>
-            <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><span>🔐</span><span class='label'>Usuarios y claves</span></a>
+            <div id='grp_trabajadores_admin' data-group='trabajadores_admin' class='menu-group nested {'force-open' if active in ['Trabajadores','Usuarios'] or active_sub == 'anuncios' else ''}'>
+              <button type='button' class='menu-title {'active' if active in ['Trabajadores','Usuarios'] or active_sub == 'anuncios' else ''}' onclick="toggleGroup('grp_trabajadores_admin')"><span>👥</span><span class='label'>Trabajadores / Usuarios y claves</span><span class='chev'>∨</span></button>
+              <div class='submenu'>
+                <a class='{cls_trab}' onclick='saveSideScroll()' href='/admin/trabajadores'><span>👥</span><span class='label'>Trabajadores</span></a>
+                <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><span>🔐</span><span class='label'>Usuarios y claves</span></a>
+                <a class='menu-item {'active' if active_type == 'Gestion Contratacion' and active_sub == 'anuncios' else ''}' onclick='saveSideScroll()' href='/admin/contratacion?sec=anuncios'><span>📢</span><span class='label'>Anuncios</span></a>
+              </div>
+            </div>
             <a class='{cls_test}' onclick='saveSideScroll()' href='/admin/modo_prueba'><span>🧪</span><span class='label'>Modo prueba y limpieza</span></a>
           </div>
         </div>"""
@@ -3262,7 +3307,7 @@ def trabajador_contratacion():
     <div class='hero'><div class='topbar'><div><h1>Gestión de <span class='accent'>Contrato</span></h1><div class='subtitle'>Visualiza y descarga tus contratos, anexos y documentos de incorporación o renovación.</div></div></div></div>
     <section class='grid'><div class='card mini'><div><h3>Trabajador</h3><b>{t['nombre'] if t else dni}</b></div><div class='ico'>👤</div></div><div class='card mini'><div><h3>Empresa</h3><b>{session.get('empresa') or (t['empresa'] if t else '')}</b></div><div class='ico'>🏢</div></div><div class='card mini'><div><h3>Documentos</h3><b>{len(docs)}</b></div><div class='ico'>🧾</div></div>
     <div id='mis-contratos' class='card span-12'><h2>Mis documentos contractuales</h2><div class='table-wrap'><table><tr><th>Documento</th><th>Etapa</th><th>Estado</th><th>Fecha</th><th>Acción</th></tr>{rows or '<tr><td colspan=5>No hay documentos de contratación cargados.</td></tr>'}</table></div></div></section>"""
-    return render_page(content, active='Gestion Contratacion:documentaria')
+    return render_page(content, active=f'Gestion Contratacion:{sec}')
 
 @app.route('/contratacion/ver/<int:cid>')
 @worker_required
@@ -3295,8 +3340,8 @@ def contratacion_plantilla_detalle(pid):
       <a class='tpl-tab {'active' if tab=='condiciones' else ''}' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='condiciones')}'>Condiciones</a>
     </div>"""
     if tab=='campos':
-        rows=''.join([f"<tr><td><span class='state-pill {'ok' if c['activo'] else 'bad'}'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{html.escape(c['descripcion'] or '')}</td><td>{html.escape(c['tipo_campo'] or '')}</td><td>{html.escape(c['nombre_campo'] or '')}</td><td><code>{{{{{html.escape(c['campo_origen'] or '')}}}}}</code></td><td>{html.escape(c['tipo_dato'] or '')}</td><td>{html.escape(c['requerido'] or '')}</td></tr>" for c in campos])
-        body=f"""<div class='tpl-toolbar schema-toolbar'><span>Campos de correspondencia para usar en Word como <b>«CampoOrigen»</b> o <b>{{{{CampoOrigen}}}}</b>.</span><span><a class='c-btn gray' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕ Campos de Esquema</a> <a class='c-btn gray' href='{url_for('contratacion_campos_esquema_excel',pid=pid)}'>⬇ Descargar campos</a></span></div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="7">Sin campos registrados.</td></tr>'}</table></div>"""
+        rows=''.join([f"<tr><td><a class='icon-btn small' href='{url_for('contratacion_campo_editar',pid=pid,campo_id=c['id'])}'>Editar</a></td><td><span class='state-pill {'ok' if c['activo'] else 'bad'}'>{'ACTIVE' if c['activo'] else 'INACTIVE'}</span></td><td>{html.escape(c['descripcion'] or '')}</td><td>{html.escape(c['tipo_campo'] or '')}</td><td>{html.escape(c['nombre_campo'] or '')}</td><td><code>{{{{{html.escape(c['campo_origen'] or '')}}}}}</code></td><td>{html.escape(c['tipo_dato'] or '')}</td><td>{html.escape(c['requerido'] or '')}</td></tr>" for c in campos])
+        body=f"""<div class='tpl-toolbar schema-toolbar'><span>Campos de correspondencia para usar en Word como <b>«CampoOrigen»</b> o <b>{{{{CampoOrigen}}}}</b>.</span><span><a class='c-btn' href='{url_for('contratacion_campo_editar',pid=pid)}'>+ Crear Campo</a> <a class='c-btn gray' href='{url_for('contratacion_campos_esquema',pid=pid)}'>⌕ Campos de Esquema</a> <a class='c-btn gray' href='{url_for('contratacion_campos_esquema_excel',pid=pid)}'>⬇ Descargar campos</a></span></div><div class='tpl-table-wrap'><table class='tpl-table'><tr><th>Editar</th><th>Estado</th><th>Descripción</th><th>Tipo Campo</th><th>Nombre Campo</th><th>Campo Origen</th><th>Tipo de Dato</th><th>Requerido</th></tr>{rows or '<tr><td colspan="8">Sin campos registrados.</td></tr>'}</table></div>"""
     elif tab=='condiciones':
         crear_btn = f"<a class='c-btn' href='{url_for('contratacion_condicion_editar',pid=pid)}'>⊕ Crear Condición</a>" if condicion_habilitada else "<span class='c-btn gray disabled'>Condiciones deshabilitadas</span>"
         info = "" if condicion_habilitada else "<div class='notice'>Para crear o editar condiciones primero entra al lápiz de <b>Editar Plantilla</b> y cambia el campo <b>Condición</b> a <b>CONDICIONES</b>.</div>"
@@ -3408,6 +3453,38 @@ def contratacion_plantilla_detalle(pid):
     return render_page(content, active='Gestion Contratacion:plantillas')
 
 
+@app.route('/admin/contratacion/plantilla/<int:pid>/campo', defaults={'campo_id': None}, methods=['GET','POST'])
+@app.route('/admin/contratacion/plantilla/<int:pid>/campo/<int:campo_id>', methods=['GET','POST'])
+@admin_required
+def contratacion_campo_editar(pid, campo_id=None):
+    with db() as con:
+        pl=con.execute('SELECT * FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
+        campo=con.execute('SELECT * FROM contratacion_plantilla_campos WHERE id=? AND plantilla_id=?',(campo_id,pid)).fetchone() if campo_id else None
+    if not pl: abort(404)
+    if request.method == 'POST':
+        nombre=clean(request.form.get('nombre_campo')) or 'Campo Manual'
+        origen=clean(request.form.get('campo_origen')) or re.sub(r'[^A-Za-z0-9_]','',nombre.replace(' ',''))
+        tipo_campo=clean(request.form.get('tipo_campo')) or 'Origen de Datos'
+        tipo_dato=clean(request.form.get('tipo_dato')) or 'Text'
+        requerido=clean(request.form.get('requerido')) or 'SI'
+        activo=1 if request.form.get('activo','1')=='1' else 0
+        descripcion=clean(request.form.get('descripcion'))
+        valor_default=clean(request.form.get('valor_default'))
+        opciones=clean(request.form.get('opciones'))
+        with db() as con:
+            if campo_id:
+                con.execute("UPDATE contratacion_plantilla_campos SET descripcion=?, tipo_campo=?, nombre_campo=?, campo_origen=?, tipo_dato=?, requerido=?, activo=?, valor_default=?, opciones=? WHERE id=? AND plantilla_id=?", (descripcion,tipo_campo,nombre,origen,tipo_dato,requerido,activo,valor_default,opciones,campo_id,pid))
+            else:
+                con.execute("INSERT INTO contratacion_plantilla_campos(plantilla_id,descripcion,tipo_campo,nombre_campo,campo_origen,tipo_dato,requerido,activo,valor_default,opciones) VALUES(?,?,?,?,?,?,?,?,?,?)", (pid,descripcion,tipo_campo,nombre,origen,tipo_dato,requerido,activo,valor_default,opciones))
+            con.commit()
+        flash('Campo guardado y enlazado a la plantilla Word.', 'ok')
+        return redirect(url_for('contratacion_plantilla_detalle',pid=pid,tab='campos'))
+    def cv(k, default=''):
+        try: return campo[k] if campo and k in campo.keys() else default
+        except Exception: return default
+    campo_options=''.join([f"<option value='{html.escape(n)}' data-origen='{html.escape(o)}' data-tipo='{html.escape(td)}'>{html.escape(n)} / {{{{{html.escape(o)}}}}}</option>" for n,o,td in CONTRATACION_CAMPOS_CORRESPONDENCIA])
+    content=f"""<div class='cond-overlay'><div class='cond-modal'><h2>Campo de Plantilla</h2><p class='muted2'>Configura campos automaticos desde Excel, manuales o desplegables. En Word usa {{{{CampoOrigen}}}}.</p><form method='post' class='cond-form'><label>Campo base</label><input list='campos_base' id='campoBase' oninput='autoCampoBase()'><datalist id='campos_base'>{campo_options}</datalist><label>Nombre visible</label><input name='nombre_campo' id='nombreCampo' value='{html.escape(cv('nombre_campo'))}' required><label>Campo origen Word</label><input name='campo_origen' id='campoOrigen' value='{html.escape(cv('campo_origen'))}' required><label>Tipo campo</label><select name='tipo_campo'><option {'selected' if cv('tipo_campo')=='Origen de Datos' else ''}>Origen de Datos</option><option {'selected' if cv('tipo_campo')=='Manual' else ''}>Manual</option><option {'selected' if cv('tipo_campo')=='Desplegable' else ''}>Desplegable</option></select><label>Tipo dato</label><select name='tipo_dato' id='tipoDato'><option {'selected' if cv('tipo_dato')=='Text' else ''}>Text</option><option {'selected' if cv('tipo_dato')=='Number' else ''}>Number</option><option {'selected' if cv('tipo_dato')=='DateTime' else ''}>DateTime</option></select><label>Valor manual/default</label><input name='valor_default' value='{html.escape(cv('valor_default'))}' placeholder='Ej: Básico / 1500 / 18.05.2026'><label>Opciones desplegable</label><textarea name='opciones' placeholder='Una opción por línea: Básico&#10;Intermedio&#10;Avanzado'>{html.escape(cv('opciones'))}</textarea><label>Requerido</label><select name='requerido'><option {'selected' if cv('requerido')=='SI' else ''}>SI</option><option {'selected' if cv('requerido')=='NO' else ''}>NO</option></select><label>Estado</label><select name='activo'><option value='1' {'selected' if str(cv('activo','1'))!='0' else ''}>ACTIVO</option><option value='0' {'selected' if str(cv('activo','1'))=='0' else ''}>INACTIVO</option></select><label>Descripcion</label><textarea name='descripcion'>{html.escape(cv('descripcion'))}</textarea><div class='modal-actions'><a class='c-btn gray' href='{url_for('contratacion_plantilla_detalle',pid=pid,tab='campos')}'>Cancelar</a><button class='c-btn'>Guardar campo</button></div></form></div></div><script>function autoCampoBase(){{const inp=document.getElementById('campoBase'); const op=[...document.querySelectorAll('#campos_base option')].find(o=>o.value===inp.value); if(!op)return; document.getElementById('nombreCampo').value=op.value.split(' / ')[0]; document.getElementById('campoOrigen').value=op.dataset.origen; document.getElementById('tipoDato').value=op.dataset.tipo||'Text';}}</script>"""
+    return render_page(content, active='Gestion Contratacion:plantillas')
 @app.route('/admin/contratacion/plantilla/<int:pid>/condicion', defaults={'cid': None}, methods=['GET','POST'])
 @app.route('/admin/contratacion/plantilla/<int:pid>/condicion/<int:cid>', methods=['GET','POST'])
 @admin_required
@@ -3751,7 +3828,7 @@ def contratacion_plantilla_historial(pid):
       <div class='hist-info'>Historial de cargas de contratos relacionado con: <b>{h(pl['nombre_plantilla'])}</b>. Desde esta ventana puedes descargar cada plantilla en Word.</div>
       <div class='hist-table-wrap'><table class='hist-table'>
         <tr><th>Fecha Registro</th><th>Creado por</th><th>Nombre Archivo</th><th>Tipo Documento</th><th>Identificador</th><th>Estado</th><th>Descarga</th></tr>
-        {rows or '<tr><td colspan="7">No hay historial de cargas.</td></tr>'}
+        {rows or '<tr><td colspan="8">No hay historial de cargas.</td></tr>'}
       </table></div>
     </div></div>
     """
@@ -3882,8 +3959,9 @@ def firma_camara_demo():
     <style>.camera-box{background:#0f172a;border-radius:18px;padding:16px;display:grid;place-items:center;min-height:360px}.camera-box video,.camera-box img{max-width:100%;border-radius:14px;background:#000}</style>
     <script>
     let stream=null;
-    async function startCamera(){const st=document.getElementById('camStatus');try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});document.getElementById('video').srcObject=stream;st.textContent='Cámara activa correctamente.';}catch(e){st.textContent='No se pudo activar la cámara. Revisa permisos del navegador o usa HTTPS/localhost.';}}
+    async function startCamera(){const st=document.getElementById('camStatus');try{if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error('Navegador sin getUserMedia');const tries=[{video:{facingMode:{ideal:'user'},width:{ideal:1280},height:{ideal:720}},audio:false},{video:{width:{ideal:640},height:{ideal:480}},audio:false},{video:true,audio:false}];let last=null;for(const cfg of tries){try{stream=await navigator.mediaDevices.getUserMedia(cfg);break;}catch(e){last=e;}}if(!stream)throw(last||new Error('Sin cámara'));const v=document.getElementById('video');v.srcObject=stream;await v.play();st.textContent='Cámara activa correctamente.';}catch(e){st.textContent='No se pudo activar la cámara: '+(e.name||e.message)+'. Revisa permisos, HTTPS/localhost o cierra otras apps que usen cámara.';}}
     function capturePhoto(){const v=document.getElementById('video'),c=document.getElementById('canvas'),img=document.getElementById('preview');if(!v.videoWidth){document.getElementById('camStatus').textContent='Primero activa la cámara.';return;}c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);img.src=c.toDataURL('image/png');img.style.display='block';}
+    document.addEventListener('DOMContentLoaded',()=>setTimeout(startCamera,600));
     </script>
     """
     return render_page(content, active='Gestion Contratacion:firma')
@@ -3928,11 +4006,65 @@ def firma_publica_token(token):
     contrato_info = f"{html.escape(doc['tipo_doc'])} - {html.escape(doc['archivo_nombre'] or '')}" if doc else 'Contrato/documento de contratación'
     content = f"""
     <!doctype html><html lang='es'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Firma digital / facial</title>
-    <style>body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#0f172a;color:#111827}}.wrap{{max-width:920px;margin:0 auto;padding:22px}}.card{{background:#fff;border-radius:22px;padding:22px;box-shadow:0 18px 45px #0005;margin:18px 0}}h1{{margin:0;color:#0f172a}}.muted{{color:#64748b;line-height:1.5}}.badge{{display:inline-block;background:#fef3c7;color:#92400e;border-radius:999px;padding:8px 12px;font-weight:800}}video,img{{width:100%;max-height:430px;background:#000;border-radius:18px;object-fit:contain}}.camera{{background:#111827;border-radius:22px;padding:14px}}button,.btn{{border:0;border-radius:12px;padding:13px 16px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-block}}.primary{{background:#2563eb;color:white}}.green{{background:#16a34a;color:white}}.gray{{background:#475569;color:white}}input[type=text]{{width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:12px;font-size:16px;box-sizing:border-box}}.actions{{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}}.ok{{background:#dcfce7;color:#166534;padding:12px;border-radius:12px;font-weight:900}}label{{font-weight:800}}canvas{{display:none}}@media(max-width:700px){{.wrap{{padding:12px}}.card{{padding:16px;border-radius:16px}}}}</style></head>
+    <style>body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#0f172a;color:#111827}}.wrap{{max-width:920px;margin:0 auto;padding:22px}}.card{{background:#fff;border-radius:22px;padding:22px;box-shadow:0 18px 45px #0005;margin:18px 0}}h1{{margin:0;color:#0f172a}}.muted{{color:#64748b;line-height:1.5}}.badge{{display:inline-block;background:#fef3c7;color:#92400e;border-radius:999px;padding:8px 12px;font-weight:800}}video,img{{width:100%;min-height:330px;max-height:430px;background:#000;border-radius:18px;object-fit:cover}}.camera{{background:#111827;border-radius:22px;padding:14px}}button,.btn{{border:0;border-radius:12px;padding:13px 16px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-block}}.primary{{background:#2563eb;color:white}}.green{{background:#16a34a;color:white}}.gray{{background:#475569;color:white}}input[type=text]{{width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:12px;font-size:16px;box-sizing:border-box}}.actions{{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}}.ok{{background:#dcfce7;color:#166534;padding:12px;border-radius:12px;font-weight:900}}label{{font-weight:800}}canvas{{display:none}}@media(max-width:700px){{.wrap{{padding:12px}}.card{{padding:16px;border-radius:16px}}}}</style></head>
     <body><div class='wrap'><div class='card'><h1>Firma de contrato con cámara</h1><p class='muted'>Trabajador: <b>{html.escape(sol['trabajador'] or '')}</b> · DNI: <b>{html.escape(sol['dni'] or '')}</b></p><p>Documento: <b>{contrato_info}</b></p><span class='badge'>Estado: {html.escape(estado)}</span></div>
     {"<div class='card ok'>✅ Firma registrada correctamente. Ya puede cerrar esta ventana.</div>" if ok else ""}
-    <form method='post' class='card' onsubmit='return prepararEnvio()'><h2>1. Activar cámara y capturar evidencia</h2><p class='muted'>Funciona en laptop y celular. En celular usa la cámara frontal cuando el navegador lo permite.</p><div class='camera'><video id='video' autoplay playsinline></video><canvas id='canvas'></canvas><img id='preview' style='display:none'></div><input type='hidden' name='captura_base64' id='captura_base64'><input type='hidden' name='camara_origen' id='camara_origen' value='WEB'><div class='actions'><button type='button' class='primary' onclick='startCamera()'>📷 Activar cámara</button><button type='button' class='green' onclick='capturePhoto()'>✅ Capturar foto</button><button type='button' class='gray' onclick='stopCamera()'>Detener cámara</button></div><p id='camStatus' class='muted'></p><h2>2. Aceptación / firma digital simple</h2><p class='muted'>Declaro que soy el titular del DNI indicado, que he revisado el documento y acepto registrar mi firma/aceptación electrónica con evidencia de cámara.</p><label><input type='checkbox' name='acepta' value='1' required> Acepto firmar/validar este documento</label><br><br><label>Nombre completo como firma</label><input type='text' name='firma_texto' value='{html.escape(sol['trabajador'] or '')}' required><div class='actions'><button class='green' type='submit'>✍️ Registrar firma</button></div></form></div>
-    <script>let stream=null,captured=false;async function startCamera(){{const st=document.getElementById('camStatus');try{{if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){{st.textContent='Tu navegador no permite cámara en este contexto. Usa Chrome/Edge actualizado con HTTPS o localhost.';return;}}const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);document.getElementById('camara_origen').value=isMobile?'CELULAR':'LAPTOP/PC';stream=await navigator.mediaDevices.getUserMedia({{video:{{facingMode:'user',width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}});const v=document.getElementById('video');v.srcObject=stream;await v.play();st.textContent='Cámara activa. Ahora presiona Capturar foto.';}}catch(e){{st.textContent='No se pudo activar cámara: '+(e&&e.name?e.name:'permiso denegado')+'. Revisa permisos, usa HTTPS/localhost y cierra otras apps que usen la cámara.';}}}}function capturePhoto(){{const v=document.getElementById('video'),c=document.getElementById('canvas'),img=document.getElementById('preview'),st=document.getElementById('camStatus');if(!v.videoWidth){{st.textContent='Primero activa la cámara.';return;}}c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);const data=c.toDataURL('image/png');document.getElementById('captura_base64').value=data;img.src=data;img.style.display='block';captured=true;st.textContent='Foto capturada correctamente.';}}function stopCamera(){{if(stream){{stream.getTracks().forEach(t=>t.stop());}}}}function prepararEnvio(){{if(!captured||!document.getElementById('captura_base64').value){{alert('Primero capture la foto de evidencia.');return false;}}return true;}}</script>
+    <form method='post' class='card' onsubmit='return prepararEnvio()'><h2>1. Cámara facial y captura de evidencia</h2><p class='muted'>La cámara intenta encender automáticamente. En celular debe abrirse en HTTPS; si es local con IP usa APP_SSL=1.</p><div class='camera'><video id='video' autoplay playsinline muted></video><canvas id='canvas'></canvas><img id='preview' style='display:none'></div><input type='hidden' name='captura_base64' id='captura_base64'><input type='hidden' name='camara_origen' id='camara_origen' value='WEB'><div class='actions'><button type='button' class='primary' onclick='startCamera(event)'>🔄 Reintentar cámara</button><button type='button' class='green' onclick='capturePhoto()'>✅ Capturar foto</button><button type='button' class='gray' onclick='stopCamera()'>Detener cámara</button><label class='btn gray' style='cursor:pointer'>📁 Cámara/archivo<input id='fileCamFallback' type='file' accept='image/*' capture='user' onchange='loadFileFallback(this)' style='display:none'></label></div><p id='camStatus' class='muted'></p><h2>2. Aceptación / firma digital simple</h2><p class='muted'>Declaro que soy el titular del DNI indicado, que he revisado el documento y acepto registrar mi firma/aceptación electrónica con evidencia de cámara.</p><label><input type='checkbox' name='acepta' value='1' required> Acepto firmar/validar este documento</label><br><br><label>Nombre completo como firma</label><input type='text' name='firma_texto' value='{html.escape(sol['trabajador'] or '')}' required><div class='actions'><button class='green' type='submit'>✍️ Registrar firma</button></div></form></div>
+    <script>
+let stream=null,captured=false,starting=false;
+function stMsg(t,ok=false,err=false){{const st=document.getElementById('camStatus'); if(st){{st.innerHTML=t; st.style.fontWeight='900'; st.style.color=err?'#b91c1c':(ok?'#15803d':'#64748b');}}}}
+function secureOk(){{return window.isSecureContext || location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);}}
+function isMobile(){{return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);}}
+async function waitVideo(v,ms=12000){{const ini=Date.now(); while(Date.now()-ini<ms){{if(v.videoWidth&&v.videoHeight&&v.readyState>=2)return true; await new Promise(r=>setTimeout(r,150));}} return false;}}
+async function startCamera(ev){{
+  if(ev)ev.preventDefault(); if(starting)return false; starting=true;
+  const v=document.getElementById('video'); const preview=document.getElementById('preview');
+  try{{
+    captured=false; document.getElementById('captura_base64').value=''; if(preview)preview.style.display='none';
+    if(!secureOk()) throw new Error('CONTEXTO_NO_SEGURO');
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) throw new Error('MEDIADEVICES_NO_DISPONIBLE');
+    if(stream){{stream.getTracks().forEach(t=>t.stop()); stream=null;}}
+    document.getElementById('camara_origen').value=isMobile()?'CELULAR':'LAPTOP/PC';
+    v.muted=true; v.autoplay=true; v.playsInline=true; v.setAttribute('playsinline',''); v.setAttribute('webkit-playsinline',''); v.style.display='block';
+    stMsg('Activando cámara real... acepta el permiso del navegador.');
+    const tries=[
+      {{video:{{facingMode:{{ideal:'user'}},width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}},
+      {{video:{{facingMode:'user'}},audio:false}},
+      {{video:{{width:{{ideal:640}},height:{{ideal:480}}}},audio:false}},
+      {{video:true,audio:false}}
+    ];
+    let last=null;
+    for(const cfg of tries){{try{{stream=await navigator.mediaDevices.getUserMedia(cfg); break;}}catch(e){{last=e;}}}}
+    if(!stream) throw(last||new Error('SIN_CAMARA'));
+    v.srcObject=stream;
+    try{{await v.play();}}catch(e){{}}
+    if(!await waitVideo(v)) throw new Error('VIDEO_NEGRO_O_SIN_IMAGEN');
+    stMsg('✅ Cámara activa. Coloca el rostro al centro y presiona <b>Capturar foto</b>.',true);
+    return true;
+  }}catch(e){{
+    if(stream){{stream.getTracks().forEach(t=>t.stop()); stream=null;}} if(v)v.srcObject=null;
+    const n=(e&&e.name)?e.name:((e&&e.message)?e.message:'Error'); let ayuda='';
+    if(n==='CONTEXTO_NO_SEGURO') ayuda=' En celular no abre cámara con HTTP/IP local. Usa HTTPS de Render o ejecuta local con APP_SSL=1 y entra por https://IP-DE-TU-PC:5000.';
+    else if(n==='NotAllowedError'||n==='PermissionDeniedError') ayuda=' Dale PERMITIR a Cámara en el candado del navegador.';
+    else if(n==='NotReadableError'||n==='TrackStartError') ayuda=' Cierra Zoom/Meet/Teams/Cámara de Windows u otra app que esté usando la cámara.';
+    else if(n==='NotFoundError'||n==='DevicesNotFoundError') ayuda=' No se encontró cámara conectada.';
+    else ayuda=' Revisa permisos de cámara del navegador y del sistema operativo.';
+    stMsg('❌ No se pudo activar cámara: '+n+'.'+ayuda+' También puedes usar el botón <b>Cámara/archivo</b> como respaldo.',false,true);
+    return false;
+  }}finally{{starting=false;}}
+}}
+function capturePhoto(){{
+  const v=document.getElementById('video'),c=document.getElementById('canvas'),img=document.getElementById('preview');
+  if(!v||!v.srcObject||!v.videoWidth){{stMsg('Primero activa la cámara y acepta el permiso.',false,true);return false;}}
+  c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  const data=c.toDataURL('image/jpeg',0.88); document.getElementById('captura_base64').value=data;
+  img.src=data;img.style.display='block';captured=true;stMsg('✅ Foto capturada correctamente. Ya puedes registrar la firma.',true);return true;
+}}
+function loadFileFallback(input){{const f=input&&input.files?input.files[0]:null; if(!f)return; const rd=new FileReader(); rd.onload=()=>{{document.getElementById('captura_base64').value=rd.result; const img=document.getElementById('preview'); img.src=rd.result; img.style.display='block'; captured=true; document.getElementById('camara_origen').value=isMobile()?'CELULAR-FALLBACK':'PC-FALLBACK'; stMsg('✅ Evidencia cargada desde cámara/archivo. Ya puedes registrar la firma.',true);}}; rd.readAsDataURL(f);}}
+function stopCamera(){{if(stream){{stream.getTracks().forEach(t=>t.stop()); stream=null;}} const v=document.getElementById('video'); if(v){{v.pause(); v.srcObject=null;}} stMsg('Cámara detenida.');}}
+function prepararEnvio(){{if(!captured||!document.getElementById('captura_base64').value){{alert('Primero capture la foto de evidencia.');return false;}}return true;}}
+document.addEventListener('DOMContentLoaded',()=>{{stMsg(secureOk()?'Intentando encender cámara automáticamente...':'⚠️ Para celular necesitas HTTPS. Usa Render o APP_SSL=1 local.'); setTimeout(()=>{{if(!captured)startCamera();}},350);}});
+</script>
     </body></html>"""
     return content
 
@@ -3976,7 +4108,8 @@ def admin_contratacion():
             esquema = clean(request.form.get('esquema')) or 'Trabajador Contrato Laboral'
             condicion = clean(request.form.get('condicion')) or 'SIN CONDICIONES'
             version = clean(request.form.get('version')) or 'Version 01'
-            activo = 1 if request.form.get('activo','1') == '1' else 0
+            # REGLA PRO: si se carga o existe archivo Word/PDF => ACTIVO; si no hay archivo => INACTIVO.
+            # Esto evita que una plantilla sin documento aparezca como lista para firma.
             f = request.files.get('archivo')
             ruta = None; archivo_nombre = None
             carpeta = UPLOAD_DIR/'contratacion'/'plantillas'; carpeta.mkdir(parents=True, exist_ok=True)
@@ -3989,11 +4122,13 @@ def admin_contratacion():
                     row = con.execute('SELECT ruta_archivo,archivo_nombre FROM contratacion_plantillas WHERE id=?',(pid,)).fetchone()
                     if not ruta and row:
                         ruta=row['ruta_archivo']; archivo_nombre=row['archivo_nombre']
+                    activo = 1 if ruta else 0
                     con.execute('''UPDATE contratacion_plantillas SET nombre_plantilla=?,descripcion=?,tipo_documento=?,esquema=?,condicion=?,version=?,activo=?,archivo_nombre=?,ruta_archivo=?,fecha_actualizacion=? WHERE id=?''', (nombre,descripcion,tipo_doc,esquema,condicion,version,activo,archivo_nombre,ruta,now_txt(),pid))
                     detectados = sincronizar_campos_desde_word(pid, ruta) if ruta else 0
                     flash(('Plantilla actualizada correctamente. Campos Word detectados: ' + str(detectados)) if detectados else 'Plantilla actualizada correctamente.', 'ok')
                     redir = url_for('contratacion_plantilla_detalle', pid=pid, tab='contenido')
                 else:
+                    activo = 1 if ruta else 0
                     cur=con.execute('''INSERT INTO contratacion_plantillas(nombre_plantilla,descripcion,tipo_documento,esquema,condicion,version,activo,archivo_nombre,ruta_archivo,fecha_creacion,fecha_actualizacion,creado_por) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''', (nombre,descripcion,tipo_doc,esquema,condicion,version,activo,archivo_nombre,ruta,now_txt(),now_txt(),marca_carga(session.get('admin_user','admin'))))
                     nuevo_id=cur.lastrowid
                     detectados = sincronizar_campos_desde_word(nuevo_id, ruta) if ruta else 0
@@ -4006,6 +4141,30 @@ def admin_contratacion():
                     redir = url_for('contratacion_plantilla_detalle', pid=nuevo_id, tab='contenido')
                 con.commit()
             return redirect(redir)
+        if accion == 'generar_docs_plantillas':
+            dni = normalizar_dni(request.form.get('dni_plantilla_firma'))
+            trab = get_trabajador(dni)
+            ids_raw = request.form.getlist('plantillas_firma')
+            creados = 0
+            if not dni or not trab:
+                flash('Selecciona un trabajador valido para generar documentos desde plantillas.', 'error')
+                return redirect(url_for('admin_contratacion', sec='firma'))
+            with db() as con:
+                for pid_raw in ids_raw:
+                    if not str(pid_raw).isdigit():
+                        continue
+                    plx = con.execute('SELECT * FROM contratacion_plantillas WHERE id=? AND activo=1', (int(pid_raw),)).fetchone()
+                    if not plx:
+                        continue
+                    nombre_doc = plx['archivo_nombre'] or (plx['nombre_plantilla'] + '.docx')
+                    con.execute('INSERT INTO contratacion_docs(dni,trabajador,empresa,etapa,tipo_doc,estado,archivo_nombre,ruta_archivo,fecha_registro,uploaded_by) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                                (dni, trab['nombre'], trab['empresa'], 'Generado desde plantilla', plx['tipo_documento'] or plx['nombre_plantilla'], 'GENERADO - PENDIENTE FIRMA', nombre_doc, plx['ruta_archivo'], now_txt(), marca_carga(session.get('admin_user','admin'))))
+                    con.execute('INSERT INTO eventos_documento(dni,evento,fecha,detalle) VALUES(?,?,?,?)', (dni, 'Documento generado desde plantilla', now_txt(), f"{plx['nombre_plantilla']} listo para firma facial/digital."))
+                    creados += 1
+                con.commit()
+            flash(f'Documentos generados desde plantillas: {creados}. Ahora ya aparecen abajo para marcarlos y enviarlos a firma masiva.', 'ok' if creados else 'error')
+            return redirect(url_for('admin_contratacion', sec='firma'))
+
         if accion == 'firma_masiva':
             ids_raw = request.form.get('documentos_lote') or ''
             metodo = clean(request.form.get('metodo_masivo')) or 'FACIAL + FIRMA DIGITAL'
@@ -4344,6 +4503,22 @@ def admin_contratacion():
         rows_docs_lote = ''
         for d in docs[:250]:
             rows_docs_lote += f"""<tr><td><input type='checkbox' class='chk-doc-firma' value='{d['id']}' data-dni='{h(d['dni'])}' data-trabajador='{h(d['trabajador'])}' data-tipo='{h(d['tipo_doc'])}'></td><td>{d['id']}</td><td>{h(d['dni'])}</td><td>{h(d['trabajador'])}</td><td>{h(d['tipo_doc'])}</td><td><span class='estado-soft'>{h(d['estado'] or '')}</span></td></tr>"""
+        doc_cards_firma = ''
+        for d in docs[:250]:
+            doc_cards_firma += f"""<label class='doc-sign-card'><input type='checkbox' class='chk-doc-firma' value='{d['id']}' data-dni='{h(d['dni'])}' data-trabajador='{h(d['trabajador'])}' data-tipo='{h(d['tipo_doc'])}' checked><span class='doc-icon'>W</span><span class='doc-info'><b>{h(d['tipo_doc'] or 'DOCUMENTO')}</b><small>{h(d['trabajador'] or '')} · DNI {h(d['dni'] or '')}</small><small>Estado: {h(d['estado'] or 'Pendiente')}</small></span></label>"""
+        # También mostrar las plantillas Word/PDF activas en la pestaña Firma/Facial/Digital.
+        # Si cargaste un contrato en Plantilla Documentos, aparece aquí inmediatamente.
+        for plf in plantillas[:250]:
+            tiene_archivo = bool(plf['ruta_archivo'] or plf['archivo_nombre'])
+            if plf['activo'] and tiene_archivo:
+                ext = (plf['archivo_nombre'] or '').split('.')[-1].upper() if (plf['archivo_nombre'] or '') else 'DOCX'
+                doc_cards_firma += f"""<label class='doc-sign-card plantilla-sign-card'><input type='checkbox' class='chk-doc-firma chk-plantilla-firma' value='PL{plf['id']}' data-dni='74324033' data-trabajador='TRABAJADOR SELECCIONADO' data-tipo='{h(plf['tipo_documento'] or plf['nombre_plantilla'])}' checked><span class='doc-icon'>{'PDF' if ext == 'PDF' else 'W'}</span><span class='doc-info'><b>{h(plf['archivo_nombre'] or plf['nombre_plantilla'] or 'PLANTILLA')}</b><small>Tipo: {h(plf['tipo_documento'] or 'CONTRATO TRABAJADOR')}</small><small>Estado: ACTIVO · Lista para firma</small></span></label>"""
+
+        rows_plantillas_firma = ''
+        for plf in plantillas[:250]:
+            estado_pl = 'ACTIVA' if plf['activo'] else 'INACTIVA'
+            rows_plantillas_firma += f"""<tr><td><input type='checkbox' name='plantillas_firma' value='{plf['id']}' {'disabled' if not plf['activo'] else ''}></td><td>{plf['id']}</td><td>{h(plf['nombre_plantilla'])}</td><td>{h(plf['tipo_documento'])}</td><td>{h(plf['archivo_nombre'])}</td><td><span class='{'ok-chip' if plf['activo'] else 'pend-chip'}'>{estado_pl}</span></td></tr>"""
+
         rows_firma = ''
         for r in firma_sols:
             token = r['firma_token'] if 'firma_token' in r.keys() and r['firma_token'] else ''
@@ -4360,76 +4535,99 @@ def admin_contratacion():
             </tr>"""
         camara_demo_url = url_for('firma_camara_demo')
         content=wrap(f"""
-        <div class='firma-page'>
-          <div class='firma-head'>
-            <div><h2>📸 Firma / Facial / Digital</h2><p>Control de firma de contratos con cámara de laptop/celular, envío individual o masivo y trazabilidad completa.</p></div>
-            <div class='firma-head-actions'><a class='c-btn' href='{camara_demo_url}' target='_blank'>Probar cámara</a><a class='c-btn gray' href='/admin/firma/configuracion'>Configurar proveedor/API</a></div>
+        <div class='firma-page firma-boceto-final'>
+          <div class='firma-topbar'>
+            <div class='title-wrap'><div class='title-icon'>📸</div><div><h1>Firma / Facial / Digital</h1><p>Captura facial en tiempo real y firma los documentos seleccionados.</p></div></div>
+            <a class='btn-back' href='/admin/contratacion?sec=bandeja'>← Volver a bandeja</a>
           </div>
-          <div class='firma-kpis'>
-            <div><b>{len(firma_sols)}</b><span>Solicitudes generadas</span></div>
-            <div><b>{sum(1 for x in firma_sols if 'Firmado' in (x['estado'] or ''))}</b><span>Firmadas</span></div>
-            <div><b>{sum(1 for x in firma_sols if 'Pendiente' in (x['estado'] or ''))}</b><span>Pendientes</span></div>
-            <div><b>{len(docs)}</b><span>Docs. disponibles</span></div>
+          <div class='person-strip'>
+            <div class='strip-item'><span class='strip-ico'>👤</span><div><small>Trabajador</small><b id='stripTrabajador'>JOSE QUITO</b></div></div>
+            <div class='strip-item'><span class='strip-ico'>🪪</span><div><small>DNI</small><b id='stripDni'>72244462</b></div></div>
+            <div class='strip-item'><span class='strip-ico'>🗓️</span><div><small>Fecha y hora</small><b id='stripFecha'>26/05/2026 10:34:22</b></div></div>
+            <div class='strip-item'><span class='strip-ico'>🖊️</span><div><small>Método de firma</small><b>FACIAL + FIRMA DIGITAL</b></div></div>
           </div>
-          <div class='firma-grid'>
-            <div class='firma-card'>
-              <h3>Activación de cámara</h3><p class='muted2'>La cámara se inicia igual que en la pantalla de prueba. En celular requiere HTTPS; en PC funciona por localhost.</p>
-              <div class='cam-wrap' id='firmaCamWrap'><span id='firmaCamBadge' class='cam-badge off'>● APAGADA</span><video id='firmaVideo' autoplay playsinline muted></video><canvas id='firmaCanvas' style='display:none'></canvas><img id='firmaPreview' style='display:none'></div>
-              <div class='firma-actions'><button type='button' id='btnFirmaStart' class='c-btn' onclick='firmaStartCam()'>📷 Activar cámara</button><button type='button' id='btnFirmaCapture' class='c-btn green' onclick='firmaCapture()'>📸 Capturar evidencia</button><button type='button' id='btnFirmaStop' class='c-btn gray' onclick='firmaStopCam()'>■ Detener</button><a class='c-btn gray' href='{camara_demo_url}' target='_blank'>📁 Cámara/archivo</a></div><p id='firmaCamMsg' class='muted2'>Preparando cámara...</p>
+          <div class='firma-grid-boceto-main'>
+            <div class='firma-card-b camera-card-b'>
+              <h2>Activación de cámara</h2><p class='b-muted'>Captura facial en tiempo real. Al detectar rostro se tomará captura automática y sonará confirmación.</p>
+              <div class='cam-wrap cam-boceto'><video id='firmaVideo' autoplay playsinline muted></video><canvas id='firmaCanvas' style='display:none'></canvas><img id='firmaPreview' style='display:none'><div class='face-frame'></div><div class='face-mesh'></div><div id='liveBadge' class='live-badge'>● APAGADA</div><div id='captureToast' class='capture-toast'>✅ Rostro reconocido correctamente<br><small>Captura realizada automáticamente</small></div></div>
+              <div id='soundBox' class='sound-ok'><span class='sound-icon'>🔊</span><div><b>¡Captura exitosa!</b><small>Rostro reconocido correctamente</small></div><span class='wave'>▂▃▄▅▆▇▆▅▄▃▂▃▄▅▆▇</span></div>
+              <div class='firma-actions boceto-actions'><button type='button' class='btn-green' onclick='firmaCapture()'>📸 Capturar evidencia</button><button type='button' class='btn-yellow' onclick='firmaStartCam(event)'>🔄 Reintentar cámara</button><button type='button' class='btn-dark' onclick='firmaStopCam()'>■ Detener</button><label class='btn-dark filecam-label'>📁 Cámara/archivo<input id='firmaFileCam' type='file' accept='image/*' capture='user' onchange='firmaLoadFileCam(this)' style='display:none'></label></div><p id='firmaCamMsg' class='b-muted'></p>
             </div>
-            <div class='firma-card'>
-              <h3>Flujo entendido</h3><div class='flow-steps'><span>1. Seleccionar contrato</span><span>2. Generar enlace</span><span>3. Trabajador abre desde celular/laptop</span><span>4. Captura facial + aceptación</span><span>5. Trazabilidad y archivo</span></div>
+            <div class='firma-card-b docs-panel-b'>
+              <h2>Documentos a firmar <span id='docsBadge' class='badge-green'>0</span></h2><p class='b-muted'>Se firmarán automáticamente los siguientes documentos:</p>
+              <div class='doc-sign-list'>{doc_cards_firma or '<div class="empty-docs">No hay documentos cargados. Sube Word/PDF en Archivos Trabajador o Plantilla Documentos.</div>'}</div>
+              <label class='switch-row'><input type='checkbox' id='firmaMasivaSwitch' checked onchange='marcarTodosFirma(this.checked)'><span>Firma masiva (todos los documentos)</span><span class='info-dot'>i</span></label>
+              <div class='ready-box'>🛡️ <div><b>Todo listo para firmar</b><small>Los documentos seleccionados serán firmados automáticamente.</small></div></div>
             </div>
           </div>
-          <form method='post' class='firma-card firma-form firma-selector-pro'>
-            <input type='hidden' name='accion' value='firma_solicitud'><h3>📄 Selección de contrato / documento a firmar</h3>
-            <p class='firma-note'>Primero selecciona el contrato o documento, luego genera el enlace para que el trabajador firme desde su aplicativo con cámara, aceptación y trazabilidad.</p>
+          <form method='post' class='firma-card firma-form firma-selector-pro sr-only-form'>
+            <input type='hidden' name='accion' value='firma_solicitud'><h3>Selección de contrato / documento a firmar</h3>
             <div class='form-row'><label>Contrato / documento principal</label><select name='documento_id' required>{opt_docs}</select></div>
-            <div class='form-row'><label>Método de firma</label><select name='metodo'><option>FACIAL + FIRMA DIGITAL</option><option>RECONOCIMIENTO FACIAL</option><option>FIRMA DIGITAL</option><option>OTP + ACEPTACIÓN</option><option>CARGA MANUAL RRHH</option></select></div>
-            <div class='form-row wide'><label>Observación / mensaje para el trabajador</label><input name='observacion' placeholder='Ej: Tienes un contrato pendiente por firmar. Abrir desde el aplicativo/celular.'></div>
-            <div class='firma-actions'><button class='c-btn green'>Generar enlace individual</button><a class='c-btn gray' href='#bandeja'>Ver bandeja</a></div>
+            <div class='form-row'><label>Método de firma</label><select name='metodo'><option>FACIAL + FIRMA DIGITAL</option><option>RECONOCIMIENTO FACIAL</option><option>FIRMA DIGITAL</option><option>OTP + ACEPTACIÓN</option></select></div>
+            <div class='form-row wide'><label>Observación / mensaje para el trabajador</label><input name='observacion' placeholder='Tienes un contrato pendiente por firmar.'></div>
+            <div class='firma-actions'><button class='btn-green'>Generar enlace individual</button><a class='btn-dark' href='#bandeja'>Ver bandeja</a></div>
           </form>
-          <form method='post' class='firma-card firma-form' onsubmit='return prepararFirmaMasiva()'>
+          <form method='post' class='firma-progress-bar' onsubmit='return prepararFirmaMasiva()'>
             <input type='hidden' name='accion' value='firma_masiva'><input type='hidden' id='documentos_lote' name='documentos_lote'>
-            <h3>Envío masivo / lote</h3><div class='mass-alert'><b id='firmaMassCounter'>0 seleccionados</b><span>Selecciona contratos y genera enlaces de firma en lote.</span></div>
-            <div class='form-row'><label>Método masivo</label><select name='metodo_masivo'><option>FACIAL + FIRMA DIGITAL</option><option>RECONOCIMIENTO FACIAL</option><option>FIRMA DIGITAL</option></select></div>
-            <div class='form-row'><label>Observación masiva</label><input name='observacion_masiva' placeholder='Envío masivo de contratos a firma'></div>
-            <div class='firma-actions'><button type='button' class='c-btn gray' onclick='marcarTodosFirma(true)'>Marcar visibles</button><button type='button' class='c-btn gray' onclick='marcarTodosFirma(false)'>Limpiar</button><button class='c-btn green'>Generar enlaces masivos</button></div>
-            <div class='table-wrap'><table class='c-table firma-table'><tr><th></th><th>ID</th><th>DNI</th><th>Trabajador</th><th>Documento</th><th>Estado</th></tr>{rows_docs_lote or '<tr><td colspan=6>No hay documentos de contratación disponibles. Primero carga contratos en Archivos Trabajador.</td></tr>'}</table></div>
+            <div class='progress-left'><b>Progreso de firma</b><div class='steps'><span class='done'>1<small>Verificación facial<br>Completado</small></span><i></i><span class='done'>2<small>Validación<br>Completado</small></span><i></i><span class='done'>3<small>Firma de documentos<br>En proceso...</small></span><i></i><span>4<small>Finalizado<br>Pendiente</small></span></div></div>
+            <button class='btn-green btn-firmar'>🖊️ Firmar todos los documentos<br><small id='firmaMassCounter'>0 seleccionados</small></button>
           </form>
           <div id='bandeja' class='firma-card'><h3>🧾 Bandeja de Firmas</h3><div class='table-wrap'><table class='c-table firma-table'><tr><th>ID</th><th>DNI</th><th>Trabajador</th><th>Método</th><th>Estado</th><th>Fecha envío</th><th>Fecha firma</th><th>Link cámara</th><th>Evidencia</th><th>Observación</th></tr>{rows_firma or '<tr><td colspan=10>No hay solicitudes de firma.</td></tr>'}</table></div></div>
           <div class='firma-card'><h3>🔐 Trazabilidad</h3><div class='trace-grid'><span>IP y navegador</span><span>Fecha / hora</span><span>Hash de evidencia</span><span>Selfie/captura</span><span>Estado RENIEC/API</span><span>Documento archivado</span></div></div>
         </div>
         <style>
-        .firma-page{{color:#102033!important;background:#eef3f8;margin:-10px -12px 0;padding:20px;min-height:calc(100vh - 90px)}}.firma-page *{{text-shadow:none!important;box-sizing:border-box!important}}.firma-page h1,.firma-page h2,.firma-page h3,.firma-page label,.firma-page p,.firma-page span{{opacity:1!important}}.firma-page h2,.firma-page h3{{color:#07182e!important}}.firma-head h2,.firma-head p{{color:white!important}}.firma-note{{grid-column:1/-1;margin:0 0 4px;color:#475569!important;font-weight:800;line-height:1.45}}.firma-head{{display:flex;justify-content:space-between;gap:16px;align-items:center;background:linear-gradient(135deg,#073552,#0c745f);color:white;border-radius:24px;padding:24px;box-shadow:0 18px 40px #0f172a22}}.firma-head h2{{font-size:34px;margin:0 0 6px}}.firma-head p{{margin:0;color:#dff7ff;font-weight:800}}.firma-head-actions,.firma-actions{{display:flex;gap:10px;flex-wrap:wrap}}.firma-kpis{{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:16px 0}}.firma-kpis div{{background:white;border-radius:20px;padding:18px;border:1px solid #d8e4ef;box-shadow:0 12px 28px #0f172a12}}.firma-kpis b{{display:block;font-size:30px;color:#03735f}}.firma-kpis span{{color:#64748b;font-weight:900}}.firma-grid{{display:grid;grid-template-columns:1.35fr .8fr;gap:16px}}.firma-card{{background:white;border:1px solid #d8e4ef;border-radius:22px;padding:20px;margin:16px 0;box-shadow:0 12px 28px #0f172a12;color:#111827}}.firma-card h3{{margin:0 0 12px;font-size:23px;color:#07182e}}.cam-wrap{{background:#000;border-radius:20px;min-height:430px;display:grid;place-items:center;overflow:hidden;border:4px solid #dbeafe;position:relative}}.cam-badge{{position:absolute;right:18px;top:14px;z-index:3;padding:10px 18px;border-radius:999px;font-weight:1000;color:white;box-shadow:0 8px 18px #0005}}.cam-badge.off{{background:#138845}}.cam-badge.on{{background:#16a34a}}.cam-badge.err{{background:#b91c1c}}.cam-wrap:before{{content:'CÁMARA WEB / FACIAL';position:absolute;inset:auto auto 12px 14px;color:#dbeafe;font-weight:950;font-size:12px;letter-spacing:.5px;opacity:.55;z-index:0}}.cam-wrap video,.cam-wrap img{{width:100%;height:100%;min-height:430px;max-height:560px;object-fit:cover;background:#000;position:relative;z-index:1}}.flow-steps{{display:grid;gap:10px}}.flow-steps span,.trace-grid span{{background:#e0f2fe;border:1px solid #7dd3fc;color:#075985;padding:12px;border-radius:14px;font-weight:950}}.firma-form{{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:end}}.firma-form h3,.firma-form .wide,.firma-form .mass-alert,.firma-form .table-wrap,.firma-form .firma-actions{{grid-column:1/-1}}.form-row label{{display:block;font-weight:950;margin-bottom:6px;color:#334155}}.form-row input,.form-row select{{background:#f8fafc!important;color:#0f172a!important;border:1px solid #cbd5e1!important;border-radius:14px!important;padding:13px!important;width:100%!important;min-height:54px!important;font-weight:900!important}}.firma-page .c-btn{{border:0!important;border-radius:14px!important;padding:13px 18px!important;font-weight:1000!important;cursor:pointer!important;text-decoration:none!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;background:linear-gradient(135deg,#ffb21a,#ffd23f)!important;color:#07111d!important;box-shadow:0 10px 22px #0f172a18!important}}.firma-page .c-btn.gray{{background:#334155!important;color:white!important}}.firma-page .c-btn:disabled{{opacity:1!important;filter:none!important;cursor:pointer!important}}.mass-alert{{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#dcfce7;border:2px solid #22c55e;color:#166534;border-radius:18px;padding:14px 16px;font-weight:950}}.firma-table th{{background:#073552!important;color:white!important}}.firma-table td{{color:#1f2937!important;background:white!important}}.estado-pill,.estado-soft,.ok-chip,.pend-chip{{display:inline-flex;border-radius:999px;padding:7px 10px;font-weight:950}}.estado-pill{{background:#fef3c7;color:#92400e}}.estado-soft{{background:#e0f2fe;color:#075985}}.ok-chip{{background:#dcfce7;color:#166534}}.pend-chip{{background:#fee2e2;color:#991b1b}}.trace-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}.c-btn.green{{background:linear-gradient(135deg,#16a34a,#22c55e)!important;color:white!important}}@media(max-width:900px){{.firma-head,.firma-grid{{grid-template-columns:1fr;display:grid}}.firma-kpis{{grid-template-columns:repeat(2,1fr)}}.firma-form{{grid-template-columns:1fr}}.trace-grid{{grid-template-columns:1fr}}}}
+        .firma-boceto-final{{background:#f5f7fb!important;margin:-10px -12px 0;padding:18px 26px 26px;min-height:calc(100vh - 80px);color:#0f172a!important;font-family:Inter,Segoe UI,Arial,sans-serif!important}}.firma-boceto-final *{{box-sizing:border-box!important;text-shadow:none!important}}.firma-topbar{{display:flex;justify-content:space-between;align-items:center;margin:0 0 18px}}.title-wrap{{display:flex;align-items:center;gap:12px}}.title-icon{{width:42px;height:42px;border-radius:12px;background:#edf2f7;display:grid;place-items:center;font-size:22px;box-shadow:inset 0 0 0 1px #e2e8f0}}.firma-topbar h1{{margin:0;font-size:30px;line-height:1;color:#0b1220;font-weight:1000}}.firma-topbar p{{margin:8px 0 0;color:#64748b;font-weight:800}}.btn-back{{background:#eef1f6;border:1px solid #dce3eb;border-radius:10px;color:#111827;text-decoration:none;font-weight:950;padding:12px 18px;box-shadow:0 6px 16px #0f172a0d}}.person-strip{{display:grid;grid-template-columns:repeat(4,1fr);gap:0;background:#fff;border:1px solid #dfe7ef;border-radius:12px;box-shadow:0 10px 26px #0f172a10;margin-bottom:14px;overflow:hidden}}.strip-item{{display:flex;gap:14px;align-items:center;padding:20px 26px;border-right:1px solid #e5eaf0}}.strip-item:last-child{{border-right:0}}.strip-ico{{font-size:28px;color:#3b82f6}}.strip-item small{{display:block;color:#111827;font-size:12px;font-weight:950;margin-bottom:8px}}.strip-item b{{font-size:13px;color:#020617;font-weight:1000}}.firma-grid-boceto-main{{display:grid;grid-template-columns:1fr 1.12fr;gap:16px}}.firma-card-b{{background:#fff;border:1px solid #e0e6ee;border-radius:12px;box-shadow:0 10px 26px #0f172a10;padding:18px}}.firma-card-b h2{{margin:0 0 8px;color:#0b1220;font-size:22px;font-weight:1000}}.b-muted{{color:#64748b;font-weight:750;line-height:1.45;margin:0 0 14px}}.cam-wrap{{position:relative;overflow:hidden;background:#000;border-radius:15px;min-height:525px;display:grid;place-items:center}}.cam-wrap video,.cam-wrap img{{width:100%;height:525px;object-fit:cover;background:#000;position:relative;z-index:3;display:block}}.cam-wrap video{{transform:scaleX(-1)}}.cam-wrap:not(.cam-live) .face-frame,.cam-wrap:not(.cam-live) .face-mesh,.cam-wrap:not(.capture-ok) #captureToast{{display:none!important}}.cam-error{{background:#fff7ed!important;border-color:#fed7aa!important;color:#9a3412!important}}.filecam-label{{position:relative;overflow:hidden}}.face-frame{{position:absolute;z-index:4;inset:17% 26%;border:3px solid #22c55e;border-radius:22px;pointer-events:none;display:none}}.face-frame:before,.face-frame:after{{content:'';position:absolute;inset:-3px;border-color:#22c55e;border-style:solid;border-width:0}}.face-mesh{{position:absolute;z-index:5;inset:23% 32%;opacity:.58;pointer-events:none;background:radial-gradient(circle,#34d399 1.4px,transparent 2px) 0 0/34px 34px,linear-gradient(32deg,transparent 49%,rgba(52,211,153,.55) 50%,transparent 51%) 0 0/70px 70px,linear-gradient(145deg,transparent 49%,rgba(52,211,153,.38) 50%,transparent 51%) 0 0/80px 80px;border-radius:50%;display:none}}.live-badge{{position:absolute;right:18px;top:18px;z-index:6;background:#11823b;color:#fff;border-radius:999px;padding:8px 16px;font-weight:1000;font-size:12px}}.capture-toast{{position:absolute;left:18px;right:18px;bottom:18px;z-index:7;background:linear-gradient(90deg,#0f5132,#0b5d34);color:#fff;border-radius:12px;padding:16px 22px;font-weight:1000;box-shadow:0 8px 22px #0006;display:none}}.capture-toast small{{display:block;color:#dcfce7;font-weight:800;margin-top:4px}}.sound-ok{{margin:16px 0 14px;background:#eafff1;border:1px solid #b9edcc;border-radius:10px;color:#16a34a;display:none;align-items:center;gap:12px;padding:12px 14px;font-weight:1000}}.sound-icon{{font-size:27px}}.sound-ok small{{display:block;color:#16a34a;font-weight:700}}.wave{{margin-left:auto;letter-spacing:2px}}.boceto-actions{{display:flex;gap:10px;flex-wrap:wrap}}.btn-yellow,.btn-green,.btn-dark{{border:0;border-radius:8px;padding:13px 18px;font-weight:1000;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 8px 16px #0f172a18}}.btn-yellow{{background:#ffbd00;color:#111827}}.btn-green{{background:#10b84e;color:#fff!important}}.btn-dark{{background:#334155;color:#fff!important}}.doc-sign-list{{display:grid;gap:12px;margin:18px 0;max-height:505px;overflow:auto;padding:0 4px 0 0}}.doc-sign-card{{display:grid;grid-template-columns:32px 56px 1fr;align-items:center;gap:14px;border:1px solid #dbe3ec;border-radius:12px;background:#fafcff;padding:17px;min-height:88px;box-shadow:0 6px 18px #0f172a08;cursor:pointer}}.doc-sign-card input{{width:20px;height:20px;accent-color:#10b84e}}.doc-icon{{width:45px;height:50px;border-radius:8px;background:#2f67c7;color:#fff;display:grid;place-items:center;font-size:20px;font-weight:1000;box-shadow:inset 0 -8px 0 rgba(0,0,0,.08)}}.doc-info b{{display:block;color:#0f172a;font-size:14px;text-transform:uppercase;margin-bottom:7px}}.doc-info small{{display:block;color:#475569;font-weight:850;margin-top:3px}}.badge-green{{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:999px;background:#10b84e;color:#fff;font-size:14px;vertical-align:middle}}.switch-row{{display:flex;align-items:center;gap:10px;margin:18px 0;color:#111827;font-weight:950}}.switch-row input{{width:42px;height:22px;accent-color:#10b84e}}.info-dot{{width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;background:#111827;color:#fff;font-size:12px}}.ready-box{{display:flex;gap:12px;align-items:center;background:#eafff1;border:1px solid #b9edcc;border-radius:10px;color:#16a34a;padding:16px;font-weight:1000}}.ready-box small{{display:block;color:#16a34a;font-weight:700;margin-top:4px}}.firma-progress-bar{{display:grid;grid-template-columns:1fr 300px;gap:22px;align-items:center;background:#fff;border:1px solid #dfe7ef;border-radius:12px;box-shadow:0 10px 26px #0f172a10;margin-top:16px;padding:18px}}.progress-left>b{{display:block;font-size:16px;margin-bottom:14px;color:#0f172a}}.steps{{display:flex;align-items:flex-start;gap:10px}}.steps i{{height:1px;background:#cbd5e1;flex:1;margin-top:17px}}.steps span{{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#e5e7eb;color:#111827;font-weight:1000;position:relative;flex:0 0 auto}}.steps span.done{{background:#10b84e;color:#fff}}.steps small{{position:absolute;top:42px;left:50%;transform:translateX(-50%);width:130px;color:#475569;font-size:10px;text-align:center;line-height:1.35}}.steps .done small{{color:#10b84e}}.btn-firmar{{height:54px;font-size:15px;flex-direction:column}}.btn-firmar small{{font-size:11px;color:#eafff1;margin-top:4px}}.sr-only-form{{display:none!important}}.firma-card{{background:#fff;border:1px solid #e0e6ee;border-radius:12px;padding:18px;margin-top:16px;color:#0f172a}}.firma-table th{{background:#0b2135!important;color:#fff!important}}.firma-table td{{background:white!important;color:#1f2937!important}}.trace-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}.trace-grid span{{background:#e0f2fe;border:1px solid #7dd3fc;color:#075985;padding:12px;border-radius:10px;font-weight:950}}.estado-pill,.estado-soft,.ok-chip,.pend-chip{{display:inline-flex;border-radius:999px;padding:7px 10px;font-weight:950}}.estado-pill{{background:#fef3c7;color:#92400e}}.estado-soft{{background:#e0f2fe;color:#075985}}.ok-chip{{background:#dcfce7;color:#166534}}.pend-chip{{background:#fee2e2;color:#991b1b}}.docs-panel-b h2,.docs-panel-b p,.docs-panel-b label,.camera-card-b h2,.camera-card-b p{{color:#0f172a!important}}.doc-sign-card{{color:#0f172a!important}}.empty-docs{{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:14px;font-weight:900}}.plantilla-sign-card{{border-color:#bbf7d0!important;background:#f8fffb!important}}.cam-wrap.cam-live .face-frame,.cam-wrap.cam-live .face-mesh{{display:block}}.cam-wrap.capture-ok #captureToast{{display:block}}.boceto-actions button:disabled{{opacity:.65;cursor:wait}}@media(max-width:1180px){{.firma-grid-boceto-main,.firma-progress-bar{{grid-template-columns:1fr}}.person-strip{{grid-template-columns:1fr 1fr}}}}@media(max-width:720px){{.firma-boceto-final{{padding:14px}}.firma-topbar,.steps{{display:grid}}.person-strip{{grid-template-columns:1fr}}.strip-item{{border-right:0;border-bottom:1px solid #e5eaf0}}.cam-wrap,.cam-wrap video,.cam-wrap img{{min-height:360px;height:360px}}}}
         </style>
         <script>
         let firmaStream=null;
-        function firmaSetStatus(txt, cls){{const msg=document.getElementById('firmaCamMsg');const badge=document.getElementById('firmaCamBadge');if(msg)msg.textContent=txt;if(badge){{badge.textContent=cls==='on'?'● ENCENDIDA':(cls==='err'?'● ERROR':'● APAGADA');badge.className='cam-badge '+cls;}}}}
-        async function firmaStartCam(){{
-          const v=document.getElementById('firmaVideo');
-          try{{
-            if(firmaStream){{firmaStream.getTracks().forEach(t=>t.stop());firmaStream=null;}}
-            if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){{firmaSetStatus('Tu navegador no permite cámara en este contexto. Usa Chrome/Edge actualizado con HTTPS o localhost.','err');return;}}
-            if(location.protocol!=='https:' && !['localhost','127.0.0.1'].includes(location.hostname)){{firmaSetStatus('En celular debe abrirse con HTTPS. En PC usa localhost. Intentando activar cámara...','off');}}
-            const principal={{video:{{facingMode:'user',width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}};
-            try{{firmaStream=await navigator.mediaDevices.getUserMedia(principal);}}
-            catch(e1){{firmaStream=await navigator.mediaDevices.getUserMedia({{video:true,audio:false}});}}
-            v.srcObject=firmaStream;v.muted=true;v.setAttribute('playsinline','');v.setAttribute('autoplay','');
-            await v.play();
-            const prev=document.getElementById('firmaPreview'); if(prev)prev.style.display='none';
-            firmaSetStatus('Cámara activa correctamente. Ya puedes capturar evidencia.','on');
-          }}catch(e){{
-            firmaSetStatus('No se pudo activar cámara: '+(e&&e.name?e.name:'permiso denegado')+'. Revisa permisos del navegador, HTTPS/localhost y cierra Zoom/Teams u otra app que use cámara.','err');
-          }}
+        let firmaCaptured=false;
+        let firmaStarting=false;
+        function firmaSetMsg(txt, ok=false, error=false){{
+          const msg=document.getElementById('firmaCamMsg');
+          if(msg){{ msg.innerHTML=txt; msg.style.color=error?'#b91c1c':(ok?'#059669':'#475569'); msg.style.fontWeight='900'; }}
         }}
-        function firmaCapture(){{const v=document.getElementById('firmaVideo'),c=document.getElementById('firmaCanvas'),img=document.getElementById('firmaPreview');if(!v||!v.videoWidth){{firmaSetStatus('Primero activa la cámara.','off');return;}}c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);img.src=c.toDataURL('image/png');img.style.display='block';firmaSetStatus('Evidencia capturada en vista previa.','on');}}
-        function firmaStopCam(){{if(firmaStream){{firmaStream.getTracks().forEach(t=>t.stop());firmaStream=null;}}const v=document.getElementById('firmaVideo');if(v)v.srcObject=null;firmaSetStatus('Cámara detenida.','off');}}
-        function updateFirmaCounter(){{const n=[...document.querySelectorAll('.chk-doc-firma:checked')].length;const el=document.getElementById('firmaMassCounter');if(el)el.textContent=n+' seleccionados';}}
-        function marcarTodosFirma(on){{document.querySelectorAll('.chk-doc-firma').forEach(x=>x.checked=on);updateFirmaCounter();}}
-        function prepararFirmaMasiva(){{const ids=[...document.querySelectorAll('.chk-doc-firma:checked')].map(x=>x.value);if(ids.length===0){{alert('Selecciona al menos un contrato para envío masivo.');return false;}}document.getElementById('documentos_lote').value=ids.join('\n');return confirm('Se generarán '+ids.length+' enlace(s) de firma. ¿Continuar?');}}
-        document.addEventListener('change',e=>{{if(e.target.classList&&e.target.classList.contains('chk-doc-firma'))updateFirmaCounter();}});
-        document.addEventListener('DOMContentLoaded',()=>{{setTimeout(()=>{{if(document.getElementById('firmaVideo'))firmaStartCam();}},500);}});
+        function firmaBadge(txt,bg){{ const badge=document.getElementById('liveBadge'); if(badge){{ badge.textContent=txt; badge.style.background=bg; }} }}
+        function firmaBeep(){{ try{{ const A=window.AudioContext||window.webkitAudioContext; const ctx=new A(); const osc=ctx.createOscillator(); const gain=ctx.createGain(); osc.type='sine'; osc.frequency.value=880; gain.gain.setValueAtTime(0.001,ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.25,ctx.currentTime+0.02); gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.28); osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime+0.30); }}catch(e){{}} }}
+        function firmaResetVisual(){{ const wrap=document.querySelector('.cam-wrap'); const preview=document.getElementById('firmaPreview'); const sound=document.getElementById('soundBox'); if(preview){{ preview.removeAttribute('src'); preview.style.display='none'; }} if(sound) sound.style.display='none'; if(wrap){{ wrap.classList.remove('capture-ok','cam-live','cam-error'); }} firmaBadge('● APAGADA','#334155'); }}
+        function firmaEsContextoSeguro(){{ return window.isSecureContext || location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname); }}
+        async function firmaEsperarVideo(video, ms=12000){{ const inicio=Date.now(); while(Date.now()-inicio < ms){{ if(video && video.videoWidth && video.videoHeight && video.readyState>=2) return true; await new Promise(r=>setTimeout(r,150)); }} return false; }}
+        async function firmaStartCam(ev){{
+          if(ev) ev.preventDefault(); if(firmaStarting) return false; firmaStarting=true;
+          const wrap=document.querySelector('.cam-wrap'); const btns=document.querySelectorAll('.boceto-actions button'); const v=document.getElementById('firmaVideo');
+          try{{
+            btns.forEach(b=>b.disabled=true); firmaCaptured=false; firmaResetVisual(); firmaBadge('● ACTIVANDO','#f59e0b'); firmaSetMsg('Activando cámara real... acepta el permiso del navegador.');
+            if(!firmaEsContextoSeguro()) throw new Error('CONTEXTO_NO_SEGURO');
+            if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('MEDIADEVICES_NO_DISPONIBLE');
+            if(firmaStream){{ firmaStream.getTracks().forEach(t=>t.stop()); firmaStream=null; }}
+            if(!v) throw new Error('VIDEO_NO_ENCONTRADO');
+            v.pause(); v.removeAttribute('src'); v.srcObject=null; v.autoplay=true; v.muted=true; v.playsInline=true; v.setAttribute('playsinline','playsinline'); v.setAttribute('webkit-playsinline','webkit-playsinline'); v.style.display='block'; v.style.background='#000';
+            const intentos=[{{video:{{facingMode:{{ideal:'user'}},width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}},{{video:{{facingMode:'user'}},audio:false}},{{video:{{width:{{ideal:640}},height:{{ideal:480}}}},audio:false}},{{video:true,audio:false}}];
+            let ultimoError=null; for(const cfg of intentos){{ try{{ firmaStream=await navigator.mediaDevices.getUserMedia(cfg); break; }}catch(e){{ ultimoError=e; }} }}
+            if(!firmaStream) throw (ultimoError || new Error('SIN_CAMARA'));
+            v.srcObject=firmaStream; try{{ await v.play(); }}catch(e){{}}
+            if(!await firmaEsperarVideo(v,12000)) throw new Error('VIDEO_NEGRO_O_SIN_IMAGEN');
+            if(wrap) wrap.classList.add('cam-live'); firmaBadge('● EN VIVO','#16a34a'); firmaSetMsg('✅ Cámara encendida. Si ves tu rostro, presiona <b>Capturar evidencia</b>.',true); return true;
+          }}catch(e){{
+            if(firmaStream){{ firmaStream.getTracks().forEach(t=>t.stop()); firmaStream=null; }} if(v) v.srcObject=null; if(wrap) wrap.classList.add('cam-error');
+            const nombre=(e&&e.name)?e.name:((e&&e.message)?e.message:'Error'); let ayuda='';
+            if(nombre==='CONTEXTO_NO_SEGURO') ayuda=' Abre en http://127.0.0.1:5000, localhost o HTTPS. En celular con IP local el navegador bloquea cámara si no es HTTPS.';
+            else if(nombre==='NotAllowedError'||nombre==='PermissionDeniedError') ayuda=' Permite Cámara desde el candado del navegador.';
+            else if(nombre==='NotFoundError'||nombre==='DevicesNotFoundError') ayuda=' No se encontró cámara conectada.';
+            else if(nombre==='NotReadableError'||nombre==='TrackStartError') ayuda=' La cámara está ocupada por otra app. Cierra Zoom/Meet/Teams/Cámara de Windows.';
+            else if(nombre==='VIDEO_NEGRO_O_SIN_IMAGEN') ayuda=' El permiso fue aceptado, pero no llegó imagen. Cierra otras apps de cámara y vuelve a intentar.';
+            else ayuda=' Revisa permisos de Windows/Android/iPhone y del navegador.';
+            firmaBadge('● SIN CÁMARA','#dc2626'); firmaSetMsg('❌ No se pudo activar la cámara: '+nombre+'.'+ayuda+' Puedes usar <b>Cámara/archivo</b> como respaldo.',false,true); return false;
+          }}finally{{ firmaStarting=false; btns.forEach(b=>b.disabled=false); }}
+        }}
+        function firmaCapture(){{ const v=document.getElementById('firmaVideo'), c=document.getElementById('firmaCanvas'), img=document.getElementById('firmaPreview'), wrap=document.querySelector('.cam-wrap'), sound=document.getElementById('soundBox'); if(!v || !v.srcObject || !v.videoWidth){{ firmaSetMsg('La cámara aún no tiene imagen. Presiona Reintentar cámara o usa Cámara/archivo como respaldo.',false,true); return false; }} c.width=v.videoWidth; c.height=v.videoHeight; c.getContext('2d').drawImage(v,0,0,c.width,c.height); const data=c.toDataURL('image/jpeg',0.88); img.src=data; img.style.display='block'; firmaCaptured=true; if(wrap){{ wrap.classList.add('capture-ok','cam-live'); wrap.classList.remove('cam-error'); }} if(sound) sound.style.display='flex'; firmaBeep(); firmaSetMsg('✅ Evidencia facial capturada correctamente. Lista para firmar los documentos seleccionados.',true); return true; }}
+        function firmaLoadFileCam(input){{ const file=input && input.files ? input.files[0] : null; if(!file) return; const img=document.getElementById('firmaPreview'), wrap=document.querySelector('.cam-wrap'), sound=document.getElementById('soundBox'); const reader=new FileReader(); reader.onload=function(){{ if(img){{ img.src=reader.result; img.style.display='block'; }} firmaCaptured=true; if(wrap){{ wrap.classList.add('cam-live','capture-ok'); wrap.classList.remove('cam-error'); }} if(sound) sound.style.display='flex'; firmaBadge('● EVIDENCIA','#16a34a'); firmaSetMsg('✅ Evidencia cargada correctamente desde cámara/archivo.',true); firmaBeep(); }}; reader.readAsDataURL(file); }}
+        function firmaStopCam(){{ if(firmaStream){{ firmaStream.getTracks().forEach(t=>t.stop()); firmaStream=null; }} const v=document.getElementById('firmaVideo'); if(v){{ v.pause(); v.srcObject=null; }} const wrap=document.querySelector('.cam-wrap'); if(wrap) wrap.classList.remove('cam-live'); firmaBadge('● DETENIDA','#334155'); firmaSetMsg('Cámara detenida.'); }}
+        function updateFirmaCounter(){{ const checks=[...document.querySelectorAll('.doc-sign-list .chk-doc-firma:checked')]; const n=checks.length; const el=document.getElementById('firmaMassCounter'); if(el) el.textContent='Se firmarán '+n+' documentos'; const b=document.getElementById('docsBadge'); if(b) b.textContent=n; const first=checks[0]; if(first){{ const dni=document.getElementById('stripDni'), trab=document.getElementById('stripTrabajador'); if(dni) dni.textContent=first.dataset.dni||''; if(trab) trab.textContent=(first.dataset.trabajador||'').toUpperCase(); }} const f=document.getElementById('stripFecha'); if(f){{ const d=new Date(); f.textContent=d.toLocaleDateString('es-PE')+' '+d.toLocaleTimeString('es-PE'); }} }}
+        function marcarTodosFirma(on){{ document.querySelectorAll('.chk-doc-firma').forEach(x=>x.checked=on); updateFirmaCounter(); }}
+        function prepararFirmaMasiva(){{ const ids=[...new Set([...document.querySelectorAll('.doc-sign-list .chk-doc-firma:checked')].map(x=>x.value))]; if(ids.length===0){{ alert('Selecciona al menos un contrato para firmar.'); return false; }} if(!firmaCaptured){{ const continuar=confirm('Aún no se capturó evidencia facial. ¿Deseas continuar igual?'); if(!continuar) return false; }} const lote=document.getElementById('documentos_lote'); if(lote) lote.value=ids.join('
+'); return confirm('Se firmarán/generarán '+ids.length+' documento(s). ¿Continuar?'); }}
+        document.addEventListener('change',e=>{{ if(e.target.classList && e.target.classList.contains('chk-doc-firma')) updateFirmaCounter(); }});
+        document.addEventListener('DOMContentLoaded',()=>{{ updateFirmaCounter(); firmaResetVisual(); firmaSetMsg('Cámara en primer plano: se encenderá automáticamente. Acepta el permiso del navegador. Debe abrirse en localhost/127.0.0.1 o HTTPS.'); setTimeout(()=>{{ firmaStartCam(); }},350); }});
         </script>
         """)
     elif sec=='nisira':
@@ -4438,7 +4636,7 @@ def admin_contratacion():
         content=wrap(f"<h2 class='c-title'>Descargas</h2><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th>Código</th><th>Apellidos y Nombres</th><th>Tipo Documento</th><th>Estado Doc</th><th>Fecha Envío</th></tr>{docs_rows or '<tr><td colspan=6>No hay archivos.</td></tr>'}</table></div>")
     else:
         content=wrap(f"<h2 class='c-title'>Archivos Trabajador</h2><div class='toolbar'>🔎 Filtros &nbsp; ⚙ Acción ▾ &nbsp; ⬇ Descargar ▾</div><form method='post' enctype='multipart/form-data' class='c-card c-form' style='padding:18px'><b>Trabajador</b><input name='dni' list='trabajadores_list' required><datalist id='trabajadores_list'>{opt_trab}</datalist><b>Etapa</b><select name='etapa'><option>Incorporación</option><option>Renovación</option><option>Cese</option></select><b>Tipo documento</b><select name='tipo_doc'>{opt_tipo}</select><b>Archivo</b><input type='file' name='archivo' required><span></span><button class='c-btn'>⬆ Subir Docs Individual</button></form><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th></th><th>Código</th><th>Apellidos y Nombres</th><th>Tipo Documento</th><th>Estado Doc</th><th>Fecha Envío</th></tr>{docs_rows or '<tr><td colspan=7>No hay archivos.</td></tr>'}</table></div>")
-    return render_page(content, active='Gestion Contratacion:documentaria')
+    return render_page(content, active=f'Gestion Contratacion:{sec}')
 
 
 @app.route('/admin/crear_carpetas')
@@ -4559,4 +4757,31 @@ def admin_firma_digital():
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '5000'))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    host = os.getenv('HOST', '0.0.0.0')
+    debug = os.getenv('FLASK_DEBUG', '0') == '1'
+    ssl_context = None
+    # Para probar desde CELULAR en red local, el navegador exige HTTPS.
+    # Ejecuta en Windows: set APP_SSL=1 && python app.py
+    # Luego abre en el celular: https://IP-DE-TU-PC:5000/firma/<token>
+    if os.getenv('APP_SSL', '0') == '1':
+        cert_file = os.getenv('SSL_CERT', 'cert.pem')
+        key_file = os.getenv('SSL_KEY', 'key.pem')
+        if Path(cert_file).exists() and Path(key_file).exists():
+            ssl_context = (cert_file, key_file)
+        else:
+            ssl_context = 'adhoc'
+    try:
+        print('============================================================')
+        print('Portal PRIZE iniciado')
+        print('PC local:  http://127.0.0.1:%s' % port)
+        if ssl_context:
+            print('Celular:   https://IP-DE-TU-PC:%s  (aceptar certificado)' % port)
+        else:
+            print('Celular:   usar enlace HTTPS de Render o iniciar con APP_SSL=1')
+        print('Nota cámara:', contexto_camara_seguro_texto())
+        print('============================================================')
+        app.run(host=host, port=port, debug=debug, ssl_context=ssl_context)
+    except Exception as e:
+        print('No se pudo iniciar con SSL:', e)
+        print('Reintentando en HTTP solo para PC localhost...')
+        app.run(host=host, port=port, debug=debug)
