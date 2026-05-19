@@ -1,0 +1,15 @@
+MEJORA APLICADA - BOTÓN ACTIVAR CÁMARA
+
+1. Se corrigió el JavaScript de la pestaña Firma / Facial / Digital.
+2. El botón "Activar cámara" ahora solicita permiso al navegador con getUserMedia.
+3. Se agregaron 3 intentos automáticos de apertura de cámara:
+   - Cámara frontal HD.
+   - Cámara frontal básica.
+   - Cualquier cámara disponible.
+4. Se agregó mensaje claro si el navegador bloquea la cámara por permiso, HTTP, cámara ocupada o ausencia de dispositivo.
+5. Se quitó el autoarranque forzado al cargar la página para evitar bloqueo del navegador antes del clic del usuario.
+6. Al activar correctamente, se muestra EN VIVO y se genera captura automática de evidencia.
+
+IMPORTANTE:
+- La cámara funciona en Render/HTTPS o en http://localhost:5000.
+- Los navegadores bloquean cámara si el sistema se abre con HTTP por IP o dominio sin HTTPS.
