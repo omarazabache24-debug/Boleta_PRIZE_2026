@@ -57,10 +57,20 @@ app = Flask(__name__)
 @app.after_request
 def permitir_camara_firma(response):
     # Permite cámara/micrófono en la propia página del sistema.
-    # IMPORTANTE: Chrome/Edge solo habilitan getUserMedia en HTTPS o localhost/127.0.0.1.
+    # IMPORTANTE: Chrome/Edge/Safari solo permiten cámara en HTTPS o en localhost/127.0.0.1.
+    # Para celular, publicar en Render/HTTPS o ejecutar local con APP_SSL=1 y abrir https://IP-DE-TU-PC:5000.
     response.headers['Permissions-Policy'] = 'camera=(self), microphone=(self), fullscreen=(self)'
     response.headers['Feature-Policy'] = "camera 'self'; microphone 'self'"
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     return response
+
+
+def contexto_camara_seguro_texto():
+    return (
+        'La cámara web del navegador solo funciona en HTTPS o en localhost/127.0.0.1. '
+        'En PC local usa http://127.0.0.1:5000. En celular usa el enlace HTTPS de Render, '
+        'o ejecuta local con APP_SSL=1 y abre https://IP-DE-TU-PC:5000 aceptando el certificado.'
+    )
 app.secret_key = os.getenv("SECRET_KEY", "prize_documentos_ultra_2026")
 app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -3999,18 +4009,61 @@ def firma_publica_token(token):
     <style>body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#0f172a;color:#111827}}.wrap{{max-width:920px;margin:0 auto;padding:22px}}.card{{background:#fff;border-radius:22px;padding:22px;box-shadow:0 18px 45px #0005;margin:18px 0}}h1{{margin:0;color:#0f172a}}.muted{{color:#64748b;line-height:1.5}}.badge{{display:inline-block;background:#fef3c7;color:#92400e;border-radius:999px;padding:8px 12px;font-weight:800}}video,img{{width:100%;min-height:330px;max-height:430px;background:#000;border-radius:18px;object-fit:cover}}.camera{{background:#111827;border-radius:22px;padding:14px}}button,.btn{{border:0;border-radius:12px;padding:13px 16px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-block}}.primary{{background:#2563eb;color:white}}.green{{background:#16a34a;color:white}}.gray{{background:#475569;color:white}}input[type=text]{{width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:12px;font-size:16px;box-sizing:border-box}}.actions{{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}}.ok{{background:#dcfce7;color:#166534;padding:12px;border-radius:12px;font-weight:900}}label{{font-weight:800}}canvas{{display:none}}@media(max-width:700px){{.wrap{{padding:12px}}.card{{padding:16px;border-radius:16px}}}}</style></head>
     <body><div class='wrap'><div class='card'><h1>Firma de contrato con cámara</h1><p class='muted'>Trabajador: <b>{html.escape(sol['trabajador'] or '')}</b> · DNI: <b>{html.escape(sol['dni'] or '')}</b></p><p>Documento: <b>{contrato_info}</b></p><span class='badge'>Estado: {html.escape(estado)}</span></div>
     {"<div class='card ok'>✅ Firma registrada correctamente. Ya puede cerrar esta ventana.</div>" if ok else ""}
-    <form method='post' class='card' onsubmit='return prepararEnvio()'><h2>1. Activar cámara y capturar evidencia</h2><p class='muted'>Funciona en laptop y celular. En celular usa la cámara frontal cuando el navegador lo permite.</p><div class='camera'><video id='video' autoplay playsinline></video><canvas id='canvas'></canvas><img id='preview' style='display:none'></div><input type='hidden' name='captura_base64' id='captura_base64'><input type='hidden' name='camara_origen' id='camara_origen' value='WEB'><div class='actions'><button type='button' class='primary' onclick='startCamera(event)'>📷 Activar cámara</button><button type='button' class='green' onclick='capturePhoto()'>✅ Capturar foto</button><button type='button' class='gray' onclick='stopCamera()'>Detener cámara</button><label class='btn gray' style='cursor:pointer'>📁 Cámara/archivo<input id='fileCamFallback' type='file' accept='image/*' capture='user' onchange='loadFileFallback(this)' style='display:none'></label></div><p id='camStatus' class='muted'></p><h2>2. Aceptación / firma digital simple</h2><p class='muted'>Declaro que soy el titular del DNI indicado, que he revisado el documento y acepto registrar mi firma/aceptación electrónica con evidencia de cámara.</p><label><input type='checkbox' name='acepta' value='1' required> Acepto firmar/validar este documento</label><br><br><label>Nombre completo como firma</label><input type='text' name='firma_texto' value='{html.escape(sol['trabajador'] or '')}' required><div class='actions'><button class='green' type='submit'>✍️ Registrar firma</button></div></form></div>
+    <form method='post' class='card' onsubmit='return prepararEnvio()'><h2>1. Activar cámara y capturar evidencia</h2><p class='muted'>Funciona en laptop y celular. En celular usa cámara frontal, pero el enlace debe estar en HTTPS; si es local con IP usa APP_SSL=1.</p><div class='camera'><video id='video' autoplay playsinline></video><canvas id='canvas'></canvas><img id='preview' style='display:none'></div><input type='hidden' name='captura_base64' id='captura_base64'><input type='hidden' name='camara_origen' id='camara_origen' value='WEB'><div class='actions'><button type='button' class='primary' onclick='startCamera(event)'>📷 Activar cámara</button><button type='button' class='green' onclick='capturePhoto()'>✅ Capturar foto</button><button type='button' class='gray' onclick='stopCamera()'>Detener cámara</button><label class='btn gray' style='cursor:pointer'>📁 Cámara/archivo<input id='fileCamFallback' type='file' accept='image/*' capture='user' onchange='loadFileFallback(this)' style='display:none'></label></div><p id='camStatus' class='muted'></p><h2>2. Aceptación / firma digital simple</h2><p class='muted'>Declaro que soy el titular del DNI indicado, que he revisado el documento y acepto registrar mi firma/aceptación electrónica con evidencia de cámara.</p><label><input type='checkbox' name='acepta' value='1' required> Acepto firmar/validar este documento</label><br><br><label>Nombre completo como firma</label><input type='text' name='firma_texto' value='{html.escape(sol['trabajador'] or '')}' required><div class='actions'><button class='green' type='submit'>✍️ Registrar firma</button></div></form></div>
     <script>
 let stream=null,captured=false,starting=false;
-function stMsg(t,ok=false,err=false){{const st=document.getElementById('camStatus'); if(st){{st.textContent=t; st.style.fontWeight='900'; st.style.color=err?'#b91c1c':(ok?'#15803d':'#64748b');}}}}
+function stMsg(t,ok=false,err=false){{const st=document.getElementById('camStatus'); if(st){{st.innerHTML=t; st.style.fontWeight='900'; st.style.color=err?'#b91c1c':(ok?'#15803d':'#64748b');}}}}
 function secureOk(){{return window.isSecureContext || location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);}}
-async function waitVideo(v,ms=10000){{const ini=Date.now(); while(Date.now()-ini<ms){{if(v.videoWidth&&v.videoHeight)return true; await new Promise(r=>setTimeout(r,150));}} return false;}}
-async function startCamera(ev){{if(ev)ev.preventDefault(); if(starting)return false; starting=true; const v=document.getElementById('video'); try{{captured=false; stMsg('Activando cámara real... acepta el permiso del navegador.'); if(!secureOk())throw new Error('CONTEXTO_NO_SEGURO'); if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error('MEDIADEVICES_NO_DISPONIBLE'); if(stream){{stream.getTracks().forEach(t=>t.stop()); stream=null;}} const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent); document.getElementById('camara_origen').value=isMobile?'CELULAR':'LAPTOP/PC'; v.muted=true; v.autoplay=true; v.playsInline=true; v.setAttribute('playsinline','playsinline'); v.setAttribute('webkit-playsinline','webkit-playsinline'); v.style.display='block'; const tries=[{{video:{{facingMode:{{ideal:'user'}},width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}},{{video:{{facingMode:'user',width:{{ideal:640}},height:{{ideal:480}}}},audio:false}},{{video:{{width:{{ideal:640}},height:{{ideal:480}}}},audio:false}},{{video:true,audio:false}}]; let last=null; for(const cfg of tries){{try{{stream=await navigator.mediaDevices.getUserMedia(cfg); break;}}catch(e){{last=e;}}}} if(!stream)throw(last||new Error('SIN_CAMARA')); v.srcObject=stream; try{{await v.play();}}catch(e){{}} if(!await waitVideo(v))throw new Error('VIDEO_NEGRO_O_SIN_IMAGEN'); stMsg('✅ Cámara activa. Ahora presiona Capturar foto.',true); return true;}}catch(e){{if(stream){{stream.getTracks().forEach(t=>t.stop()); stream=null;}} if(v)v.srcObject=null; const n=(e&&e.name)?e.name:((e&&e.message)?e.message:'Error'); let ayuda=''; if(n==='CONTEXTO_NO_SEGURO')ayuda=' Abre en http://127.0.0.1:5000 o HTTPS. Chrome/Edge bloquean cámara en HTTP con IP/red.'; else if(n==='NotAllowedError'||n==='PermissionDeniedError')ayuda=' En el candado del navegador cambia Cámara a PERMITIR.'; else if(n==='NotReadableError'||n==='TrackStartError')ayuda=' Cierra Zoom/Meet/Teams/Cámara de Windows y vuelve a intentar.'; else if(n==='NotFoundError'||n==='DevicesNotFoundError')ayuda=' No se encontró cámara conectada.'; else ayuda=' Revisa permisos de Windows: Configuración > Privacidad > Cámara.'; stMsg('❌ No se pudo activar cámara: '+n+'.'+ayuda+' Como respaldo usa Cámara/archivo.',false,true); return false;}}finally{{starting=false;}}}}
-function capturePhoto(){{const v=document.getElementById('video'),c=document.getElementById('canvas'),img=document.getElementById('preview'); if(!v||!v.srcObject||!v.videoWidth){{stMsg('Primero activa la cámara y acepta el permiso.',false,true);return false;}} c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0,c.width,c.height);const data=c.toDataURL('image/png');document.getElementById('captura_base64').value=data;img.src=data;img.style.display='block';captured=true;stMsg('✅ Foto capturada correctamente. Ya puedes registrar la firma.',true);return true;}}
-function loadFileFallback(input){{const f=input&&input.files?input.files[0]:null; if(!f)return; const rd=new FileReader(); rd.onload=()=>{{document.getElementById('captura_base64').value=rd.result; const img=document.getElementById('preview'); img.src=rd.result; img.style.display='block'; captured=true; stMsg('✅ Evidencia cargada desde cámara/archivo. Ya puedes registrar la firma.',true);}}; rd.readAsDataURL(f);}}
+function isMobile(){{return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);}}
+async function waitVideo(v,ms=12000){{const ini=Date.now(); while(Date.now()-ini<ms){{if(v.videoWidth&&v.videoHeight&&v.readyState>=2)return true; await new Promise(r=>setTimeout(r,150));}} return false;}}
+async function startCamera(ev){{
+  if(ev)ev.preventDefault(); if(starting)return false; starting=true;
+  const v=document.getElementById('video'); const preview=document.getElementById('preview');
+  try{{
+    captured=false; document.getElementById('captura_base64').value=''; if(preview)preview.style.display='none';
+    if(!secureOk()) throw new Error('CONTEXTO_NO_SEGURO');
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) throw new Error('MEDIADEVICES_NO_DISPONIBLE');
+    if(stream){{stream.getTracks().forEach(t=>t.stop()); stream=null;}}
+    document.getElementById('camara_origen').value=isMobile()?'CELULAR':'LAPTOP/PC';
+    v.muted=true; v.autoplay=true; v.playsInline=true; v.setAttribute('playsinline',''); v.setAttribute('webkit-playsinline',''); v.style.display='block';
+    stMsg('Activando cámara real... acepta el permiso del navegador.');
+    const tries=[
+      {{video:{{facingMode:{{ideal:'user'}},width:{{ideal:1280}},height:{{ideal:720}}}},audio:false}},
+      {{video:{{facingMode:'user'}},audio:false}},
+      {{video:{{width:{{ideal:640}},height:{{ideal:480}}}},audio:false}},
+      {{video:true,audio:false}}
+    ];
+    let last=null;
+    for(const cfg of tries){{try{{stream=await navigator.mediaDevices.getUserMedia(cfg); break;}}catch(e){{last=e;}}}}
+    if(!stream) throw(last||new Error('SIN_CAMARA'));
+    v.srcObject=stream;
+    try{{await v.play();}}catch(e){{}}
+    if(!await waitVideo(v)) throw new Error('VIDEO_NEGRO_O_SIN_IMAGEN');
+    stMsg('✅ Cámara activa. Coloca el rostro al centro y presiona <b>Capturar foto</b>.',true);
+    return true;
+  }}catch(e){{
+    if(stream){{stream.getTracks().forEach(t=>t.stop()); stream=null;}} if(v)v.srcObject=null;
+    const n=(e&&e.name)?e.name:((e&&e.message)?e.message:'Error'); let ayuda='';
+    if(n==='CONTEXTO_NO_SEGURO') ayuda=' En celular no abre cámara con HTTP/IP local. Usa HTTPS de Render o ejecuta local con APP_SSL=1 y entra por https://IP-DE-TU-PC:5000.';
+    else if(n==='NotAllowedError'||n==='PermissionDeniedError') ayuda=' Dale PERMITIR a Cámara en el candado del navegador.';
+    else if(n==='NotReadableError'||n==='TrackStartError') ayuda=' Cierra Zoom/Meet/Teams/Cámara de Windows u otra app que esté usando la cámara.';
+    else if(n==='NotFoundError'||n==='DevicesNotFoundError') ayuda=' No se encontró cámara conectada.';
+    else ayuda=' Revisa permisos de cámara del navegador y del sistema operativo.';
+    stMsg('❌ No se pudo activar cámara: '+n+'.'+ayuda+' También puedes usar el botón <b>Cámara/archivo</b> como respaldo.',false,true);
+    return false;
+  }}finally{{starting=false;}}
+}}
+function capturePhoto(){{
+  const v=document.getElementById('video'),c=document.getElementById('canvas'),img=document.getElementById('preview');
+  if(!v||!v.srcObject||!v.videoWidth){{stMsg('Primero activa la cámara y acepta el permiso.',false,true);return false;}}
+  c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  const data=c.toDataURL('image/jpeg',0.88); document.getElementById('captura_base64').value=data;
+  img.src=data;img.style.display='block';captured=true;stMsg('✅ Foto capturada correctamente. Ya puedes registrar la firma.',true);return true;
+}}
+function loadFileFallback(input){{const f=input&&input.files?input.files[0]:null; if(!f)return; const rd=new FileReader(); rd.onload=()=>{{document.getElementById('captura_base64').value=rd.result; const img=document.getElementById('preview'); img.src=rd.result; img.style.display='block'; captured=true; document.getElementById('camara_origen').value=isMobile()?'CELULAR-FALLBACK':'PC-FALLBACK'; stMsg('✅ Evidencia cargada desde cámara/archivo. Ya puedes registrar la firma.',true);}}; rd.readAsDataURL(f);}}
 function stopCamera(){{if(stream){{stream.getTracks().forEach(t=>t.stop()); stream=null;}} const v=document.getElementById('video'); if(v){{v.pause(); v.srcObject=null;}} stMsg('Cámara detenida.');}}
 function prepararEnvio(){{if(!captured||!document.getElementById('captura_base64').value){{alert('Primero capture la foto de evidencia.');return false;}}return true;}}
-document.addEventListener('DOMContentLoaded',()=>{{stMsg('Cámara lista. Presiona Activar cámara. Debe estar en HTTPS o localhost/127.0.0.1.'); setTimeout(()=>{{if(!captured)startCamera();}},700);}});
+document.addEventListener('DOMContentLoaded',()=>{{stMsg(secureOk()?'Cámara lista. Presiona Activar cámara.':'⚠️ Para celular necesitas HTTPS. Usa Render o APP_SSL=1 local.'); setTimeout(()=>{{if(!captured)startCamera();}},650);}});
 </script>
     </body></html>"""
     return content
@@ -4822,4 +4875,31 @@ def admin_firma_digital():
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '5000'))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    host = os.getenv('HOST', '0.0.0.0')
+    debug = os.getenv('FLASK_DEBUG', '0') == '1'
+    ssl_context = None
+    # Para probar desde CELULAR en red local, el navegador exige HTTPS.
+    # Ejecuta en Windows: set APP_SSL=1 && python app.py
+    # Luego abre en el celular: https://IP-DE-TU-PC:5000/firma/<token>
+    if os.getenv('APP_SSL', '0') == '1':
+        cert_file = os.getenv('SSL_CERT', 'cert.pem')
+        key_file = os.getenv('SSL_KEY', 'key.pem')
+        if Path(cert_file).exists() and Path(key_file).exists():
+            ssl_context = (cert_file, key_file)
+        else:
+            ssl_context = 'adhoc'
+    try:
+        print('============================================================')
+        print('Portal PRIZE iniciado')
+        print('PC local:  http://127.0.0.1:%s' % port)
+        if ssl_context:
+            print('Celular:   https://IP-DE-TU-PC:%s  (aceptar certificado)' % port)
+        else:
+            print('Celular:   usar enlace HTTPS de Render o iniciar con APP_SSL=1')
+        print('Nota cámara:', contexto_camara_seguro_texto())
+        print('============================================================')
+        app.run(host=host, port=port, debug=debug, ssl_context=ssl_context)
+    except Exception as e:
+        print('No se pudo iniciar con SSL:', e)
+        print('Reintentando en HTTP solo para PC localhost...')
+        app.run(host=host, port=port, debug=debug)
