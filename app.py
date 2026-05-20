@@ -4125,6 +4125,47 @@ document.addEventListener('DOMContentLoaded',()=>{{stMsg(secureOk()?'Intentando 
     </body></html>"""
     return content
 
+
+@app.route('/admin/contratacion/carga/plantilla/<tipo>')
+@admin_required
+def descargar_plantilla_carga_contratacion(tipo):
+    """Descarga plantillas oficiales para Carga Masiva: actualización de datos y bajas."""
+    wb = Workbook(); ws = wb.active
+    tipo = (tipo or '').lower().strip()
+    if tipo in ('baja','bajas','cese'):
+        ws.title = 'BAJA_TRABAJADOR'
+        headers = ['Código Trabajador', 'Motivo Cese', 'Fecha', 'Comentario']
+        ejemplo = ['74324033', 'CESE / RENUNCIA / FIN DE CONTRATO', '31/05/2026', 'Comentario opcional']
+        nombre = 'PLANTILLA_CARGA_MASIVA_BAJA_TRABAJADOR.xlsx'
+    else:
+        ws.title = 'ACTUALIZACION_DATOS'
+        headers = ['Legajo', 'Número teléfono móvil', 'Correo electrónico']
+        ejemplo = ['74324033', '999999999', 'correo@empresa.com']
+        nombre = 'PLANTILLA_CARGA_MASIVA_ACTUALIZACION_DATOS_TRABAJADOR.xlsx'
+    ws.append(headers); ws.append(ejemplo)
+    fill = PatternFill('solid', fgColor='BFBFBF')
+    font = Font(bold=True, color='000000')
+    border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    for c in ws[1]:
+        c.fill = fill; c.font = font; c.alignment = Alignment(horizontal='center'); c.border = border
+    for col in range(1, len(headers)+1):
+        ws.column_dimensions[chr(64+col)].width = 28
+    out = PERSIST_DIR / nombre
+    wb.save(out)
+    return send_file(out, as_attachment=True, download_name=nombre)
+
+
+def _headers_excel(ws):
+    return {str(c.value or '').strip().upper(): i for i, c in enumerate(ws[1])}
+
+def _celda(row, idx, *names):
+    for n in names:
+        i = idx.get(str(n).strip().upper())
+        if i is not None:
+            return clean(row[i].value)
+    return ''
+
+
 @app.route('/admin/contratacion', methods=['GET','POST'])
 @admin_required
 def admin_contratacion():
@@ -4149,6 +4190,75 @@ def admin_contratacion():
                 con.execute('UPDATE trabajadores SET activo=? WHERE dni=?', (nuevo_estado, dni_estado)); con.commit()
             flash(('Trabajador reactivado.' if nuevo_estado else 'Trabajador cesado/inactivado. Sus documentos se mantienen archivados.'), 'ok')
             return redirect(url_for('admin_contratacion', sec='actualizar'))
+        if accion == 'carga_actualizar_datos':
+            empresa = clean(request.form.get('empresa')) or 'AQUANQA'
+            f = request.files.get('archivo')
+            if not f or not f.filename:
+                flash('Selecciona el Excel de actualización de datos.', 'error')
+                return redirect(url_for('admin_contratacion', sec='carga'))
+            carpeta = UPLOAD_DIR/'contratacion'/'carga_masiva'; carpeta.mkdir(parents=True, exist_ok=True)
+            path = carpeta/(now_file()+'_ACTUALIZACION_'+secure_filename(f.filename)); f.save(path)
+            ok = no = err = 0
+            try:
+                wb = load_workbook(path, data_only=True); ws = wb.active; idx = _headers_excel(ws)
+                with db() as con:
+                    for row in ws.iter_rows(min_row=2):
+                        legajo = normalizar_dni(_celda(row, idx, 'Legajo', 'Código Trabajador', 'Codigo Trabajador', 'DNI'))
+                        celular = _celda(row, idx, 'Número teléfono móvil', 'Numero telefono movil', 'Telefono movil', 'Celular')
+                        correo = _celda(row, idx, 'Correo electrónico', 'Correo electronico', 'Correo')
+                        if not legajo:
+                            continue
+                        existe = con.execute('SELECT dni FROM trabajadores WHERE dni=?', (legajo,)).fetchone()
+                        if not existe:
+                            no += 1; continue
+                        sets=[]; vals=[]
+                        if celular:
+                            sets.append('celular=?'); vals.append(celular)
+                        if correo:
+                            sets.append('correo=?'); vals.append(correo.lower())
+                        if empresa:
+                            sets.append('empresa=?'); vals.append(empresa)
+                        if sets:
+                            vals.append(legajo)
+                            con.execute('UPDATE trabajadores SET '+','.join(sets)+' WHERE dni=?', vals)
+                            ok += 1
+                    con.commit()
+                exportar_excels_locales()
+                flash(f'Actualización de datos completada: {ok} trabajadores actualizados, {no} no encontrados.', 'ok')
+            except Exception as e:
+                err += 1; flash('Error procesando actualización de datos: '+str(e), 'error')
+            return redirect(url_for('admin_contratacion', sec='carga'))
+        if accion == 'carga_baja_trabajador':
+            empresa = clean(request.form.get('empresa')) or 'AQUANQA'
+            f = request.files.get('archivo')
+            if not f or not f.filename:
+                flash('Selecciona el Excel de baja de trabajador.', 'error')
+                return redirect(url_for('admin_contratacion', sec='carga'))
+            carpeta = UPLOAD_DIR/'contratacion'/'carga_masiva'; carpeta.mkdir(parents=True, exist_ok=True)
+            path = carpeta/(now_file()+'_BAJA_'+secure_filename(f.filename)); f.save(path)
+            ok = no = 0
+            try:
+                wb = load_workbook(path, data_only=True); ws = wb.active; idx = _headers_excel(ws)
+                with db() as con:
+                    for row in ws.iter_rows(min_row=2):
+                        dni = normalizar_dni(_celda(row, idx, 'Código Trabajador', 'Codigo Trabajador', 'Legajo', 'DNI'))
+                        motivo = _celda(row, idx, 'Motivo Cese', 'Motivo')
+                        fecha = fecha_sin_hora(_celda(row, idx, 'Fecha', 'Fecha Cese'))
+                        comentario = _celda(row, idx, 'Comentario', 'Observacion', 'Observación')
+                        if not dni:
+                            continue
+                        existe = con.execute('SELECT dni FROM trabajadores WHERE dni=?', (dni,)).fetchone()
+                        if not existe:
+                            no += 1; continue
+                        obs = f"BAJA MASIVA | EMPRESA: {empresa} | MOTIVO: {motivo} | FECHA: {fecha} | COMENTARIO: {comentario}".strip()
+                        con.execute('UPDATE trabajadores SET activo=0, fecha_fin_contrato=COALESCE(NULLIF(?,\'\'), fecha_fin_contrato), observacion=? WHERE dni=?', (fecha, obs, dni))
+                        ok += 1
+                    con.commit()
+                exportar_excels_locales()
+                flash(f'Baja masiva completada: {ok} trabajadores inactivados, {no} no encontrados.', 'ok')
+            except Exception as e:
+                flash('Error procesando baja masiva: '+str(e), 'error')
+            return redirect(url_for('admin_contratacion', sec='carga'))
         if accion == 'crear_observado':
             tipo_persona = clean(request.form.get('tipo_persona')) or 'Trabajador'
             trabajador_sel = clean(request.form.get('trabajador_sel'))
@@ -4395,7 +4505,30 @@ def admin_contratacion():
         rows=''.join([f"<tr class='{ 'selected' if i==0 else ''}'><td><input type='checkbox' {'checked' if i==0 else ''}></td><td>🔍 📄</td><td>{232105-i}</td><td><span class='c-badge green'>APROBADO</span></td><td>{'Eliminar Contrato' if i%2==0 else 'Eliminar Alta Trabajador'}</td><td>{now_txt()}</td><td>{now_txt()}</td><td>{(trabajadores[i]['nombre'] if i < len(trabajadores) else 'TRABAJADOR DEMO')}</td></tr>" for i in range(10)])
         content=wrap(f"<h2 class='c-title'>Eventos</h2><div class='c-filter'><b>Tipos de Evento:</b><select><option>Renovar Contrato</option><option>Eliminar Contrato</option></select><b>Estados:</b><select><option></option><option>Aprobado</option><option>Pendiente</option></select><b>Código Trabajador</b><input><span></span><span><button class='c-btn'>⌕ Buscar</button> <button class='c-btn gray'>Limpiar</button></span></div><div class='toolbar'>⚙ Acción ▾</div><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th></th><th>No.Operación</th><th>Estado</th><th>Tipo de Evento</th><th>Fecha Registro</th><th>Fecha último Estado</th><th>Trabajador</th></tr>{rows}</table></div>")
     elif sec=='carga':
-        content=wrap("<h2 class='c-title'>Carga Masiva</h2><div class='c-card'><div class='tabs'><div class='tab active'>Carga Masiva</div><div class='tab'>Registros de Carga Masiva</div></div></div><div class='c-filter' style='grid-template-columns:1fr 1fr;max-width:980px;margin:auto'><input placeholder='Codigo/Nombre'><select><option>Grupo</option></select></div><div class='tile-grid'><div class='c-tile'><div class='tile-icon'>▤</div><h2>Carga Masiva Actualizar Datos Trabajo</h2><span class='download-corner'>⬇</span></div><div class='c-tile'><div class='tile-icon'>▤</div><h2>Carga Masiva Bajas Trabajador</h2><span class='download-corner'>⬇</span></div></div>")
+        emp_opts = "<option>AQUANQA</option><option>AQUANCA II</option>"
+        content=wrap(f"""
+        <h2 class='c-title'>Carga Masiva</h2>
+        <div class='c-card'><div class='tabs'><div class='tab active'>Carga Masiva</div><div class='tab'>Registros de Carga Masiva</div></div></div>
+        <div class='c-filter' style='grid-template-columns:1fr 1fr;max-width:980px;margin:auto'><input placeholder='Código/Nombre'><select><option>Grupo</option><option>Actualización de datos</option><option>Baja de trabajador</option></select></div>
+        <div class='tile-grid'>
+          <div class='c-tile' onclick='abrirCargaModal("actualizar")'><div class='tile-icon'>▤</div><h2>Carga Masiva Actualizar Datos Trabajador</h2><a class='download-corner' onclick='event.stopPropagation()' href='{url_for('descargar_plantilla_carga_contratacion', tipo='actualizar')}'>⬇</a></div>
+          <div class='c-tile' onclick='abrirCargaModal("baja")'><div class='tile-icon'>▤</div><h2>Carga Masiva Bajas Trabajador</h2><a class='download-corner' onclick='event.stopPropagation()' href='{url_for('descargar_plantilla_carga_contratacion', tipo='baja')}'>⬇</a></div>
+        </div>
+        <div id='modalActualizar' class='obs-modal'><div class='obs-box'><div class='obs-head'><h2>Importar registros - Actualización de datos</h2><button type='button' onclick='cerrarCargaModal()'>×</button></div>
+          <form method='post' enctype='multipart/form-data' class='obs-form'><input type='hidden' name='accion' value='carga_actualizar_datos'>
+            <label>Compañía:</label><select name='empresa'>{emp_opts}</select>
+            <label>Archivo Excel:</label><input type='file' name='archivo' accept='.xlsx,.xls' required>
+            <div></div><div class='obs-actions'><a class='c-btn gray' href='{url_for('descargar_plantilla_carga_contratacion', tipo='actualizar')}'>⬇ Plantilla</a><button class='c-btn'>Subir</button><button type='button' class='c-btn gray' onclick='cerrarCargaModal()'>Cerrar</button></div>
+          </form></div></div>
+        <div id='modalBaja' class='obs-modal'><div class='obs-box'><div class='obs-head'><h2>Importar registros - Baja de trabajador</h2><button type='button' onclick='cerrarCargaModal()'>×</button></div>
+          <form method='post' enctype='multipart/form-data' class='obs-form'><input type='hidden' name='accion' value='carga_baja_trabajador'>
+            <label>Compañía:</label><select name='empresa'>{emp_opts}</select>
+            <label>Archivo Excel:</label><input type='file' name='archivo' accept='.xlsx,.xls' required>
+            <div></div><div class='obs-actions'><a class='c-btn gray' href='{url_for('descargar_plantilla_carga_contratacion', tipo='baja')}'>⬇ Plantilla</a><button class='c-btn'>Subir</button><button type='button' class='c-btn gray' onclick='cerrarCargaModal()'>Cerrar</button></div>
+          </form></div></div>
+        <style>.obs-modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;align-items:center;justify-content:center;padding:18px}}.obs-modal.show{{display:flex}}.obs-box{{width:min(620px,96vw);background:#fff;color:#111827;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden}}.obs-head{{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #dce2ea}}.obs-head h2{{color:#111827!important;margin:0}}.obs-head button{{border:0;background:transparent;font-size:32px;color:#8a8f98;cursor:pointer}}.obs-form{{display:grid;grid-template-columns:150px 1fr;gap:14px 12px;padding:24px;align-items:center}}.obs-form label{{color:#374151!important;font-weight:700;text-align:right}}.obs-form input,.obs-form select{{background:#fff!important;color:#111827!important;border:1px solid #cdd5df!important;border-radius:8px!important;padding:10px!important}}.obs-actions{{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}}@media(max-width:760px){{.obs-form{{grid-template-columns:1fr}}.obs-form label{{text-align:left}}}}</style>
+        <script>function abrirCargaModal(t){{cerrarCargaModal();document.getElementById(t==='baja'?'modalBaja':'modalActualizar').classList.add('show');}}function cerrarCargaModal(){{document.querySelectorAll('.obs-modal').forEach(m=>m.classList.remove('show'));}}</script>
+        """)
     elif sec=='reportes':
         content=wrap(f"<h2 class='c-title'>Reportes</h2><div class='c-card table-wrap'><table class='c-table'><tr><th></th><th>Código</th><th>Nombre</th><th>Nombre</th><th>Componente</th><th>Creado por</th></tr>{report_rows}</table></div>")
     elif sec=='actualizar':
@@ -4435,7 +4568,6 @@ def admin_contratacion():
           <div id='tabObsActivos' class='table-wrap obs-tab'><table id='tablaObs' class='c-table'><tr><th></th><th>Acción</th><th>Estado</th><th>Tipo Documento</th><th>Número Documento</th><th>Nombre</th><th>Motivo</th><th>Nivel Restricción</th><th>Comentario</th><th>Creado Por</th><th>Fecha/Hora Creación</th><th>Editor Por</th><th>Fecha/Hora Edición</th></tr>{obs_rows}</table></div>
           <div id='tabObsAnulados' class='table-wrap obs-tab' style='display:none'><table class='c-table'><tr><th>Log</th><th>Tipo Documento</th><th>Número Documento</th><th>Nombre</th><th>Motivo</th><th>Nivel Restricción</th><th>Comentario</th><th>Creado Por</th><th>Fecha/Hora Creación</th><th>Editor Por</th><th>Fecha/Hora Edición</th></tr>{obs_anulados_rows}</table></div>
         </div>
-        <div class='c-card'><div class='tabs'><div class='tab active'>Tipos de Documento por Etapa</div></div><div class='table-wrap'><table class='c-table'><tr><th></th><th>Estado</th><th>Código</th><th>Tipo Documento</th><th>Etapa</th><th>Esquema</th><th>Descripción</th></tr>{tipos_rows}</table></div></div>
         <style>.obs-modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;align-items:center;justify-content:center;padding:18px}}.obs-modal.show{{display:flex}}.obs-box{{width:min(760px,96vw);background:#fff;color:#111827;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden}}.obs-head{{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #dce2ea}}.obs-head h2{{color:#111827!important;margin:0}}.obs-head button{{border:0;background:transparent;font-size:32px;color:#8a8f98;cursor:pointer}}.obs-form{{display:grid;grid-template-columns:190px 1fr;gap:14px 12px;padding:24px;align-items:center}}.obs-form label{{color:#374151!important;font-weight:700;text-align:right}}.obs-form input,.obs-form select{{background:#fff!important;color:#111827!important;border:1px solid #cdd5df!important;border-radius:8px!important;padding:10px!important}}.radio-line{{display:flex;gap:24px}}.radio-line label{{text-align:left!important;font-weight:500!important}}.obs-actions{{display:flex;gap:10px;justify-content:flex-end}}@media(max-width:760px){{.obs-form{{grid-template-columns:1fr}}.obs-form label{{text-align:left}}}}</style>
         <script>
         function abrirObsModal(){{document.getElementById('obsModal').classList.add('show');}}
