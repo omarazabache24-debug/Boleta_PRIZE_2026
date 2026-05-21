@@ -1,1 +1,0 @@
-Se integró la misma lógica de cámara que funciona en Prueba de cámara dentro de la pantalla principal Firma / Facial / Digital. La cámara intenta iniciar automáticamente, botones corregidos y fallback video:true para PC/celular. Para celular se requiere HTTPS.
