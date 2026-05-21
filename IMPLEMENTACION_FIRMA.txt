@@ -1,9 +1,0 @@
-
-IMPLEMENTACION REALIZADA
-
-- Nueva pestaña: Firma / Facial / Digital
-- Activación de cámara web y celular
-- Captura de evidencia facial
-- Base preparada para integración RENIEC/API biométrica
-- Bandeja de firmas
-- Trazabilidad de contratos
