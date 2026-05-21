@@ -798,6 +798,66 @@ def init_db():
             if not existe:
                 con.execute('''INSERT INTO contratacion_tipos(codigo,descripcion,etapa,obligatorio,activo,requiere_firma_digital,requiere_firma_electronica,requiere_confirmacion_recepcion)
                                VALUES(?,?,?,?,?,?,?,?)''', (codigo, desc, etapa, obligatorio, activo, fd, fe, cr))
+
+        # PRO: Maestro Tipo Documento de Empleado (similar a Adapta)
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS contratacion_tipo_empleado(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT,
+            descripcion TEXT,
+            nombre_corto TEXT,
+            grupo TEXT,
+            activo INTEGER DEFAULT 1,
+            permite_doc_sin_cargo INTEGER DEFAULT 0,
+            requiere_validacion INTEGER DEFAULT 0,
+            tiene_fecha_vencimiento INTEGER DEFAULT 0,
+            es_contrato INTEGER DEFAULT 0
+        )''')
+        base_tipo_empleado=[
+            ('089','CONTRATO TRABAJADOR','CONTRATO','Contratación Trabajadores',1,0,0,0,1),
+            ('929','CONTRATO TRABAJADOR(RENOVACIÓN)','CONTRATO RENOVACIÓN','Renovaciones de Contrato',1,0,0,0,1),
+            ('468','ANEXO DE RIESGOS','ANEXO DE RIESGOS','Contratación Trabajadores',1,0,0,0,0),
+            ('890','BOLETIN SIS. PENSIONARIO','BOLETIN PENSIONARIO','Contratación Trabajadores',1,0,0,0,0),
+            ('323','CARGO DE ENTREGA','CARGO DE ENTREGA','Contratación Trabajadores',1,0,0,0,0),
+            ('706','CARTA DE COMPROMISO','CARTA COMPROMISO','Contratación Trabajadores',1,0,0,0,0),
+            ('159','NOTA DE CARGO','NOTA DE CARGO','Contratación Trabajadores',1,0,0,0,0),
+            ('057','CARGO ENTREGA RENOVACION','CARGO RENOVACION','Renovaciones de Contrato',1,0,0,0,0),
+            ('400','ELECCIÓN DE BENEFICIOS SOCIALES','ELECCIÓN BENEFICIOS','Contratación Trabajadores',1,0,0,0,0),
+            ('214','AUTODECLARACION BUENAS PRACTICAS','BUENAS PRACTICAS','Contratación Trabajadores',1,0,0,0,0),
+        ]
+        for codigo, descripcion, nombre_corto, grupo, activo, sin_cargo, validacion, vencimiento, contrato in base_tipo_empleado:
+            existe = con.execute('SELECT id FROM contratacion_tipo_empleado WHERE codigo=? OR UPPER(descripcion)=UPPER(?) LIMIT 1', (codigo, descripcion)).fetchone()
+            if not existe:
+                con.execute('''INSERT INTO contratacion_tipo_empleado(codigo,descripcion,nombre_corto,grupo,activo,permite_doc_sin_cargo,requiere_validacion,tiene_fecha_vencimiento,es_contrato)
+                               VALUES(?,?,?,?,?,?,?,?,?)''', (codigo, descripcion, nombre_corto, grupo, activo, sin_cargo, validacion, vencimiento, contrato))
+
+        # PRO: Maestro Cargos (con estado Activo/Inactivo y ficha editable)
+        con.execute('''
+        CREATE TABLE IF NOT EXISTS contratacion_cargos(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo TEXT,
+            nombre TEXT,
+            nombre_corto TEXT,
+            resumen TEXT,
+            funciones TEXT,
+            activo INTEGER DEFAULT 1
+        )''')
+        base_cargos=[
+            ('803','AUXILIAR DE TRANSPORTE Y COMEDORES','AUXILIAR DE TRANSPORTE Y COMEDORES','', 'Coordinar con transportistas para asegurar el recojo y llegada del personal a tiempo en fundo.\\nRecepcionar y archivar manifiestos y facturas de los proveedores de transporte.'),
+            ('023','AUXILIAR DOCUMENTARIO DE COMPRAS','AUXILIAR DOCUMENTARIO DE COMPRAS','', 'Gestionar documentos de compras, validar sustentos y apoyar el archivo documentario del área.'),
+            ('741','OPERARIO DE ALMACEN AGRICOLA','OPERARIO DE ALMACEN AGRICOLA','', 'Recepcionar, ordenar y controlar materiales agrícolas según procedimientos internos.'),
+            ('764','AUXILIAR DE COMERCIO EXTERIOR','AUXILIAR DE COMERCIO EXTERIOR','', 'Apoyar en documentación, seguimiento y control de operaciones de comercio exterior.'),
+            ('357','AUXILIAR DE PRODUCCION AGRICOLA','AUXILIAR DE PRODUCCION AGRICOLA','', 'Apoyar las actividades operativas de producción agrícola y control de avances diarios.'),
+            ('2950','AUXILIAR DE FERTIRIEGO','AUXILIAR DE FERTIRIEGO','', 'Apoyar la programación, control y ejecución de labores de fertirriego.'),
+            ('2949','ASISTENTE DE FERTIRIEGO Y OSMOSIS','ASISTENTE DE FERTIRIEGO Y OSMOSIS','', 'Registrar, monitorear y reportar actividades de fertirriego y sistemas de osmosis.'),
+            ('2948','SUB GERENTE AGRÍCOLA','SUB GERENTE AGRÍCOLA','', 'Supervisar la gestión agrícola, coordinar equipos y controlar indicadores productivos.'),
+            ('2947','ANALISTA DE GESTIÓN DE LA INFORMACIÓN AGRÍCOLA','ANALISTA DE GESTIÓN DE LA INFORMACIÓN AGRÍCOLA','', 'Analizar información agrícola, generar reportes y proponer mejoras de gestión.'),
+            ('2946','AUXILIAR DE DIGITACIÓN - DESPACHO','AUXILIAR DE DIGITACIÓN - DESPACHO','', 'Registrar información de despacho, validar datos y mantener reportes actualizados.'),
+        ]
+        for codigo, nombre, nombre_corto, resumen, funciones in base_cargos:
+            existe = con.execute('SELECT id FROM contratacion_cargos WHERE codigo=? OR UPPER(nombre)=UPPER(?) LIMIT 1', (codigo, nombre)).fetchone()
+            if not existe:
+                con.execute('''INSERT INTO contratacion_cargos(codigo,nombre,nombre_corto,resumen,funciones,activo) VALUES(?,?,?,?,?,1)''', (codigo, nombre, nombre_corto, resumen, funciones))
         con.execute('''
         CREATE TABLE IF NOT EXISTS contratacion_plantillas(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -4321,6 +4381,82 @@ def admin_contratacion():
                 con.execute('DELETE FROM contratacion_tipos WHERE id=?', (tid,)); con.commit()
             flash('Tipo de documento eliminado.', 'ok')
             return redirect(url_for('admin_contratacion', sec='tipos_etapa'))
+
+        if accion == 'guardar_tipo_empleado':
+            did = request.form.get('doc_emp_id')
+            codigo = clean(request.form.get('codigo'))
+            descripcion = clean(request.form.get('descripcion')).upper()
+            nombre_corto = clean(request.form.get('nombre_corto')).upper()
+            grupo = clean(request.form.get('grupo')) or 'Contratación Trabajadores'
+            activo = 1 if request.form.get('activo') == '1' else 0
+            sin_cargo = 1 if request.form.get('permite_doc_sin_cargo') == '1' else 0
+            validacion = 1 if request.form.get('requiere_validacion') == '1' else 0
+            vencimiento = 1 if request.form.get('tiene_fecha_vencimiento') == '1' else 0
+            contrato = 1 if request.form.get('es_contrato') == '1' else 0
+            if not descripcion or not nombre_corto or not grupo:
+                flash('Completa Descripción, Nombre Corto y Grupo.', 'error')
+                return redirect(url_for('admin_contratacion', sec='tipo_empleado'))
+            if not codigo:
+                codigo = str(abs(hash(descripcion)) % 9000 + 100).zfill(3)
+            with db() as con:
+                if did:
+                    con.execute('''UPDATE contratacion_tipo_empleado SET codigo=?,descripcion=?,nombre_corto=?,grupo=?,activo=?,permite_doc_sin_cargo=?,requiere_validacion=?,tiene_fecha_vencimiento=?,es_contrato=? WHERE id=?''',
+                                (codigo, descripcion, nombre_corto, grupo, activo, sin_cargo, validacion, vencimiento, contrato, did))
+                    flash('Tipo documento de empleado actualizado.', 'ok')
+                else:
+                    con.execute('''INSERT INTO contratacion_tipo_empleado(codigo,descripcion,nombre_corto,grupo,activo,permite_doc_sin_cargo,requiere_validacion,tiene_fecha_vencimiento,es_contrato) VALUES(?,?,?,?,?,?,?,?,?)''',
+                                (codigo, descripcion, nombre_corto, grupo, activo, sin_cargo, validacion, vencimiento, contrato))
+                    flash('Tipo documento de empleado creado.', 'ok')
+                con.commit()
+            return redirect(url_for('admin_contratacion', sec='tipo_empleado'))
+        if accion == 'estado_tipo_empleado':
+            did = request.form.get('doc_emp_id')
+            activo = 1 if request.form.get('activo') == '1' else 0
+            with db() as con:
+                con.execute('UPDATE contratacion_tipo_empleado SET activo=? WHERE id=?', (activo, did)); con.commit()
+            flash('Estado actualizado.', 'ok')
+            return redirect(url_for('admin_contratacion', sec='tipo_empleado'))
+        if accion == 'eliminar_tipo_empleado':
+            did = request.form.get('doc_emp_id')
+            with db() as con:
+                con.execute('DELETE FROM contratacion_tipo_empleado WHERE id=?', (did,)); con.commit()
+            flash('Tipo documento de empleado eliminado.', 'ok')
+            return redirect(url_for('admin_contratacion', sec='tipo_empleado'))
+        if accion == 'guardar_cargo':
+            cid = request.form.get('cargo_id')
+            codigo = clean(request.form.get('codigo'))
+            nombre = clean(request.form.get('nombre')).upper()
+            nombre_corto = clean(request.form.get('nombre_corto')).upper()
+            resumen = clean(request.form.get('resumen'))
+            funciones = clean(request.form.get('funciones'))
+            activo = 1 if request.form.get('activo') == '1' else 0
+            if not nombre or not nombre_corto:
+                flash('Completa Nombre y Nombre Corto del cargo.', 'error')
+                return redirect(url_for('admin_contratacion', sec='cargo'))
+            if not codigo:
+                codigo = str(abs(hash(nombre)) % 9000 + 100).zfill(3)
+            with db() as con:
+                if cid:
+                    con.execute('''UPDATE contratacion_cargos SET codigo=?,nombre=?,nombre_corto=?,resumen=?,funciones=?,activo=? WHERE id=?''', (codigo, nombre, nombre_corto, resumen, funciones, activo, cid))
+                    flash('Cargo actualizado.', 'ok')
+                else:
+                    con.execute('''INSERT INTO contratacion_cargos(codigo,nombre,nombre_corto,resumen,funciones,activo) VALUES(?,?,?,?,?,?)''', (codigo, nombre, nombre_corto, resumen, funciones, activo))
+                    flash('Cargo creado.', 'ok')
+                con.commit()
+            return redirect(url_for('admin_contratacion', sec='cargo'))
+        if accion == 'estado_cargo':
+            cid = request.form.get('cargo_id')
+            activo = 1 if request.form.get('activo') == '1' else 0
+            with db() as con:
+                con.execute('UPDATE contratacion_cargos SET activo=? WHERE id=?', (activo, cid)); con.commit()
+            flash('Estado de cargo actualizado.', 'ok')
+            return redirect(url_for('admin_contratacion', sec='cargo'))
+        if accion == 'eliminar_cargo':
+            cid = request.form.get('cargo_id')
+            with db() as con:
+                con.execute('DELETE FROM contratacion_cargos WHERE id=?', (cid,)); con.commit()
+            flash('Cargo eliminado.', 'ok')
+            return redirect(url_for('admin_contratacion', sec='cargo'))
         if accion == 'crear_observado':
             tipo_persona = clean(request.form.get('tipo_persona')) or 'Trabajador'
             trabajador_sel = clean(request.form.get('trabajador_sel'))
@@ -4483,6 +4619,8 @@ def admin_contratacion():
         firma_sols=con.execute('SELECT * FROM firma_solicitudes ORDER BY id DESC LIMIT 300').fetchall()
         trabajadores=con.execute('SELECT dni,nombre,empresa,cargo,area,correo,activo,fecha_registro FROM trabajadores ORDER BY nombre LIMIT 700').fetchall()
         observados=con.execute('SELECT * FROM trabajadores_observados ORDER BY id DESC LIMIT 500').fetchall()
+        tipo_empleado=con.execute('SELECT * FROM contratacion_tipo_empleado ORDER BY descripcion LIMIT 1000').fetchall()
+        cargos=con.execute('SELECT * FROM contratacion_cargos ORDER BY nombre LIMIT 2000').fetchall()
 
         # Filtros reales de Plantilla Documentos
         f_nombre = clean(request.args.get('f_nombre'))
@@ -4532,6 +4670,18 @@ def admin_contratacion():
         </tr>""" for r in tipos])
     def h(v):
         return html.escape(str(v or ''))
+    def estado_select(nombre_accion, id_name, rid, activo):
+        return f"<form method='post'><input type='hidden' name='accion' value='{nombre_accion}'><input type='hidden' name='{id_name}' value='{rid}'><select name='activo' onchange='this.form.submit()' class='select-mini'><option value='1' {'selected' if activo else ''}>🟢 Active</option><option value='0' {'selected' if not activo else ''}>🔴 Inactive</option></select></form>"
+    tipo_emp_rows=''.join([f"""
+        <tr>
+          <td class='nowrap'><button type='button' class='icon-btn' onclick='editarTipoEmpleado("{r['id']}","{escjs(r['codigo'])}","{escjs(r['descripcion'])}","{escjs(r['nombre_corto'])}","{escjs(r['grupo'])}","{1 if r['activo'] else 0}","{1 if r['permite_doc_sin_cargo'] else 0}","{1 if r['requiere_validacion'] else 0}","{1 if r['tiene_fecha_vencimiento'] else 0}","{1 if r['es_contrato'] else 0}")'>✎</button><form method='post' style='display:inline' onsubmit='return confirm("¿Eliminar tipo documento de empleado?")'><input type='hidden' name='accion' value='eliminar_tipo_empleado'><input type='hidden' name='doc_emp_id' value='{r['id']}'><button class='icon-btn'>🗑</button></form></td>
+          <td>{estado_select('estado_tipo_empleado','doc_emp_id',r['id'],r['activo'])}</td><td>{h(r['codigo'])}</td><td>{h(r['descripcion'])}</td><td>{h(r['nombre_corto'])}</td><td>{h(r['grupo'])}</td>
+        </tr>""" for r in tipo_empleado])
+    cargo_rows=''.join([f"""
+        <tr>
+          <td class='nowrap'><button type='button' class='icon-btn' onclick='editarCargo("{r['id']}","{escjs(r['codigo'])}","{escjs(r['nombre'])}","{escjs(r['nombre_corto'])}","{escjs(r['resumen'])}","{escjs(r['funciones'])}","{1 if r['activo'] else 0}")'>✎</button><form method='post' style='display:inline' onsubmit='return confirm("¿Eliminar cargo?")'><input type='hidden' name='accion' value='eliminar_cargo'><input type='hidden' name='cargo_id' value='{r['id']}'><button class='icon-btn'>🗑</button></form></td>
+          <td>{estado_select('estado_cargo','cargo_id',r['id'],r['activo'])}</td><td>{h(r['codigo'])}</td><td>{h(r['nombre'])}</td><td>{h(r['nombre_corto'])}</td>
+        </tr>""" for r in cargos])
     plantillas_rows=''.join([
         f"""<tr>
           <td class='tpl-actions'>
@@ -4636,6 +4786,61 @@ def admin_contratacion():
         function filtrarTipoStage(v){{v=(v||'').toLowerCase();document.querySelectorAll('#tablaTiposEtapa tr').forEach((tr,i)=>{{if(i===0)return;let st=(tr.children[4]?.innerText||'').toLowerCase();tr.style.display=(!v||st===v)?'':'none';}});}}
         </script>
         """)
+    elif sec=='tipo_empleado':
+        grupo_opts = ''.join(["<option>"+x+"</option>" for x in ['Contratación Trabajadores','Renovaciones de Contrato']])
+        html_tipo = """
+        <h2 class='c-title'>Tipos de Documento de Empleado</h2>
+        <div class='c-bar'><div><input id='filtroTipoEmp' class='input' style='background:#fff!important;color:#111!important;max-width:520px' placeholder='Nombre / Código' onkeyup='filtrarTabla(&quot;tablaTipoEmpleado&quot;, this.value)'><br><br><button class='c-btn' type='button'>⌕ Buscar</button> <button class='c-btn gray' type='button' onclick='document.getElementById(&quot;filtroTipoEmp&quot;).value=&quot;&quot;;filtrarTabla(&quot;tablaTipoEmpleado&quot;,&quot;&quot;)'>Limpiar</button></div><button type='button' class='c-btn' onclick='abrirTipoEmpleado()'>+ Crear Tipo Doc</button></div>
+        <div class='c-card table-wrap'><table id='tablaTipoEmpleado' class='c-table'><tr><th>Acción</th><th>Estado</th><th>Código</th><th>Descripción</th><th>ShortName</th><th>Grupo</th></tr>__ROWS__</table></div>
+        <div id='tipoEmpleadoModal' class='obs-modal'>
+          <div class='obs-box tipo-box'><div class='obs-head'><h2 id='tipoEmpleadoTitulo'>Crear tipo documento de empleado</h2><button type='button' onclick='cerrarTipoEmpleado()'>×</button></div>
+            <form method='post' class='obs-form'>
+              <input type='hidden' name='accion' value='guardar_tipo_empleado'><input type='hidden' name='doc_emp_id' id='doc_emp_id'>
+              <label>Code</label><input name='codigo' id='doc_emp_codigo'>
+              <label>Descripción</label><input name='descripcion' id='doc_emp_desc' required>
+              <label>Nombre Corto</label><input name='nombre_corto' id='doc_emp_corto' required>
+              <label>Grupo</label><select name='grupo' id='doc_emp_grupo'>__GRUPOS__</select>
+              <label>Estado</label><select name='activo' id='doc_emp_activo'><option value='1'>Active</option><option value='0'>Inactive</option></select>
+              <label>Permite generar y/o adjuntar doc. sin cargo</label><input type='checkbox' name='permite_doc_sin_cargo' id='doc_emp_sin_cargo' value='1'>
+              <label>Requiere validación</label><input type='checkbox' name='requiere_validacion' id='doc_emp_validacion' value='1'>
+              <label>El documento tiene fecha de vencimiento</label><input type='checkbox' name='tiene_fecha_vencimiento' id='doc_emp_vencimiento' value='1'>
+              <label>El documento es un contrato</label><input type='checkbox' name='es_contrato' id='doc_emp_contrato' value='1'>
+              <div></div><div class='obs-actions'><button class='c-btn'>Guardar</button><button type='reset' class='c-btn gray'>Limpiar</button><button type='button' onclick='cerrarTipoEmpleado()' class='c-btn gray'>Atrás</button></div>
+            </form></div></div>
+        <style>.nowrap{white-space:nowrap}.icon-btn{border:0;background:transparent;font-size:20px;cursor:pointer;margin:0 3px}.select-mini{background:#fff!important;color:#111!important;border:1px solid #d1d5db;border-radius:999px;padding:6px 10px}.obs-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;align-items:center;justify-content:center;padding:18px}.obs-modal.show{display:flex}.obs-box{width:min(900px,96vw);background:#fff;color:#111827;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden}.tipo-box{width:min(920px,96vw)}.obs-head{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #dce2ea}.obs-head h2{margin:0;color:#111827!important}.obs-head button{border:0;background:transparent;font-size:32px;color:#8a8f98;cursor:pointer}.obs-form{display:grid;grid-template-columns:260px 1fr;gap:18px 14px;padding:24px;align-items:center}.obs-form label{font-weight:700;text-align:right;color:#111827!important}.obs-form input:not([type=checkbox]),.obs-form select,.obs-form textarea{background:#fff!important;color:#111827!important;border:1px solid #cdd5df!important;border-radius:8px!important;padding:10px!important}.obs-form input[type=checkbox]{width:20px;height:20px;accent-color:#1a73e8}.obs-actions{display:flex;gap:10px;justify-content:flex-end}@media(max-width:760px){.obs-form{grid-template-columns:1fr}.obs-form label{text-align:left}}</style>
+        <script>
+        function abrirTipoEmpleado(){document.getElementById('tipoEmpleadoTitulo').innerText='Crear tipo documento de empleado';document.getElementById('doc_emp_id').value='';document.getElementById('doc_emp_codigo').value='';document.getElementById('doc_emp_desc').value='';document.getElementById('doc_emp_corto').value='';document.getElementById('doc_emp_grupo').value='Contratación Trabajadores';document.getElementById('doc_emp_activo').value='1';['doc_emp_sin_cargo','doc_emp_validacion','doc_emp_vencimiento','doc_emp_contrato'].forEach(id=>document.getElementById(id).checked=false);document.getElementById('tipoEmpleadoModal').classList.add('show');}
+        function cerrarTipoEmpleado(){document.getElementById('tipoEmpleadoModal').classList.remove('show');}
+        function editarTipoEmpleado(id,cod,desc,corto,grupo,activo,sinCargo,validacion,vencimiento,contrato){document.getElementById('tipoEmpleadoTitulo').innerText='Editar: '+desc;document.getElementById('doc_emp_id').value=id;document.getElementById('doc_emp_codigo').value=cod;document.getElementById('doc_emp_desc').value=desc;document.getElementById('doc_emp_corto').value=corto;document.getElementById('doc_emp_grupo').value=grupo||'Contratación Trabajadores';document.getElementById('doc_emp_activo').value=activo;document.getElementById('doc_emp_sin_cargo').checked=sinCargo==='1';document.getElementById('doc_emp_validacion').checked=validacion==='1';document.getElementById('doc_emp_vencimiento').checked=vencimiento==='1';document.getElementById('doc_emp_contrato').checked=contrato==='1';document.getElementById('tipoEmpleadoModal').classList.add('show');}
+        function filtrarTabla(id,q){q=(q||'').toLowerCase();document.querySelectorAll('#'+id+' tr').forEach((tr,i)=>{if(i===0)return;tr.style.display=tr.innerText.toLowerCase().includes(q)?'':'none';});}
+        </script>
+        """.replace('__ROWS__', tipo_emp_rows).replace('__GRUPOS__', grupo_opts)
+        content=wrap(html_tipo)
+    elif sec=='cargo':
+        html_cargo = """
+        <h2 class='c-title'>Cargos</h2>
+        <div class='c-bar'><div><input id='filtroCargo' class='input' style='background:#fff!important;color:#111!important;max-width:520px' placeholder='Nombre' onkeyup='filtrarTabla(&quot;tablaCargos&quot;, this.value)'><br><br><button class='c-btn' type='button'>⌕ Buscar</button> <button class='c-btn gray' type='button' onclick='document.getElementById(&quot;filtroCargo&quot;).value=&quot;&quot;;filtrarTabla(&quot;tablaCargos&quot;,&quot;&quot;)'>Limpiar</button></div><button type='button' class='c-btn' onclick='abrirCargo()'>+ Crear Cargo</button></div>
+        <div class='c-card table-wrap'><table id='tablaCargos' class='c-table'><tr><th>Acción</th><th>Estado</th><th>Código</th><th>Descripción</th><th>NombreCorto</th></tr>__ROWS__</table></div>
+        <div id='cargoModal' class='obs-modal'><div class='obs-box tipo-box'><div class='obs-head'><h2 id='cargoTitulo'>Crear Cargo</h2><button type='button' onclick='cerrarCargo()'>×</button></div>
+          <form method='post' class='obs-form'>
+            <input type='hidden' name='accion' value='guardar_cargo'><input type='hidden' name='cargo_id' id='cargo_id'>
+            <label>Codigo</label><input name='codigo' id='cargo_codigo'>
+            <label>Nombre</label><input name='nombre' id='cargo_nombre' required>
+            <label>Nombre Corto</label><input name='nombre_corto' id='cargo_corto' required>
+            <label>Resumen</label><input name='resumen' id='cargo_resumen'>
+            <label>Funciones:</label><textarea name='funciones' id='cargo_funciones' rows='4'></textarea>
+            <label>Estado</label><select name='activo' id='cargo_activo'><option value='1'>Active</option><option value='0'>Inactive</option></select>
+            <div></div><div class='obs-actions'><button class='c-btn'>Guardar</button><button type='button' onclick='cerrarCargo()' class='c-btn gray'>Atrás</button></div>
+          </form></div></div>
+        <style>.nowrap{white-space:nowrap}.icon-btn{border:0;background:transparent;font-size:20px;cursor:pointer;margin:0 3px}.select-mini{background:#fff!important;color:#111!important;border:1px solid #d1d5db;border-radius:999px;padding:6px 10px}.obs-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;align-items:center;justify-content:center;padding:18px}.obs-modal.show{display:flex}.obs-box{width:min(900px,96vw);background:#fff;color:#111827;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden}.tipo-box{width:min(920px,96vw)}.obs-head{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #dce2ea}.obs-head h2{margin:0;color:#111827!important}.obs-head button{border:0;background:transparent;font-size:32px;color:#8a8f98;cursor:pointer}.obs-form{display:grid;grid-template-columns:220px 1fr;gap:18px 14px;padding:24px;align-items:center}.obs-form label{font-weight:700;text-align:right;color:#111827!important}.obs-form input:not([type=checkbox]),.obs-form select,.obs-form textarea{background:#fff!important;color:#111827!important;border:1px solid #cdd5df!important;border-radius:8px!important;padding:10px!important}.obs-actions{display:flex;gap:10px;justify-content:flex-end}@media(max-width:760px){.obs-form{grid-template-columns:1fr}.obs-form label{text-align:left}}</style>
+        <script>
+        function abrirCargo(){document.getElementById('cargoTitulo').innerText='Crear Cargo';document.getElementById('cargo_id').value='';document.getElementById('cargo_codigo').value='';document.getElementById('cargo_nombre').value='';document.getElementById('cargo_corto').value='';document.getElementById('cargo_resumen').value='';document.getElementById('cargo_funciones').value='';document.getElementById('cargo_activo').value='1';document.getElementById('cargoModal').classList.add('show');}
+        function cerrarCargo(){document.getElementById('cargoModal').classList.remove('show');}
+        function editarCargo(id,cod,nombre,corto,resumen,funciones,activo){document.getElementById('cargoTitulo').innerText='Editar: '+nombre;document.getElementById('cargo_id').value=id;document.getElementById('cargo_codigo').value=cod;document.getElementById('cargo_nombre').value=nombre;document.getElementById('cargo_corto').value=corto;document.getElementById('cargo_resumen').value=resumen;document.getElementById('cargo_funciones').value=funciones;document.getElementById('cargo_activo').value=activo;document.getElementById('cargoModal').classList.add('show');}
+        function filtrarTabla(id,q){q=(q||'').toLowerCase();document.querySelectorAll('#'+id+' tr').forEach((tr,i)=>{if(i===0)return;tr.style.display=tr.innerText.toLowerCase().includes(q)?'':'none';});}
+        </script>
+        """.replace('__ROWS__', cargo_rows)
+        content=wrap(html_cargo)
     elif sec in ['maestros','observados','tipos_etapa','tipo_empleado','cargo']:
         content=wrap(f"""
         <h2 class='c-title'>Listas de trabajadores observados</h2>
