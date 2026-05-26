@@ -6096,6 +6096,27 @@ def parche_final_login_header(response):
         pass
     return response
 
+
+
+# ===== PARCHE FINAL PEDIDO: PORTAL HR + CELULAR COMPACTO + SIDEBAR SIN TAPA DASHBOARD =====
+@app.after_request
+def parche_portal_hr_movil_compacto(response):
+    try:
+        ct = response.headers.get('Content-Type','')
+        if 'text/html' not in ct.lower():
+            return response
+        html_text = response.get_data(as_text=True)
+        html_text = html_text.replace('PRIZE PRO', 'PORTAL HR')
+        html_text = html_text.replace('Prize Pro', 'Portal HR')
+        html_text = html_text.replace('PRIZE', 'PORTAL HR')
+        css = '\n<style id="portal-hr-final-mobile-fix">\n.login-title h1{font-size:36px!important;line-height:1.05!important;font-weight:800!important;color:#182233!important;letter-spacing:-.035em!important;white-space:nowrap!important;text-transform:uppercase!important;}\n.login-logo{z-index:10!important;}.login-card{overflow:visible!important;}.login-body:after{content:"🛡️  Sistema seguro y confiable\\\\A © 2025 Portal HR. Todos los derechos reservados."!important;white-space:pre!important;}\n.login-input input,.login-input select{background:#fff!important;color:#172033!important;-webkit-text-fill-color:#172033!important;caret-color:#172033!important;opacity:1!important;}\n.login-input input::placeholder{color:#6b7787!important;-webkit-text-fill-color:#6b7787!important;opacity:1!important;}\n@media(max-width:700px){\n  .login-body{padding:76px 12px 104px!important;align-items:center!important;justify-content:center!important;overflow-y:auto!important;}\n  .login-card{width:calc(100vw - 34px)!important;max-width:390px!important;padding:78px 24px 28px!important;border-radius:26px!important;}\n  .login-logo{width:112px!important;height:112px!important;margin:-88px auto 22px!important;top:auto!important;position:relative!important;left:auto!important;transform:none!important;display:flex!important;justify-content:center!important;}\n  .login-avatar-svg{width:112px!important;height:112px!important;}.login-avatar-svg:before{width:62px!important;height:62px!important;}\n  .login-title{margin:0 0 22px!important;}.login-title h1{font-size:31px!important;}.login-title b{font-size:16px!important;line-height:1.28!important;max-width:300px!important;margin:auto!important;}\n  .login-title:after{margin-top:16px!important;width:58px!important;}.login-card .field{margin-bottom:12px!important;}.login-card .field label{font-size:14px!important;margin-bottom:6px!important;}\n  .login-input{height:54px!important;border-radius:16px!important;}.login-input i{width:30px!important;height:30px!important;font-size:15px!important;}\n  .login-input input,.login-input select{height:42px!important;min-height:42px!important;font-size:16px!important;border-radius:14px!important;}\n  .login-card .btn-green{height:56px!important;font-size:19px!important;border-radius:16px!important;margin:15px 0 18px!important;}.login-links a{font-size:14px!important;}\n  .login-body:after{font-size:12px!important;bottom:12px!important;line-height:1.7!important;}\n}\n@media(max-width:1000px){\n  .mobile-head{height:56px!important;min-height:56px!important;position:sticky!important;top:0!important;z-index:2147483647!important;background:#0f4a35!important;color:#fff!important;padding:0 14px!important;display:flex!important;align-items:center!important;}\n  .mobile-head b{font-size:15px!important;font-weight:800!important;letter-spacing:.02em!important;color:#fff!important;}.mobile-head a{font-size:15px!important;font-weight:800!important;color:#fff!important;text-decoration:none!important;}\n  .mobile-head .toggle{width:42px!important;height:42px!important;border-radius:12px!important;background:rgba(255,255,255,.12)!important;}\n  .side{top:56px!important;height:calc(100dvh - 56px)!important;width:286px!important;left:-306px!important;background:#073126!important;padding-top:8px!important;z-index:2147483644!important;}\n  .side.open{left:0!important;}.side-head-pro{display:none!important;}nav{padding:8px 14px 18px!important;}.menu-group{margin:7px 0!important;}\n  .menu-title{min-height:52px!important;padding:11px 13px!important;border-radius:16px!important;font-size:14px!important;line-height:1.22!important;}\n  .menu-item{min-height:44px!important;padding:10px 12px!important;border-radius:14px!important;font-size:13.5px!important;line-height:1.22!important;}\n  .menu-title i,.menu-item i{width:28px!important;height:28px!important;font-size:16px!important;}.menu-title .label,.menu-item .label{color:#f8fffc!important;opacity:1!important;visibility:visible!important;font-weight:760!important;}\n  .submenu{padding:6px 0!important;}.menu-group.nested{margin-left:10px!important;padding-left:10px!important;}.side-user{margin:14px 14px 18px!important;padding:12px!important;border-radius:16px!important;}\n  .main{padding-top:14px!important;}.hero,.topbar,.card{scroll-margin-top:70px!important;}\n}\n</style>\n'
+        html_text = html_text.replace('</head>', css + '</head>')
+        response.set_data(html_text)
+        response.headers['Content-Length'] = str(len(response.get_data()))
+    except Exception:
+        pass
+    return response
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '5000'))
     host = os.getenv('HOST', '0.0.0.0')
