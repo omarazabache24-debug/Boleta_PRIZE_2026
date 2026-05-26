@@ -2387,7 +2387,7 @@ def empresas_disponibles_login():
 
 def login_template(admin=False, error=""):
     action = url_for('admin_login') if admin else url_for('login')
-    title = "PRIZE PRO"
+    title = "PORTAL HR PRO"
     sub = "Actualización de datos de trabajadores" if admin else "Actualización de datos de trabajadores"
     if admin:
         opts = ''.join([f"<option value='{e}'>{e}</option>" for e in empresas_disponibles_login()])
@@ -5512,6 +5512,48 @@ body{background:#eef2f5!important;color:#0f172a!important;font-weight:700!import
 body{background:#eef2f5!important;color:#0f172a!important;font-weight:700!important}.main{background:#eef2f5!important;color:#0f172a!important;padding:28px 30px!important}.card,.mini,.metric,.stat,.module-tile,.hero,.login-card{background:#fff!important;border:1px solid #dbe5ee!important;color:#0f172a!important;box-shadow:0 14px 36px rgba(15,23,42,.10)!important;border-radius:24px!important}.hero{padding:24px!important}.hero h1,.topbar h1,.card h2,.module-tile h2{color:#0f172a!important;font-weight:1000!important}.muted,.subtitle,.muted2{color:#5f6b7a!important}.btn-green,.btn-blue,.btn{background:linear-gradient(135deg,#19aa63,#0f8f55)!important;color:#fff!important;border:0!important;border-radius:14px!important;font-weight:1000!important;box-shadow:0 12px 24px rgba(22,163,74,.20)!important}.btn-red{border:0!important;border-radius:14px!important}.input,select,textarea,input[type=file]{background:#fff!important;color:#111827!important;border:1px solid #d5e1ec!important;border-radius:14px!important}.input:focus,select:focus,textarea:focus{border-color:#19aa63!important;box-shadow:0 0 0 4px rgba(22,163,74,.14)!important}table{color:#243042!important}th{background:#f3f7fb!important;color:#334155!important}td{border-bottom:1px solid #e5edf4!important}.table-wrap{background:#fff!important;border-radius:18px!important;border:1px solid #e3ebf2!important}.flash{background:#dff7e9!important;color:#064e3b!important;border-color:#9adbb8!important}.flash.err{background:#fee2e2!important;color:#991b1b!important;border-color:#fecaca!important}
 .side{background:linear-gradient(180deg,#124f34,#0e322d 42%,#091827)!important;border-right:1px solid rgba(255,255,255,.10)!important;box-shadow:16px 0 36px rgba(15,23,42,.22)!important}.side-top{height:86px!important;background:#124f34!important;border-bottom:1px solid rgba(255,255,255,.12)!important}.side-top b{color:#fff!important;font-size:18px!important}.brand{padding:22px 18px 18px!important;text-align:left!important}.brand img{display:none!important}.brand:before{content:'PORTAL HR PRO';display:block;color:#fff;font-size:22px;font-weight:1000;letter-spacing:.3px}.brand p{margin:4px 0 0!important;color:#d1fae5!important;font-size:13px!important;font-weight:900}.menu-title,.menu-item{background:transparent!important;border:0!important;color:#d7e1ea!important;box-shadow:none!important;border-radius:16px!important;margin:5px 8px!important;padding:15px 18px!important;font-weight:1000!important}.menu-title:hover,.menu-item:hover{background:rgba(255,255,255,.09)!important;color:#fff!important}.menu-item.active,.menu-title.active,.menu-group.force-open>.menu-title.active{background:linear-gradient(135deg,#17aa55,#158a48)!important;color:#fff!important;box-shadow:0 14px 28px rgba(0,0,0,.20)!important}.submenu{padding:4px 0 8px!important}.side-user{background:rgba(255,255,255,.10)!important;color:#fff!important;border:1px solid rgba(255,255,255,.12)!important}.side-user small{color:#b7f7d1!important}.mobile-head{background:#124f34!important;color:#fff!important}.app{background:#eef2f5!important}.app.side-collapsed{grid-template-columns:92px 1fr!important}.side.collapsed .brand:before{content:'HR';text-align:center;font-size:22px}.side.collapsed .brand{padding:18px 8px!important;text-align:center!important}
 .login-body{background:radial-gradient(circle at 9% 5%,rgba(34,197,94,.18) 0 19%,transparent 19.4%),radial-gradient(circle at 94% 0%,rgba(20,184,166,.18) 0 20%,transparent 20.4%),linear-gradient(180deg,#f8fafc 0%,#ecfdf5 100%)!important}.login-body:after{content:'';position:absolute;left:-4%;right:-4%;bottom:-6%;height:31%;background:linear-gradient(135deg,#22c55e,#064e3b);clip-path:polygon(0 38%,25% 22%,50% 15%,75% 25%,100% 35%,100% 100%,0 100%);z-index:0}.login-card{width:min(92vw,560px)!important;padding:88px 56px 34px!important;overflow:visible!important;text-align:left!important;background:rgba(255,255,255,.96)!important;position:relative!important;z-index:2!important}.login-card:before{content:'👥'!important;position:absolute!important;left:50%!important;top:-68px!important;transform:translateX(-50%)!important;width:136px!important;height:136px!important;border-radius:50%!important;background:#fff!important;border:1px solid #dbe5ee!important;color:#149459!important;display:grid!important;place-items:center!important;font-size:52px!important;box-shadow:0 22px 55px rgba(15,23,42,.13)!important}.login-card:after{display:none!important}.login-logo{display:none!important}.login-title h1{color:#1f2937!important;font-size:42px!important;letter-spacing:1px!important}.login-title b{color:#64748b!important;font-size:17px!important}.login-title:after{content:'';display:block;margin:20px auto 0;width:62px;height:4px;border-radius:999px;background:#10b981}.login-input{background:#eaf2ff!important;border:1px solid #cfe0f2!important;border-radius:16px!important;padding:0 14px!important;margin-bottom:20px!important;color:#149459!important}.login-input input,.login-input select{background:transparent!important;color:#0f172a!important;border:0!important}.login-input input::placeholder{color:#64748b!important}.login-card .field label{display:block!important;color:#111827!important;margin:10px 0 8px;font-weight:1000}.login-card .btn-green{width:100%!important;margin:0 0 28px!important;font-size:20px!important;border-radius:16px!important;padding:17px!important}.login-links{margin-top:0!important;padding-bottom:0!important}.login-links a{color:#64748b!important}.contract-detail-wrap,.contract-detail-wrap *{color:#0f172a!important}
+
+
+
+/* ===== CORRECCIÓN REAL FINAL: HEADER LIMPIO, LOGIN PORTAL HR PRO, DASHBOARD VISIBLE MÓVIL ===== */
+.login-card{{
+  width:min(90vw,500px)!important;
+  max-width:500px!important;
+  padding:122px 46px 30px!important;
+}}
+.login-logo{{top:-78px!important;z-index:30!important;}}
+.login-avatar-svg{{width:122px!important;height:122px!important;}}
+.login-avatar-svg:before{{width:68px!important;height:68px!important;}}
+.login-title{{position:relative!important;z-index:20!important;margin:0 0 24px!important;}}
+.login-title h1{{font-size:36px!important;line-height:1.05!important;color:#182233!important;text-transform:uppercase!important;white-space:nowrap!important;}}
+.login-title b{{color:#667085!important;}}
+.login-body:after{{content:"🛡️  Sistema seguro y confiable\A © 2025 Prize Pro. Todos los derechos reservados."!important;white-space:pre!important;position:absolute!important;left:0!important;right:0!important;bottom:18px!important;text-align:center!important;color:#fff!important;font-size:16px!important;line-height:1.9!important;font-weight:650!important;z-index:1!important;background:none!important;height:auto!important;clip-path:none!important;}}
+
+.side{{position:sticky!important;top:0!important;height:100vh!important;padding-top:0!important;background:#073126!important;overflow-y:auto!important;overflow-x:hidden!important;}}
+.side::before{{content:""!important;position:sticky!important;top:0!important;display:block!important;height:112px!important;margin-bottom:-112px!important;background:#073126!important;z-index:2147483638!important;pointer-events:none!important;}}
+.side-head-pro{{position:sticky!important;top:12px!important;z-index:2147483640!important;margin:12px 12px 18px!important;height:82px!important;min-height:82px!important;padding:0 12px!important;background:#123f33!important;border:1px solid rgba(255,255,255,.16)!important;border-radius:20px!important;box-shadow:0 16px 34px rgba(0,0,0,.34)!important;overflow:hidden!important;isolation:isolate!important;backdrop-filter:none!important;}}
+.side-head-pro:before{{content:""!important;position:absolute!important;inset:0!important;background:linear-gradient(90deg,#123f33 0%,#196b48 52%,#123f33 100%)!important;opacity:1!important;z-index:-1!important;}}
+.side-head-pro:after{{display:none!important;}}
+.side-head-pro *{{position:relative!important;z-index:3!important;}}
+.side-brand-text b{{color:#ffffff!important;font-size:16px!important;font-weight:800!important;}}
+.side-brand-text small{{color:#d6e9e2!important;font-size:14px!important;font-weight:650!important;}}
+nav{{position:relative!important;z-index:1!important;padding-top:0!important;}}
+
+@media(max-width:1000px){{
+  .side{{position:fixed!important;top:0!important;left:-340px!important;width:315px!important;height:100dvh!important;padding-top:0!important;background:#073126!important;}}
+  .side.open{{left:0!important;}}
+  .side-head-pro{{top:10px!important;margin:10px 10px 18px!important;}}
+  .mobile-head{{background:#0f4a35!important;color:#fff!important;z-index:999999!important;height:56px!important;}}
+  .menu-title,.menu-item{{color:#f1f7f5!important;opacity:1!important;text-shadow:none!important;font-weight:760!important;}}
+  .menu-title .label,.menu-item .label{{color:inherit!important;opacity:1!important;visibility:visible!important;}}
+  .menu-item.active,.menu-item.parent-active,.menu-title.active,.menu-group.force-open>.menu-title.active{{background:rgba(22,185,120,.30)!important;color:#ffffff!important;box-shadow:inset 4px 0 0 #34d399!important;border:1px solid rgba(134,239,172,.22)!important;}}
+  .menu-item.active .label,.menu-item.parent-active .label,.menu-title.active .label,.menu-group.force-open>.menu-title.active .label{{color:#ffffff!important;}}
+  .menu-title i,.menu-item i{{color:#d7eee5!important;background:rgba(255,255,255,.08)!important;}}
+  .login-card{{padding:116px 26px 30px!important;}}
+  .login-logo{{top:-70px!important;}}
+  .login-avatar-svg{{width:116px!important;height:116px!important;}}
+  .login-title h1{{font-size:31px!important;}}
+}}
 
 </style>
         <script>
