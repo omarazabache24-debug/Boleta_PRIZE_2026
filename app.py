@@ -2266,6 +2266,188 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
   .login-title b{font-size:17px!important;max-width:310px!important;margin:auto!important;}
   .login-body:after{font-size:12px!important;bottom:14px!important;}
 }
+
+
+/* =========================================================
+   AJUSTE FINAL EXACTO LOGIN REFERENCIA 1443
+   - fondo suave verde/menta
+   - tarjeta compacta centrada
+   - icono arriba sin tapar letras
+   - textos y campos visibles
+   ========================================================= */
+.login-body{
+  min-height:100vh!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:38px 18px 118px!important;
+  overflow:hidden!important;
+  position:relative!important;
+  background:
+    radial-gradient(circle at 7% -6%,rgba(34,197,94,.18) 0 20%,transparent 20.4%),
+    radial-gradient(circle at 94% -6%,rgba(45,212,191,.17) 0 22%,transparent 22.4%),
+    linear-gradient(180deg,#fbfdff 0%,#effaf5 100%)!important;
+}
+.login-body:before{
+  content:""!important;
+  position:absolute!important;
+  left:0!important;right:0!important;bottom:0!important;
+  height:31%!important;
+  background:linear-gradient(135deg,#22c55e 0%,#059669 45%,#064e3b 100%)!important;
+  clip-path:polygon(0 39%,22% 29%,48% 20%,73% 30%,100% 24%,100% 100%,0 100%)!important;
+  z-index:0!important;
+  opacity:.98!important;
+}
+.login-body:after{
+  content:"🛡️  Sistema seguro y confiable\A© 2025 Prize Pro. Todos los derechos reservados."!important;
+  white-space:pre!important;
+  position:absolute!important;
+  left:0!important;right:0!important;bottom:18px!important;
+  text-align:center!important;
+  color:#fff!important;
+  font-size:16px!important;
+  line-height:1.9!important;
+  font-weight:650!important;
+  z-index:1!important;
+  background:none!important;
+  height:auto!important;
+  clip-path:none!important;
+}
+.login-card{
+  width:min(90vw,500px)!important;
+  max-width:500px!important;
+  min-height:auto!important;
+  margin:0 auto!important;
+  padding:82px 46px 30px!important;
+  border-radius:28px!important;
+  background:rgba(255,255,255,.975)!important;
+  border:1px solid #dce8ef!important;
+  box-shadow:0 20px 54px rgba(15,23,42,.12)!important;
+  overflow:visible!important;
+  position:relative!important;
+  z-index:2!important;
+  text-align:left!important;
+}
+.login-logo{
+  display:block!important;
+  position:absolute!important;
+  top:-62px!important;
+  left:50%!important;
+  transform:translateX(-50%)!important;
+  margin:0!important;
+  z-index:4!important;
+}
+.login-logo img{display:none!important;}
+.login-card:before,.login-card:after{display:none!important;content:none!important;}
+.login-avatar-svg{
+  width:124px!important;
+  height:124px!important;
+  border-radius:50%!important;
+  background:#fff!important;
+  border:1px solid #dbe7ef!important;
+  box-shadow:0 16px 40px rgba(15,23,42,.10)!important;
+  display:grid!important;
+  place-items:center!important;
+}
+.login-avatar-svg:before{
+  content:""!important;
+  display:block!important;
+  width:68px!important;
+  height:68px!important;
+  background:center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%2327c77b'/%3E%3Cstop offset='1' stop-color='%230b8f5a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='35' cy='30' r='13' fill='url(%23g)'/%3E%3Ccircle cx='61' cy='28' r='15' fill='url(%23g)'/%3E%3Cpath d='M13 72c1-17 13-28 29-28 5 0 9 1 13 3-7 5-12 13-13 25H13z' fill='url(%23g)'/%3E%3Cpath d='M38 72c1-19 14-31 32-31 15 0 25 12 25 31H38z' fill='url(%23g)'/%3E%3C/svg%3E")!important;
+}
+.login-title{
+  position:relative!important;
+  z-index:6!important;
+  text-align:center!important;
+  margin:0 0 23px!important;
+}
+.login-title h1{
+  position:relative!important;
+  z-index:6!important;
+  margin:0 0 11px!important;
+  color:#182233!important;
+  font-size:38px!important;
+  line-height:1.06!important;
+  font-weight:800!important;
+  letter-spacing:-.035em!important;
+  text-transform:uppercase!important;
+  white-space:nowrap!important;
+}
+.login-title b{
+  display:block!important;
+  color:#667085!important;
+  font-size:16px!important;
+  font-weight:520!important;
+  line-height:1.35!important;
+}
+.login-title:after{
+  content:""!important;
+  display:block!important;
+  width:60px!important;
+  height:4px!important;
+  border-radius:999px!important;
+  background:#16b978!important;
+  margin:18px auto 0!important;
+}
+.login-card .field{margin-bottom:13px!important;}
+.login-card .field label{
+  display:block!important;
+  color:#1f2937!important;
+  font-size:14px!important;
+  font-weight:720!important;
+  margin:0 0 7px!important;
+}
+.login-input{
+  height:54px!important;
+  background:#eaf3ff!important;
+  border:1px solid #cfe0f2!important;
+  border-radius:17px!important;
+  padding:0 10px!important;
+  gap:10px!important;
+  display:flex!important;
+  align-items:center!important;
+  margin:0!important;
+  box-shadow:none!important;
+  color:#172033!important;
+}
+.login-input:focus-within{border-color:#18b96d!important;box-shadow:0 0 0 3px rgba(22,185,120,.13)!important;}
+.login-input i{
+  width:31px!important;height:31px!important;border-radius:10px!important;
+  background:rgba(255,255,255,.72)!important;color:#11945d!important;font-size:16px!important;
+  display:grid!important;place-items:center!important;flex:0 0 auto!important;
+}
+.login-input input,.login-input select{
+  height:42px!important;min-height:42px!important;background:#fff!important;border:1px solid #d5e3ef!important;border-radius:15px!important;
+  color:#172033!important;-webkit-text-fill-color:#172033!important;caret-color:#172033!important;
+  font-size:16px!important;font-weight:520!important;padding:0 13px!important;outline:none!important;box-shadow:none!important;width:100%!important;
+}
+.login-input select{appearance:auto!important;color:#172033!important;-webkit-text-fill-color:#172033!important;}
+.login-input select option{background:#fff!important;color:#172033!important;}
+.login-input input::placeholder{color:#6b7787!important;opacity:1!important;-webkit-text-fill-color:#6b7787!important;}
+.login-input input:focus,.login-input select:focus{background:#fff!important;color:#111827!important;-webkit-text-fill-color:#111827!important;border-color:#18b96d!important;box-shadow:none!important;}
+.login-input input:-webkit-autofill{-webkit-box-shadow:0 0 0 1000px #fff inset!important;-webkit-text-fill-color:#172033!important;caret-color:#172033!important;}
+.login-card .btn-green{
+  width:100%!important;height:58px!important;border-radius:17px!important;background:linear-gradient(135deg,#1fac67,#0f8f55)!important;
+  color:#fff!important;font-size:19px!important;font-weight:760!important;display:flex!important;align-items:center!important;justify-content:center!important;
+  margin:16px 0 20px!important;border:0!important;box-shadow:0 14px 28px rgba(22,163,74,.24)!important;
+}
+.login-links{margin:0!important;padding:0!important;text-align:center!important;}
+.login-links a{font-size:14px!important;color:#667085!important;font-weight:650!important;text-decoration:none!important;}
+@media(max-width:700px){
+  .login-body{padding:74px 12px 104px!important;align-items:center!important;overflow-y:auto!important;}
+  .login-card{width:calc(100vw - 26px)!important;max-width:420px!important;padding:90px 26px 30px!important;border-radius:26px!important;}
+  .login-logo{top:-56px!important;}
+  .login-avatar-svg{width:112px!important;height:112px!important;}
+  .login-avatar-svg:before{width:62px!important;height:62px!important;}
+  .login-title h1{font-size:31px!important;}
+  .login-title b{font-size:17px!important;max-width:310px!important;margin:auto!important;}
+  .login-input{height:58px!important;}
+  .login-input input,.login-input select{height:46px!important;min-height:46px!important;font-size:17px!important;}
+  .login-card .btn-green{height:60px!important;font-size:20px!important;}
+  .login-body:after{font-size:12px!important;bottom:14px!important;}
+}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -2494,7 +2676,7 @@ def empresas_disponibles_login():
 
 def login_template(admin=False, error=""):
     action = url_for('admin_login') if admin else url_for('login')
-    title = "PORTAL HR PRO"
+    title = "PRIZE PRO"
     sub = "Actualización de datos de trabajadores" if admin else "Actualización de datos de trabajadores"
     if admin:
         opts = ''.join([f"<option value='{e}'>{e}</option>" for e in empresas_disponibles_login()])
