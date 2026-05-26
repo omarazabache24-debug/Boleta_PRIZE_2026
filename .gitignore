@@ -1,0 +1,15 @@
+# Archivos que no deben subirse a Render
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.env
+.venv/
+venv/
+*.zip
+DOCUMENTOS_PRIZE_AUTO/
+uploads/
+REGISTROS_EXCEL_LOCAL/*.xlsx
+
+# Base local opcional
+*.db
