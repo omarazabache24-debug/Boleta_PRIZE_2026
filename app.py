@@ -1734,6 +1734,7 @@ def sincronizar_documentos_carpeta(dni=None, devolver_resumen=False):
 # =============================
 BASE = r'''
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ title }}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <style>
 :root{--txt:#eef2f7;--mut:#a8b0bb;--yellow:#10b981;--yellow2:#16a34a;--dark:#15181d;--panel:#1e2025;--panel2:#171a20;--line:#343a43;--shadow:0 24px 60px rgba(0,0,0,.35)}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--txt);background:#15181d;font-weight:650}a{text-decoration:none;color:inherit}.hidden{display:none!important}.btn,.btn-blue,.btn-green,.btn-red{border:1px solid #3a414b;border-radius:14px;padding:12px 18px;background:#20242b;color:#eef2f7;font-weight:950;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 10px 22px rgba(0,0,0,.18);transition:.16s}.btn:hover,.btn-blue:hover,.btn-green:hover{transform:translateY(-1px);box-shadow:0 16px 34px rgba(0,0,0,.28)}.btn-blue{background:linear-gradient(135deg,#292e36,#1f232b);border-color:#4a525e;color:var(--yellow)}.btn-green{background:linear-gradient(135deg,var(--yellow2),var(--yellow));border:0;color:#1d1f24}.btn-red{background:#361a24;border-color:#7f1d1d;color:#fecaca}.flash{padding:13px 16px;border-radius:16px;margin:10px 0;background:#2a2a1b;border:1px solid #9a7b16;color:#ffefaa}.flash.err{background:#3a1720;border-color:#7f1d1d;color:#fecaca}.input,select,textarea{width:100%;border:1px solid #3a414b;border-radius:14px;padding:13px 14px;background:#111418;color:#f8fafc;font:inherit;outline:none}option{background:#111418;color:#f8fafc}.input:focus,select:focus,textarea:focus{border-color:var(--yellow);box-shadow:0 0 0 4px rgba(16,185,129,.12)}
@@ -1962,6 +1963,14 @@ p,.subtitle,.muted,.muted2,label,td,th,.card,.mini,.metric,.stat{font-weight:500
 .login-body{background:radial-gradient(circle at 8% 0%,rgba(34,197,94,.18) 0 18%,transparent 18.3%),radial-gradient(circle at 92% 2%,rgba(20,184,166,.15) 0 20%,transparent 20.4%),linear-gradient(180deg,#f8fafc 0%,#ecfdf5 100%)!important}.login-card{width:min(92vw,520px)!important;padding:78px 48px 30px!important;background:rgba(255,255,255,.97)!important;border-radius:28px!important;border:1px solid #dce8ef!important;box-shadow:0 22px 54px rgba(15,23,42,.13)!important}.login-title h1{font-size:38px!important;font-weight:780!important;color:#182233!important;letter-spacing:-.03em!important}.login-title b{font-size:16px!important;font-weight:500!important;color:#667085!important}.login-card .field label{font-size:14px!important;font-weight:700!important;color:#1f2937!important}.login-input{background:#edf5ff!important;border:1px solid #cfe0f2!important;border-radius:17px!important;padding:0 14px!important;box-shadow:none!important}.login-input input,.login-input select{font-weight:520!important;color:#172033!important}.login-card .btn-green{font-size:18px!important;font-weight:750!important}.login-links a{color:#667085!important;font-weight:650!important;text-decoration:none!important}.login-links a:hover{color:#0f9b59!important}
 @media(max-width:1000px){.main{padding:14px!important}.hero h1,.topbar h1{font-size:24px!important}.side{top:0!important;height:100dvh!important}.menu-title,.menu-item{font-size:14px!important}.login-title h1{font-size:31px!important}.login-card{padding:74px 26px 28px!important}}
 
+
+/* =========================================================
+   AJUSTE PRO SIDEBAR: encabezado limpio, iconos suaves,
+   pestañas principales/secundarias claras y visibles
+   ========================================================= */
+body{font-weight:520!important;letter-spacing:-.01em!important}.side{background:linear-gradient(180deg,#0f3f2b 0%,#0b2a27 45%,#071423 100%)!important;border-right:1px solid rgba(255,255,255,.10)!important;box-shadow:10px 0 28px rgba(15,23,42,.22)!important;width:320px!important}.app{grid-template-columns:320px 1fr!important}.app.side-collapsed{grid-template-columns:88px 1fr!important}.side.collapsed{width:88px!important}.side-head-pro{height:92px;margin:10px 10px 8px;padding:12px 10px;display:grid;grid-template-columns:42px 1fr 42px;align-items:center;gap:9px;background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:18px;box-shadow:0 12px 26px rgba(0,0,0,.13);position:sticky;top:10px;z-index:8}.side-brand-pro{display:flex;align-items:center;justify-content:center;gap:9px;min-width:0}.side-brand-icon{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:rgba(255,255,255,.14);color:#a7f3d0;font-size:17px}.side-brand-text{display:flex;flex-direction:column;line-height:1.05;min-width:0}.side-brand-text b{font-size:15px;font-weight:780;color:#fff;letter-spacing:.01em;white-space:nowrap}.side-brand-text small{font-size:13px;font-weight:650;color:#cbd5e1;margin-top:4px}.toggle{width:42px;height:42px;border-radius:13px;background:rgba(255,255,255,.10)!important;color:#eaf8f1!important;font-size:22px;display:grid;place-items:center;transition:.16s}.toggle:hover{background:rgba(255,255,255,.17)!important;transform:translateY(-1px)}.side.collapsed .side-head-pro{grid-template-columns:1fr;height:76px;padding:10px}.side.collapsed .side-brand-pro,.side.collapsed .side-toggle-right{display:none}.side.collapsed .side-toggle-left{margin:auto}.brand{display:none!important}nav{padding:2px 12px 18px!important}.menu-group{margin:8px 0 10px!important;border-radius:18px!important;overflow:visible!important}.menu-title,.menu-item{font-family:Inter,Segoe UI,Arial,sans-serif!important;font-weight:680!important;text-shadow:none!important;letter-spacing:0!important}.menu-title{min-height:56px;padding:13px 16px!important;border-radius:18px!important;background:rgba(255,255,255,.035)!important;border:1px solid rgba(255,255,255,.08)!important;color:#e7eef7!important;box-shadow:none!important}.menu-title i,.menu-item i{width:28px;min-width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:18px;color:#d5dee9;background:rgba(255,255,255,.045)}.menu-title .label{line-height:1.25}.menu-title .chev{font-size:15px;color:#d3dde8!important;margin-left:auto}.menu-title:hover,.menu-item:hover{background:rgba(255,255,255,.075)!important;color:#fff!important}.menu-title.active,.menu-group.force-open>.menu-title.active{background:linear-gradient(135deg,#18b66b,#10a160)!important;color:#052116!important;border:1px solid rgba(134,239,172,.45)!important;box-shadow:0 12px 24px rgba(16,185,129,.22)!important}.menu-title.active i,.menu-group.force-open>.menu-title.active i{background:rgba(255,255,255,.22)!important;color:#06331e!important}.menu-title.active .chev{color:#052116!important}.menu-group.nested{margin-left:12px!important;padding-left:12px!important;border-left:1px solid rgba(203,213,225,.16)!important}.menu-group.nested>.menu-title{min-height:50px;border-radius:15px!important;background:rgba(255,255,255,.025)!important}.menu-group.nested.force-open>.menu-title{background:rgba(16,185,129,.11)!important;color:#f8fafc!important;border-left:3px solid #34d399!important}.submenu{padding:8px 0 7px!important;overflow:hidden!important}.menu-item{min-height:46px;margin:4px 0 4px 14px!important;padding:11px 13px!important;border-radius:14px!important;border-left:0!important;color:#dce5ee!important;background:transparent!important}.menu-item i{font-size:16px;background:transparent!important;color:#cbd5e1!important}.menu-item.active,.menu-item.parent-active{background:rgba(16,185,129,.16)!important;color:#ffffff!important;box-shadow:inset 3px 0 0 #34d399!important}.menu-item.active i,.menu-item.parent-active i{color:#86efac!important}.menu-item.sub-mini{font-size:13px!important;min-height:40px;margin-left:32px!important;color:#cbd5e1!important}.side-user{margin:22px 10px 18px!important;padding:16px!important;border:1px solid rgba(255,255,255,.10)!important;border-radius:18px!important;background:rgba(255,255,255,.075)!important;box-shadow:none!important}.avatar{background:#21c777!important;color:#072318!important}.side-user b{font-size:16px;font-weight:760!important;color:#fff!important}.side-user small{font-size:13px;color:#bbf7d0!important;font-weight:620!important}.side.collapsed nav{padding:4px 8px!important}.side.collapsed .menu-title{justify-content:center!important;padding:13px 8px!important}.side.collapsed .menu-title i{margin:0!important}.side.collapsed .menu-group.nested{margin-left:0!important;padding-left:0!important;border-left:0!important}.side.collapsed .label,.side.collapsed .chev,.side.collapsed .side-user{display:none!important}.side.collapsed .submenu{display:none!important}.main{background:linear-gradient(135deg,#f8fbfd 0%,#eef6f3 100%)!important;color:#142033!important}.hero,.card,.c-card,.filter-card,.table-wrap{color:#142033!important}h1,h2,h3,.c-title,.topbar h1{font-weight:780!important;color:#122033!important;text-shadow:none!important}.subtitle,.muted{font-weight:460!important;color:#667085!important}.metric b,.stat b{font-weight:680!important}.metric small,.stat small{font-weight:500!important}
+@media(max-width:1000px){.app,.app.side-collapsed{grid-template-columns:1fr!important}.side{width:315px!important}.side-head-pro{top:8px;margin:8px}.side.open{left:0!important}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -2007,8 +2016,8 @@ def render_page(content, title="PORTAL HR PRO", active="Inicio"):
     primer_nombre = user_label.split()[0] if user_label else 'Usuario'
     body = f'''
     <div class="mobile-head"><button class="toggle" onclick="toggleSide()">☰</button><b>PORTAL HR PRO</b><a href="/logout">Salir</a></div>
-    <div class="app"><aside class="side"><div class="side-top"><button class="toggle" title="Expandir / contraer panel" onclick="toggleSide()">☰</button><b class="label">PORTAL HR PRO</b><button class="toggle" title="Expandir / contraer panel" onclick="toggleSide()">☰</button></div>
-      <div class="brand"><img src="{logo_url()}" alt="PORTAL HR PRO"><p>PORTAL HR PRO</p></div>{sidebar(active)}<div class="side-user"><div class="avatar">👤</div><div><b>{primer_nombre}</b><br><small>{'Administrador' if session.get('admin_id') else 'Trabajador'}</small></div></div></aside><main class="main">{flashes()}{content}</main></div>'''
+    <div class="app"><aside class="side"><div class="side-head-pro"><button class="toggle side-toggle-left" title="Expandir / contraer panel" onclick="toggleSide()"><i class="bi bi-list"></i></button><div class="side-brand-pro"><div class="side-brand-icon"><i class="bi bi-kanban"></i></div><div class="side-brand-text"><b>PORTAL HR PRO</b><small>Dashboard</small></div></div><button class="toggle side-toggle-right" title="Expandir / contraer panel" onclick="toggleSide()"><i class="bi bi-list"></i></button></div>
+      {sidebar(active)}<div class="side-user"><div class="avatar"><i class="bi bi-person-fill"></i></div><div><b>{primer_nombre}</b><br><small>{'Administrador' if session.get('admin_id') else 'Trabajador'}</small></div></div></aside><main class="main">{flashes()}{content}</main></div>'''
     return render_template_string(BASE, body=body, title=title)
 
 
@@ -2080,48 +2089,48 @@ def sidebar(active):
         archivos_cls = 'menu-item sub-mini doc-loaded ' + ('active' if active_sub == 'documentaria' else '') if docs_count_con else 'menu-item sub-mini ' + ('active' if active_sub == 'documentaria' else '')
         admin = f"""
         <div id='grp_admin' data-group='admin' class='{admin_cls}'>
-          <button type='button' class='menu-title' onclick="toggleGroup('grp_admin')"><span>⚙️</span><span class='label'>Administrador</span><span class='chev'>∨</span></button>
+          <button type='button' class='menu-title' onclick="toggleGroup('grp_admin')"><i class='bi bi-grid-1x2'></i><span class='label'>Administrador</span><span class='chev'>∨</span></button>
           <div class='submenu'>
-            <a class='{cls_dash}' onclick='saveSideScroll()' href='/admin'><span>📊</span><span class='label'>Dashboard</span></a>
+            <a class='{cls_dash}' onclick='saveSideScroll()' href='/admin'><i class='bi bi-speedometer2'></i><span class='label'>Dashboard</span></a>
             <div id='grp_modulo_documentos' data-group='modulo_documentos' class='{docs_mod_cls}'>
-              <button type='button' class='{docs_head}' onclick="toggleGroup('grp_modulo_documentos')"><span>🗃️</span><span class='label'>1. Gestión Documental</span><span class='chev'>∨</span></button>
+              <button type='button' class='{docs_head}' onclick="toggleGroup('grp_modulo_documentos')"><i class='bi bi-folder2-open'></i><span class='label'>1. Gestión Documental</span><span class='chev'>∨</span></button>
               <div class='submenu'>
-                <a class='{cls_moddocs}' onclick='saveSideScroll()' href='/admin/modulo/documentos'><span>📊</span><span class='label'>Dashboard</span></a>
+                <a class='{cls_moddocs}' onclick='saveSideScroll()' href='/admin/modulo/documentos'><i class='bi bi-speedometer2'></i><span class='label'>Dashboard</span></a>
                 <div id='grp_pago' data-group='pago' class='{pago_cls}'>
-                  <button type='button' class='menu-title' onclick="toggleGroup('grp_pago')"><span>▣</span><span class='label'>Documentos de pago</span><span class='chev'>∨</span></button>
+                  <button type='button' class='menu-title' onclick="toggleGroup('grp_pago')"><i class='bi bi-file-earmark-text'></i><span class='label'>Documentos de pago</span><span class='chev'>∨</span></button>
                   <div class='submenu'>{pago}</div>
                 </div>
                 <div id='grp_empresa' data-group='empresa' class='{emp_cls}'>
-                  <button type='button' class='menu-title' onclick="toggleGroup('grp_empresa')"><span>▦</span><span class='label'>Documentos de la empresa</span><span class='chev'>∨</span></button>
+                  <button type='button' class='menu-title' onclick="toggleGroup('grp_empresa')"><i class='bi bi-building'></i><span class='label'>Documentos de la empresa</span><span class='chev'>∨</span></button>
                   <div class='submenu'>{emp}</div>
                 </div>
                 <div id='grp_personal' data-group='personal' class='{per_cls}'>
-                  <button type='button' class='menu-title' onclick="toggleGroup('grp_personal')"><span>▤</span><span class='label'>Documentos personales</span><span class='chev'>∨</span></button>
+                  <button type='button' class='menu-title' onclick="toggleGroup('grp_personal')"><i class='bi bi-person-lines-fill'></i><span class='label'>Documentos personales</span><span class='chev'>∨</span></button>
                   <div class='submenu'>{per}</div>
                 </div>
-                <a class='{cls_docs}' onclick='saveSideScroll()' href='/admin/documentos'><span>⬆️</span><span class='label'>Subir / gestionar documentos</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/plantilla_gestion/documental'><span>⬇️</span><span class='label'>Plantilla Documental</span></a>
+                <a class='{cls_docs}' onclick='saveSideScroll()' href='/admin/documentos'><i class='bi bi-cloud-arrow-up'></i><span class='label'>Subir / gestionar documentos</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/plantilla_gestion/documental'><i class='bi bi-file-earmark-arrow-down'></i><span class='label'>Plantilla Documental</span></a>
               </div>
             </div>
             <div id='grp_vacacional' data-group='vacacional' class='{vac_cls}'>
-              <button type='button' class='{vac_head}' onclick="toggleGroup('grp_vacacional')"><span>🏖️</span><span class='label'>2. Gestión Vacacional</span><span class='chev'>∨</span></button>
+              <button type='button' class='{vac_head}' onclick="toggleGroup('grp_vacacional')"><i class='bi bi-calendar2-week'></i><span class='label'>2. Gestión Vacacional</span><span class='chev'>∨</span></button>
               <div class='submenu'>
-                <a class='{cls_vac}' onclick='saveSideScroll()' href='/admin/vacaciones'><span>📊</span><span class='label'>Dashboard vacacional</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#cargar-saldos'><span>🗓️</span><span class='label'>Saldos Vacacionales</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#solicitudes'><span>📄</span><span class='label'>Solicitudes de Vacaciones</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#aprobaciones'><span>✅</span><span class='label'>Aprobaciones</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#reportes'><span>📑</span><span class='label'>Reportes</span></a>
-                <a class='menu-item' onclick='saveSideScroll()' href='/admin/plantilla_gestion/vacacional'><span>⬇️</span><span class='label'>Plantilla Vacacional</span></a>
+                <a class='{cls_vac}' onclick='saveSideScroll()' href='/admin/vacaciones'><i class='bi bi-bar-chart-line'></i><span class='label'>Dashboard vacacional</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#cargar-saldos'><i class='bi bi-calendar-check'></i><span class='label'>Saldos Vacacionales</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#solicitudes'><i class='bi bi-file-earmark-check'></i><span class='label'>Solicitudes de Vacaciones</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#aprobaciones'><i class='bi bi-check2-circle'></i><span class='label'>Aprobaciones</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/vacaciones#reportes'><i class='bi bi-clipboard-data'></i><span class='label'>Reportes</span></a>
+                <a class='menu-item' onclick='saveSideScroll()' href='/admin/plantilla_gestion/vacacional'><i class='bi bi-file-earmark-arrow-down'></i><span class='label'>Plantilla Vacacional</span></a>
               </div>
             </div>
             <div id='grp_trabajadores_admin' data-group='trabajadores_admin' class='menu-group nested {'force-open' if active in ['Trabajadores','Usuarios'] or active_sub == 'anuncios' else ''}'>
-              <button type='button' class='menu-title {'active' if active in ['Trabajadores','Usuarios'] or active_sub == 'anuncios' else ''}' onclick="toggleGroup('grp_trabajadores_admin')"><span>👥</span><span class='label'>Trabajadores / Usuarios y claves</span><span class='chev'>∨</span></button>
+              <button type='button' class='menu-title {'active' if active in ['Trabajadores','Usuarios'] or active_sub == 'anuncios' else ''}' onclick="toggleGroup('grp_trabajadores_admin')"><i class='bi bi-people'></i><span class='label'>Trabajadores / Usuarios y claves</span><span class='chev'>∨</span></button>
               <div class='submenu'>
-                <a class='{cls_trab}' onclick='saveSideScroll()' href='/admin/trabajadores'><span>👥</span><span class='label'>Trabajadores</span></a>
-                <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><span>🔐</span><span class='label'>Usuarios y claves</span></a>
+                <a class='{cls_trab}' onclick='saveSideScroll()' href='/admin/trabajadores'><i class='bi bi-people'></i><span class='label'>Trabajadores</span></a>
+                <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><i class='bi bi-lock'></i><span class='label'>Usuarios y claves</span></a>
               </div>
             </div>
-            <a class='{cls_test}' onclick='saveSideScroll()' href='/admin/modo_prueba'><span>🧪</span><span class='label'>Modo prueba y limpieza</span></a>
+            <a class='{cls_test}' onclick='saveSideScroll()' href='/admin/modo_prueba'><i class='bi bi-magic'></i><span class='label'>Modo prueba y limpieza</span></a>
           </div>
         </div>"""
     user_docs_keys = [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES]
@@ -2131,15 +2140,15 @@ def sidebar(active):
         <button type='button' class='menu-title' onclick="toggleGroup('grp_user_documental')"><span>🗃️</span><span class='label'>Gestión Documental</span><span class='chev'>∨</span></button>
         <div class='submenu'><a class='menu-item' onclick='saveSideScroll()' href='/panel'><span>📊</span><span class='label'>Dashboard documental</span></a>
           <div id='grp_pago' data-group='pago' class='{pago_cls}'>
-            <button type='button' class='menu-title' onclick="toggleGroup('grp_pago')"><span>▣</span><span class='label'>Documentos de pago</span><span class='chev'>∨</span></button>
+            <button type='button' class='menu-title' onclick="toggleGroup('grp_pago')"><i class='bi bi-file-earmark-text'></i><span class='label'>Documentos de pago</span><span class='chev'>∨</span></button>
             <div class='submenu'>{pago}</div>
           </div>
           <div id='grp_empresa' data-group='empresa' class='{emp_cls}'>
-            <button type='button' class='menu-title' onclick="toggleGroup('grp_empresa')"><span>▦</span><span class='label'>Documentos de la empresa</span><span class='chev'>∨</span></button>
+            <button type='button' class='menu-title' onclick="toggleGroup('grp_empresa')"><i class='bi bi-building'></i><span class='label'>Documentos de la empresa</span><span class='chev'>∨</span></button>
             <div class='submenu'>{emp}</div>
           </div>
           <div id='grp_personal' data-group='personal' class='{per_cls}'>
-            <button type='button' class='menu-title' onclick="toggleGroup('grp_personal')"><span>▤</span><span class='label'>Documentos personales</span><span class='chev'>∨</span></button>
+            <button type='button' class='menu-title' onclick="toggleGroup('grp_personal')"><i class='bi bi-person-lines-fill'></i><span class='label'>Documentos personales</span><span class='chev'>∨</span></button>
             <div class='submenu'>{per}</div>
           </div>
         </div>
@@ -2147,7 +2156,7 @@ def sidebar(active):
     user_gestiones = '' if session.get('admin_id') else f"""
       <div id='grp_user_vacacional' data-group='user_vacacional' class='menu-group {'force-open' if active == 'Gestion Vacacional' else ''}'>
         <button type='button' class='menu-title {'active' if active == 'Gestion Vacacional' else ''}' onclick="toggleGroup('grp_user_vacacional')"><span>🏖️</span><span class='label'>Gestión Vacacional</span><span class='chev'>∨</span></button>
-        <div class='submenu'><a class='menu-item {'active' if active == 'Gestion Vacacional' else ''}' onclick='saveSideScroll()' href='/vacaciones/mi_solicitud'><span>📊</span><span class='label'>Dashboard vacacional</span></a><a class='menu-item {'active' if active == 'Gestion Vacacional' else ''}' onclick='saveSideScroll()' href='/vacaciones/mi_solicitud#solicitar'><span>🗓️</span><span class='label'>Saldo y solicitud</span></a><a class='menu-item {'active' if active == 'Gestion Vacacional' else ''}' onclick='saveSideScroll()' href='/vacaciones/aprobaciones_jefe'><span>✅</span><span class='label'>Aprobaciones jefe</span></a></div>
+        <div class='submenu'><a class='menu-item {'active' if active == 'Gestion Vacacional' else ''}' onclick='saveSideScroll()' href='/vacaciones/mi_solicitud'><i class='bi bi-bar-chart-line'></i><span class='label'>Dashboard vacacional</span></a><a class='menu-item {'active' if active == 'Gestion Vacacional' else ''}' onclick='saveSideScroll()' href='/vacaciones/mi_solicitud#solicitar'><span>🗓️</span><span class='label'>Saldo y solicitud</span></a><a class='menu-item {'active' if active == 'Gestion Vacacional' else ''}' onclick='saveSideScroll()' href='/vacaciones/aprobaciones_jefe'><span>✅</span><span class='label'>Aprobaciones jefe</span></a></div>
       </div>
 """
     return f"""
@@ -2156,8 +2165,8 @@ def sidebar(active):
       {user_gestiones}
       {admin}
       <div id='grp_cuenta' data-group='cuenta' class='menu-group {'force-open' if active == 'Inicio' else ''}'>
-        <button type='button' class='menu-title {'active' if active == 'Inicio' else ''}' onclick="toggleGroup('grp_cuenta')"><span>👤</span><span class='label'>Mi cuenta</span><span class='chev'>∨</span></button>
-        <div class='submenu'><a class='menu-item {'active' if active == 'Inicio' else ''}' onclick='saveSideScroll()' href='/panel'><span>🏠</span><span class='label'>Inicio</span></a><a class='menu-item' href='/logout'><span>🚪</span><span class='label'>Salir</span></a></div>
+        <button type='button' class='menu-title {'active' if active == 'Inicio' else ''}' onclick="toggleGroup('grp_cuenta')"><i class='bi bi-person-circle'></i><span class='label'>Mi cuenta</span><span class='chev'>∨</span></button>
+        <div class='submenu'><a class='menu-item {'active' if active == 'Inicio' else ''}' onclick='saveSideScroll()' href='/panel'><i class='bi bi-house'></i><span class='label'>Inicio</span></a><a class='menu-item' href='/logout'><i class='bi bi-box-arrow-right'></i><span class='label'>Salir</span></a></div>
       </div>
     </nav>"""
 
