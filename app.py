@@ -2120,6 +2120,19 @@ nav{padding-top:4px!important}.menu-title,.menu-item{font-weight:610!important;c
 @media(max-width:700px){.login-body{padding:82px 12px 108px!important;align-items:center!important;overflow-y:auto!important}.login-card{width:calc(100vw - 26px)!important;max-width:420px!important;padding:82px 26px 30px!important;border-radius:26px!important}.login-logo{top:-62px!important}.login-avatar-svg{width:124px!important;height:124px!important}.login-title h1{font-size:31px!important}.login-title b{font-size:17px!important;max-width:310px!important;margin:auto!important}.login-input{height:58px!important}.login-input input,.login-input select{height:46px!important;min-height:46px!important;font-size:17px!important}.login-card .btn-green{height:60px!important;font-size:20px!important}.login-body:after{font-size:12px!important;bottom:14px!important}}
 .side-head-pro{position:sticky!important;top:0!important;z-index:999!important}
 
+
+/* ===== CORRECCION FINAL SOLICITADA: HEADER FIJO, CHIP ACTIVO Y LOGIN SIN TAPAR ===== */
+.side-head-pro{
+  position:sticky!important;top:0!important;z-index:9999!important;margin:10px 10px 14px!important;
+  background:linear-gradient(135deg,#163f31 0%,#0f2e27 58%,#0a241f 100%)!important;
+  border:1px solid rgba(255,255,255,.10)!important;border-radius:18px!important;box-shadow:0 12px 28px rgba(0,0,0,.25)!important;
+  overflow:hidden!important;isolation:isolate!important;backdrop-filter:none!important;
+}
+.side-head-pro:before{content:""!important;position:absolute!important;inset:0!important;background:linear-gradient(90deg,rgba(255,255,255,.08),rgba(255,255,255,0))!important;z-index:-1!important}.side-head-pro *{position:relative!important;z-index:2!important}.side{scrollbar-color:#7aa99a #0a241f!important}.side::-webkit-scrollbar{width:8px!important}.side::-webkit-scrollbar-track{background:#0a241f!important}.side::-webkit-scrollbar-thumb{background:#6ea58f!important;border-radius:999px!important;border:2px solid #0a241f!important}
+.admin-chip{position:relative!important}.admin-chip-btn{border:0!important;background:transparent!important;display:flex!important;align-items:center!important;gap:10px!important;font-weight:850!important;color:#111827!important;cursor:pointer!important;padding:3px 4px!important;border-radius:999px!important}.admin-chip-btn:hover{background:#eef7f1!important}.admin-menu{display:none!important;position:absolute!important;right:0!important;top:48px!important;width:180px!important;background:#ffffff!important;border:1px solid #d9e5ee!important;border-radius:16px!important;box-shadow:0 18px 38px rgba(15,23,42,.16)!important;padding:8px!important;z-index:99999!important}.admin-dropdown.open .admin-menu,.admin-dropdown:focus-within .admin-menu{display:block!important}.admin-menu a{display:flex!important;align-items:center!important;gap:10px!important;padding:11px 12px!important;border-radius:12px!important;color:#172033!important;font-weight:760!important}.admin-menu a:hover{background:#eef8f2!important;color:#0f8f55!important}.admin-menu i{color:#149459!important}.top-actions{overflow:visible!important}.admin-header{overflow:visible!important}.admin-chip .a{color:#092316!important;font-weight:850!important}
+.login-card{padding-top:110px!important}.login-logo{top:-62px!important;z-index:10!important}.login-title{margin-top:0!important;position:relative!important;z-index:3!important}.login-title h1{position:relative!important;z-index:3!important}.login-avatar-svg{width:124px!important;height:124px!important}.login-avatar-svg:before{width:68px!important;height:68px!important}.login-input input,.login-input select{color:#172033!important;-webkit-text-fill-color:#172033!important}.login-input input:focus,.login-input select:focus{color:#111827!important;-webkit-text-fill-color:#111827!important;background:#fff!important}
+@media(max-width:700px){.login-card{padding-top:98px!important}.login-logo{top:-60px!important}.login-title h1{font-size:31px!important}.admin-menu{right:0!important;top:46px!important}.side-head-pro{margin:8px 10px 12px!important}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -2131,6 +2144,13 @@ function toggleGroup(id){const g=document.getElementById(id); if(!g)return; g.cl
 function initSide(){const s=side(), a=appShell(); if(!s)return; const c=localStorage.getItem('sideCollapsed')==='1' && window.innerWidth>=1000; s.classList.toggle('collapsed',c); if(a)a.classList.toggle('side-collapsed',c); document.querySelectorAll('.menu-group[data-group]').forEach(g=>{const id=g.id; const saved=localStorage.getItem('group_'+id); if(saved==='1' && !g.classList.contains('force-open')) g.classList.add('closed')}); if(!location.hash){setTimeout(restoreSideScroll,60)}; document.querySelectorAll('.menu-item').forEach(a=>a.addEventListener('click',()=>{saveSideScroll(); if(window.innerWidth<1000){const s=side(); if(s)s.classList.remove('open')}}));}
 function filterCards(){const q=(document.getElementById('cardSearch')?.value||'').toLowerCase();document.querySelectorAll('.doc-card').forEach(c=>{c.style.display=c.innerText.toLowerCase().includes(q)?'block':'none'})}
 window.addEventListener('DOMContentLoaded',()=>{initSide(); if(location.hash){document.querySelectorAll('.menu-item').forEach(x=>{if(x.getAttribute('href')&&x.getAttribute('href').endsWith(location.hash)) x.classList.add('active')}); setTimeout(()=>{document.querySelector(location.hash)?.scrollIntoView({block:'start'});},120)}});window.addEventListener('beforeunload',saveSideScroll)
+
+document.addEventListener('click',function(e){
+  document.querySelectorAll('.admin-dropdown.open').forEach(function(d){
+    if(!d.contains(e.target)){d.classList.remove('open')}
+  });
+});
+
 </script></head><body>{{ body|safe }}
 <script>
 window.addEventListener('DOMContentLoaded',()=>{
@@ -2730,7 +2750,16 @@ def admin():
         </div>
         <div class='top-actions'>
           <button class='top-icon notif-bell' title='Notificaciones' onclick="alert('No tienes notificaciones pendientes')"><span>🔔</span><i>0</i></button>
-          <div class='admin-chip'><span class='a'>A</span><span>Administrador⌄</span></div>
+          <div class='admin-chip admin-dropdown'>
+            <button type='button' class='admin-chip-btn' onclick="this.parentElement.classList.toggle('open')">
+              <span class='a'>A</span><span>Administrador⌄</span>
+            </button>
+            <div class='admin-menu'>
+              <a href='/admin'><i class='bi bi-house'></i> Inicio</a>
+              <a href='/admin/usuarios'><i class='bi bi-person-circle'></i> Mi cuenta</a>
+              <a href='/logout'><i class='bi bi-box-arrow-right'></i> Salir</a>
+            </div>
+          </div>
         </div>
       </div>
 
