@@ -2037,6 +2037,65 @@ body{font-family:"Inter","Segoe UI",Arial,sans-serif!important;font-weight:520!i
 }
 @media(max-height:760px){.login-body{align-items:flex-start!important;padding-top:86px!important}.login-card{margin-top:0!important}}
 
+
+/* =========================================================
+   AJUSTE FINAL SOLICITADO: login igual referencia + texto visible
+   + encabezado del panel fijo al deslizar
+   ========================================================= */
+.login-body{
+  min-height:100vh!important;min-height:100dvh!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  padding:92px 18px 118px!important;position:relative!important;overflow:hidden!important;
+  background:
+    radial-gradient(circle at 7% -4%,rgba(34,197,94,.20) 0 21%,transparent 21.4%),
+    radial-gradient(circle at 95% 0%,rgba(20,184,166,.16) 0 22%,transparent 22.4%),
+    linear-gradient(180deg,#fbfdff 0%,#effaf5 100%)!important;
+}
+.login-body:before{
+  content:""!important;display:block!important;position:absolute!important;left:0!important;right:0!important;bottom:0!important;height:35%!important;
+  background:linear-gradient(135deg,#22c55e 0%,#047857 100%)!important;
+  clip-path:polygon(0 42%,22% 29%,48% 22%,73% 32%,100% 25%,100% 100%,0 100%)!important;
+  opacity:.96!important;z-index:0!important;
+}
+.login-body:after{
+  content:"🛡️  Sistema seguro y confiable\A © 2025 Prize Pro. Todos los derechos reservados."!important;
+  white-space:pre!important;position:absolute!important;left:0!important;right:0!important;bottom:22px!important;text-align:center!important;
+  color:#fff!important;font-size:15px!important;line-height:1.85!important;font-weight:650!important;z-index:1!important;
+}
+.login-card{
+  width:min(92vw,540px)!important;margin:0 auto!important;padding:92px 48px 36px!important;
+  background:rgba(255,255,255,.97)!important;border:1px solid #dce8ef!important;border-radius:30px!important;
+  box-shadow:0 22px 55px rgba(15,23,42,.13)!important;overflow:visible!important;position:relative!important;z-index:2!important;
+}
+.login-logo{position:absolute!important;top:-72px!important;left:50%!important;transform:translateX(-50%)!important;margin:0!important;z-index:4!important;display:block!important}
+.login-logo img{display:none!important}.login-card:before,.login-card:after{display:none!important;content:none!important}
+.login-avatar-svg{width:142px!important;height:142px!important;border-radius:50%!important;background:#fff!important;border:1px solid #dbe7ef!important;box-shadow:0 16px 42px rgba(15,23,42,.10)!important;display:grid!important;place-items:center!important;position:relative!important}
+.login-avatar-svg:before{content:""!important;width:78px!important;height:78px!important;display:block!important;background:no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%2327c77b'/%3E%3Cstop offset='1' stop-color='%230b8f5a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='35' cy='30' r='13' fill='url(%23g)'/%3E%3Ccircle cx='61' cy='28' r='15' fill='url(%23g)'/%3E%3Cpath d='M13 72c1-17 13-28 29-28 5 0 9 1 13 3-7 5-12 13-13 25H13z' fill='url(%23g)'/%3E%3Cpath d='M38 72c1-19 14-31 32-31 15 0 25 12 25 31H38z' fill='url(%23g)'/%3E%3C/svg%3E")!important}
+.login-title{text-align:center!important;margin:8px 0 26px!important}.login-title h1{color:#182233!important;font-size:38px!important;line-height:1.05!important;font-weight:800!important;letter-spacing:-.035em!important;margin:0 0 12px!important;text-transform:uppercase!important}.login-title b{display:block!important;color:#667085!important;font-size:17px!important;font-weight:520!important;line-height:1.35!important}.login-title:after{content:""!important;display:block!important;width:66px!important;height:4px!important;border-radius:999px!important;background:#16b978!important;margin:22px auto 0!important}
+.login-card .field{margin-bottom:16px!important}.login-card .field label{display:block!important;color:#1f2937!important;font-weight:720!important;font-size:15px!important;margin:0 0 8px!important}
+.login-input{height:64px!important;background:#eaf3ff!important;border:1px solid #cfe0f2!important;border-radius:18px!important;padding:0 12px!important;gap:12px!important;display:flex!important;align-items:center!important;box-shadow:none!important;margin:0!important;color:#172033!important}
+.login-input i{width:34px!important;height:34px!important;border-radius:11px!important;background:rgba(255,255,255,.72)!important;color:#11945d!important;font-size:17px!important;display:grid!important;place-items:center!important;flex:0 0 auto!important}
+.login-input input,.login-input select{
+  height:48px!important;min-height:48px!important;background:#fff!important;border:1px solid #d5e3ef!important;border-radius:16px!important;
+  color:#172033!important;-webkit-text-fill-color:#172033!important;caret-color:#172033!important;
+  font-size:17px!important;font-weight:520!important;padding:0 14px!important;outline:none!important;box-shadow:none!important;width:100%!important;
+}
+.login-input select{appearance:auto!important;-webkit-text-fill-color:#172033!important;color:#172033!important}.login-input select option{background:#fff!important;color:#172033!important;-webkit-text-fill-color:#172033!important}
+.login-input input::placeholder{color:#6b7787!important;opacity:1!important;-webkit-text-fill-color:#6b7787!important}.login-input input:focus,.login-input select:focus{background:#fff!important;color:#111827!important;-webkit-text-fill-color:#111827!important;border-color:#18b96d!important;box-shadow:0 0 0 3px rgba(22,185,120,.12)!important}
+.login-input input:-webkit-autofill{-webkit-box-shadow:0 0 0 1000px #fff inset!important;-webkit-text-fill-color:#172033!important;caret-color:#172033!important}
+.login-card .btn-green{width:100%!important;height:64px!important;border-radius:18px!important;background:linear-gradient(135deg,#1fac67,#0f8f55)!important;color:#fff!important;font-size:20px!important;font-weight:760!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:18px 0 22px!important;border:0!important;box-shadow:0 15px 30px rgba(22,163,74,.26)!important}
+.login-links{margin:0!important;padding:0!important;text-align:center!important}.login-links a{font-size:15px!important;color:#667085!important;font-weight:650!important}.login-links a:hover{color:#0f9b59!important}
+/* Encabezado fijo del panel: ya no se superpone al scroll */
+.side{overflow-y:auto!important;scrollbar-color:rgba(148,163,184,.55) transparent!important}.side::-webkit-scrollbar-thumb{background:rgba(148,163,184,.50)!important;border-radius:999px!important}.side::-webkit-scrollbar-track{background:transparent!important}
+.side-head-pro{position:sticky!important;top:0!important;z-index:999!important;margin:0 10px 10px!important;min-height:78px!important;height:auto!important;background:linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.035))!important;border:1px solid rgba(255,255,255,.10)!important;border-radius:0 0 18px 18px!important;box-shadow:0 14px 28px rgba(0,0,0,.22)!important;backdrop-filter:blur(10px)!important}
+.side-brand-text b{font-weight:760!important;color:#fff!important}.side-brand-text small{font-weight:570!important;color:#cbd5e1!important}.side-brand-icon{color:#d9f7e8!important;background:rgba(255,255,255,.12)!important}.toggle{color:#eaf8f1!important;background:rgba(255,255,255,.10)!important}
+nav{padding-top:4px!important}.menu-title,.menu-item{font-weight:610!important;color:#e6edf5!important;text-shadow:none!important}.menu-title .label,.menu-item .label{color:inherit!important;line-height:1.28!important}.menu-title i,.menu-item i{color:#d3dde8!important;background:rgba(255,255,255,.06)!important}.menu-group.force-open>.menu-title,.menu-title.active{color:#052116!important}.menu-group.force-open>.menu-title .label,.menu-title.active .label{color:#052116!important}.menu-item.active,.menu-item.parent-active{background:rgba(22,185,120,.18)!important;color:#ffffff!important}.menu-item.active .label,.menu-item.parent-active .label{color:#ffffff!important}.menu-group.nested.force-open>.menu-title{color:#f8fafc!important;background:rgba(22,185,120,.13)!important}.menu-group.nested.force-open>.menu-title .label{color:#f8fafc!important}.menu-item.sub-mini{color:#d8e2ec!important}.menu-item.sub-mini.active{color:#fff!important;background:rgba(22,185,120,.20)!important}
+@media(max-width:1000px){
+  .login-body{padding:88px 12px 108px!important;align-items:center!important;justify-content:center!important;overflow-y:auto!important}
+  .login-card{width:calc(100vw - 24px)!important;max-width:430px!important;padding:86px 26px 30px!important;border-radius:26px!important}.login-avatar-svg{width:132px!important;height:132px!important}.login-logo{top:-68px!important}.login-title h1{font-size:32px!important;line-height:1.05!important}.login-title b{font-size:18px!important;max-width:310px!important;margin:auto!important}.login-input{height:64px!important}.login-input input,.login-input select{font-size:18px!important}.login-card .btn-green{height:64px!important;font-size:21px!important}.login-body:after{font-size:12px!important;bottom:14px!important}.side-head-pro{position:sticky!important;top:0!important;margin:0 10px 10px!important}.main{padding-top:14px!important}
+}
+@media(max-height:760px){.login-body{align-items:flex-start!important;padding-top:86px!important}.login-card{margin-top:0!important}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -2258,7 +2317,7 @@ def empresas_disponibles_login():
 
 def login_template(admin=False, error=""):
     action = url_for('admin_login') if admin else url_for('login')
-    title = "PORTAL HR PRO"
+    title = "PRIZE PRO"
     sub = "Actualización de datos de trabajadores" if admin else "Actualización de datos de trabajadores"
     if admin:
         opts = ''.join([f"<option value='{e}'>{e}</option>" for e in empresas_disponibles_login()])
