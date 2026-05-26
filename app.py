@@ -1993,6 +1993,50 @@ body{font-family:"Inter","Segoe UI",Arial,sans-serif!important;font-weight:520!i
 .side.collapsed{width:88px!important;overflow:hidden!important}.side.collapsed .side-head-pro{grid-template-columns:1fr!important;height:76px!important;padding:10px!important}.side.collapsed .side-brand-pro,.side.collapsed .side-toggle-right,.side.collapsed .label,.side.collapsed .chev,.side.collapsed .side-user{display:none!important}.side.collapsed nav{padding:4px 8px!important}.side.collapsed .menu-title,.side.collapsed .menu-item{justify-content:center!important;padding:12px 8px!important;margin:6px 0!important}.side.collapsed .submenu{display:none!important}.side.collapsed .menu-group.nested{margin-left:0!important;padding-left:0!important;border-left:0!important}
 @media(max-width:1000px){.app,.app.side-collapsed{grid-template-columns:1fr!important}.side{width:315px!important;left:-340px!important}.side.open{left:0!important}.main{padding:14px!important}.login-card{width:min(94vw,500px)!important;padding:78px 26px 30px!important}.login-title h1{font-size:31px!important}.login-body:after{font-size:12px!important}}
 
+
+
+/* =========================================================
+   AJUSTE FINAL SOLICITADO: login centrado, icono nuevo,
+   letras visibles, footer, campanita única y sidebar sin superposición
+   ========================================================= */
+.login-body{
+  min-height:100svh!important;
+  min-height:100dvh!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:92px 18px 118px!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+}
+.login-card{
+  width:min(92vw,540px)!important;
+  margin:0 auto!important;
+  padding:90px 48px 34px!important;
+  border-radius:30px!important;
+}
+.login-logo{position:absolute!important;top:-72px!important;left:50%!important;transform:translateX(-50%)!important;margin:0!important;z-index:4!important}
+.login-logo img{display:none!important}
+.login-avatar-svg{
+  width:142px!important;height:142px!important;border-radius:50%!important;background:#fff!important;
+  border:1px solid #dbe7ef!important;box-shadow:0 16px 42px rgba(15,23,42,.10)!important;
+  display:grid!important;place-items:center!important;position:relative!important;
+}
+.login-avatar-svg:before{
+  content:""!important;width:78px!important;height:78px!important;display:block!important;
+  background:no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%2327c77b'/%3E%3Cstop offset='1' stop-color='%230b8f5a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='35' cy='30' r='13' fill='url(%23g)'/%3E%3Ccircle cx='61' cy='28' r='15' fill='url(%23g)'/%3E%3Cpath d='M13 72c1-17 13-28 29-28 5 0 9 1 13 3-7 5-12 13-13 25H13z' fill='url(%23g)'/%3E%3Cpath d='M38 72c1-19 14-31 32-31 15 0 25 12 25 31H38z' fill='url(%23g)'/%3E%3C/svg%3E")!important;
+}
+.login-card:before{display:none!important;content:none!important}.login-card:after{display:none!important;content:none!important}
+.login-title{text-align:center!important;margin:8px 0 26px!important}.login-title h1{color:#182233!important;font-size:38px!important;font-weight:800!important;letter-spacing:-.035em!important}.login-title b{color:#667085!important;font-size:17px!important;font-weight:520!important;line-height:1.35!important}.login-title:after{content:"";display:block;width:66px;height:4px;border-radius:999px;background:#16b978;margin:22px auto 0}.login-card .field{margin-bottom:16px!important}.login-card .field label{display:block!important;color:#1f2937!important;font-weight:720!important;font-size:15px!important;margin:0 0 8px!important}.login-input{height:64px!important;background:#eaf3ff!important;border:1px solid #cfe0f2!important;border-radius:18px!important;padding:0 12px!important;gap:12px!important;display:flex!important;align-items:center!important;box-shadow:none!important}.login-input i{width:34px!important;height:34px!important;border-radius:11px!important;background:rgba(255,255,255,.72)!important;color:#11945d!important;font-size:17px!important;display:grid!important;place-items:center!important;flex:0 0 auto!important}.login-input input,.login-input select{height:48px!important;min-height:48px!important;background:#fff!important;border:1px solid #d5e3ef!important;border-radius:16px!important;color:#172033!important;-webkit-text-fill-color:#172033!important;font-size:17px!important;font-weight:520!important;padding:0 14px!important;outline:none!important;box-shadow:none!important}.login-input select{appearance:auto!important}.login-input input::placeholder{color:#6b7787!important;opacity:1!important;-webkit-text-fill-color:#6b7787!important}.login-input input:focus,.login-input select:focus{background:#fff!important;color:#111827!important;-webkit-text-fill-color:#111827!important;border-color:#18b96d!important;box-shadow:0 0 0 3px rgba(22,185,120,.12)!important}.login-card .btn-green{height:64px!important;border-radius:18px!important;font-size:20px!important;font-weight:760!important;margin:18px 0 22px!important}.login-links a{font-size:15px!important;color:#667085!important;font-weight:650!important}.login-body:after{content:"🛡️  Sistema seguro y confiable\A © 2025 Prize Pro. Todos los derechos reservados."!important;white-space:pre!important;bottom:20px!important;color:#ffffff!important;font-size:15px!important;line-height:1.9!important;font-weight:650!important;z-index:1!important}
+/* Sidebar: evita que el encabezado se monte sobre las pestañas al hacer scroll */
+.side-head-pro{position:relative!important;top:auto!important;margin:12px 10px 10px!important;height:auto!important;min-height:78px!important;z-index:2!important;background:rgba(255,255,255,.055)!important}.side{scrollbar-color:rgba(148,163,184,.55) transparent!important}.side::-webkit-scrollbar-thumb{background:rgba(148,163,184,.50)!important}.side::-webkit-scrollbar-track{background:transparent!important}.side-brand-text b{font-weight:760!important}.side-brand-text small{font-weight:570!important}.menu-title,.menu-item{font-weight:610!important;color:#e6edf5!important}.menu-title .label,.menu-item .label{color:inherit!important;line-height:1.28!important}.menu-title i,.menu-item i{color:#d3dde8!important;background:rgba(255,255,255,.06)!important}.menu-group.force-open>.menu-title,.menu-title.active{color:#052116!important}.menu-group.force-open>.menu-title .label,.menu-title.active .label{color:#052116!important}.menu-item.active,.menu-item.parent-active{background:rgba(22,185,120,.18)!important;color:#ffffff!important}.menu-item.active .label,.menu-item.parent-active .label{color:#ffffff!important}.menu-group.nested.force-open>.menu-title{color:#f8fafc!important;background:rgba(22,185,120,.13)!important}.menu-group.nested.force-open>.menu-title .label{color:#f8fafc!important}.menu-item.sub-mini{color:#d8e2ec!important}.menu-item.sub-mini.active{color:#fff!important;background:rgba(22,185,120,.20)!important}.side.collapsed .side-head-pro{min-height:64px!important}
+/* Topbar: solo campanita */
+.top-actions{display:flex!important;align-items:center!important;gap:12px!important}.top-actions .top-icon:not(.notif-bell){display:none!important}.top-icon.notif-bell{width:44px!important;height:44px!important;border-radius:12px!important;border:0!important;background:#101923!important;color:#fff!important;display:grid!important;place-items:center!important;position:relative!important;cursor:pointer!important;box-shadow:0 8px 18px rgba(15,23,42,.10)!important}.top-icon.notif-bell span{font-size:21px!important;line-height:1!important}.top-icon.notif-bell i{position:absolute!important;right:-7px!important;top:-8px!important;background:#ff4d5c!important;color:white!important;border-radius:999px!important;font-size:11px!important;min-width:22px!important;height:22px!important;display:grid!important;place-items:center!important;font-style:normal!important;font-weight:800!important}
+@media(max-width:1000px){
+  .login-body{padding:82px 12px 105px!important;align-items:center!important;justify-content:center!important}.login-card{width:calc(100vw - 24px)!important;max-width:430px!important;padding:84px 26px 30px!important;border-radius:26px!important}.login-avatar-svg{width:132px!important;height:132px!important}.login-logo{top:-68px!important}.login-title h1{font-size:32px!important;line-height:1.05!important}.login-title b{font-size:18px!important;display:block!important;max-width:300px!important;margin:auto!important}.login-input{height:64px!important}.login-input input,.login-input select{font-size:18px!important}.login-card .btn-green{height:64px!important;font-size:21px!important}.login-body:after{font-size:12px!important;bottom:14px!important}.side{padding-top:0!important}.side-head-pro{margin-top:10px!important;position:relative!important;top:auto!important}.main{padding-top:14px!important}
+}
+@media(max-height:760px){.login-body{align-items:flex-start!important;padding-top:86px!important}.login-card{margin-top:0!important}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -2232,7 +2276,7 @@ def login_template(admin=False, error=""):
         """
     body = f"""
     <div class='login-body'><form class='login-card' method='post' action='{action}'><div class='login-inner'>
-      <div class='login-logo'><img src='{logo_url()}'></div><div class='login-title'><h1>{title}</h1><b>{sub}</b></div>
+      <div class='login-logo'><div class='login-avatar-svg' aria-label='Portal HR Pro'></div></div><div class='login-title'><h1>{title}</h1><b>{sub}</b></div>
       {f"<div class='flash err'>{error}</div>" if error else ""}{fields}<button class='btn-green'>Ingresar</button>
     </div><div class='login-links'>{'<a href="/">Entrada trabajador</a>' if admin else '<a href="/admin/login">Entrada administrador</a>'}</div></form></div>"""
     return render_template_string(BASE, body=body, title=title)
@@ -2602,8 +2646,7 @@ def admin():
           </div>
         </div>
         <div class='top-actions'>
-          <div class='top-icon'>🔔<i>0</i></div>
-          <div class='top-icon'>☰<i>0</i></div>
+          <button class='top-icon notif-bell' title='Notificaciones' onclick="alert('No tienes notificaciones pendientes')"><span>🔔</span><i>0</i></button>
           <div class='admin-chip'><span class='a'>A</span><span>Administrador⌄</span></div>
         </div>
       </div>
