@@ -3286,6 +3286,11 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
   border:1px solid #bbf7d0!important;
 }
 
+
+/* LOGIN DUAL TRABAJADOR / ADMIN */
+.login-links a.admin,.login-links a.worker{display:inline-flex!important;align-items:center!important;gap:8px!important;justify-content:center!important;color:#667085!important;font-weight:800!important;text-decoration:none!important;padding:8px 10px!important;border-radius:12px!important}
+.login-links a.admin:hover,.login-links a.worker:hover{color:#0f8f55!important;background:#ecfdf5!important}
+.login-mode-pill{display:inline-flex!important;align-items:center!important;gap:8px!important;background:#ecfdf5!important;color:#0f8f55!important;border:1px solid #bbf7d0!important;border-radius:999px!important;padding:8px 12px!important;font-weight:900!important;margin:0 0 16px!important}
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -3590,16 +3595,59 @@ def logo_svg():
 # =============================
 @app.route('/', methods=['GET','POST'])
 def login():
-    # Pantalla principal tipo imagen de referencia: acceso administrador limpio.
+    # Entrada trabajador: primero selecciona empresa, luego ingresa DNI y clave.
+    # La entrada de administrador se maneja por separado en /admin/login.
     if request.method == 'POST':
-        u = clean(request.form.get('usuario'))
-        c = clean(request.form.get('clave'))
-        empresa_login = clean(request.form.get('empresa')) or 'PORTAL HR PRO'
-        if u == ADMIN_USER and c == ADMIN_PASS:
-            session.clear(); session['admin_id']='admin'; session['admin_nombre']='Administrador'; session['empresa_login']=empresa_login
-            return redirect(url_for('admin'))
-        return login_template(True, 'Usuario o clave incorrecta.')
-    return login_template(True)
+        empresa_login = clean(request.form.get('empresa'))
+        dni = normalizar_dni(request.form.get('dni'))
+        clave = clean(request.form.get('correo') or request.form.get('clave'))
+
+        if not empresa_login:
+            return login_template(False, 'Seleccione la empresa para ingresar.')
+        if not dni or len(dni) != 8:
+            return login_template(False, 'Ingrese un DNI válido de 8 dígitos.')
+
+        bloqueado, intentos = esta_bloqueado(dni)
+        if bloqueado:
+            return login_template(False, 'Usuario bloqueado por intentos fallidos. Comuníquese con RR.HH.')
+
+        t = get_trabajador(dni)
+        if not t or int(row_get(t, 'activo', 1) or 0) != 1:
+            n, bloq = registrar_intento_fallido(dni)
+            return login_template(False, 'DNI no registrado o inactivo.')
+
+        empresas=[]
+        emp_real = clean(row_get(t, 'empresa', ''))
+        for raw in emp_real.replace('|','/').replace(';','/').replace(',','/').split('/'):
+            e=clean(raw)
+            if not e:
+                continue
+            if e.upper() == 'PORTAL HR PRO SUPERFRUITS':
+                e = 'AQUANQA'
+            if e not in empresas:
+                empresas.append(e)
+        if not empresas:
+            empresas=['AQUANQA']
+        if empresa_login not in empresas:
+            return login_template(False, 'La empresa seleccionada no corresponde al trabajador.')
+
+        clave_db = clean(row_get(t, 'clave_portal', ''))
+        clave_gen = generar_clave_trabajador(dni, row_get(t, 'fecha_nacimiento', ''))
+        correo = clean(row_get(t, 'correo', '')).lower()
+        claves_validas = {clean(clave_db), clean(clave_gen), correo}
+        if clean(clave).lower() not in {x.lower() for x in claves_validas if x}:
+            n, bloq = registrar_intento_fallido(dni)
+            msg = 'Clave incorrecta.' + (' Usuario bloqueado por 3 intentos fallidos.' if bloq else f' Intento {n}/3.')
+            return login_template(False, msg)
+
+        reset_intentos_login(dni)
+        session.clear()
+        session['dni'] = dni
+        session['nombre'] = row_get(t, 'nombre', '')
+        session['empresa'] = empresa_login
+        session['empresa_login'] = empresa_login
+        return redirect(url_for('panel'))
+    return login_template(False)
 
 @app.route('/logout')
 def logout():
