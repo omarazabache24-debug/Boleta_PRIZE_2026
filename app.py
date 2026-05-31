@@ -20,6 +20,7 @@ import html
 import base64
 import hashlib
 import uuid
+import json
 from datetime import datetime
 from pathlib import Path
 from copy import copy
@@ -315,6 +316,10 @@ def clean(v):
     return str(v or "").strip()
 
 
+def h(v):
+    return html.escape(str(v or ''))
+
+
 
 def fecha_sin_hora(v):
     """Muestra fechas sin 00:00:00, aceptando Excel datetime, ISO y texto dd/mm/aaaa."""
@@ -530,6 +535,246 @@ def db():
     return conn
 
 
+
+# =============================
+# IA HR PRO - DOCUMENTAL / VACACIONAL / LEGAL PERÚ
+# =============================
+def ia_sql_count(con, sql, params=()):
+    try:
+        return int(con.execute(sql, params).fetchone()[0] or 0)
+    except Exception:
+        return 0
+
+
+def ia_sql_rows(con, sql, params=()):
+    try:
+        return con.execute(sql, params).fetchall()
+    except Exception:
+        return []
+
+
+def ia_norm(txt):
+    txt = clean(txt).lower()
+    repl = {'á':'a','é':'e','í':'i','ó':'o','ú':'u','ñ':'n'}
+    for a,b in repl.items():
+        txt = txt.replace(a,b)
+    return re.sub(r'[^a-z0-9 ]+', ' ', txt)
+
+
+def ia_score(pregunta, row):
+    q = set(ia_norm(pregunta).split())
+    base = ' '.join([clean(row[k]) for k in row.keys() if k in ['pregunta_clave','palabras_clave','tema','modulo','respuesta']])
+    b = set(ia_norm(base).split())
+    return len(q & b)
+
+
+def asegurar_ia_hr_pro():
+    """Crea y precarga la IA del Portal HR. No borra respuestas editadas por el administrador."""
+    semillas_sistema = [
+        ('documental','admin','Dónde cargar boletas de pago','Para cargar boletas ingresa a Gestión Documental > Documentos de pago. Selecciona el tipo: Normal, CTS, Gratificación, Utilidad, Vacaciones o Liquidación. También puedes entrar a Subir / gestionar documentos para cargas individuales o masivas.','/admin/documentos','boleta boletas pago cargar subir normal cts gratificacion utilidad liquidacion documentos pago'),
+        ('documental','admin','Dónde sincronizar o detectar PDFs por DNI','Ingresa a Gestión Documental > Detectar PDFs o a Sincronizar carpetas. El sistema revisa DOCUMENTOS_PRIZE_AUTO, identifica DNI y registra documentos vinculados al trabajador.','/admin/sincronizar','detectar pdf dni sincronizar carpeta documentos prize auto'),
+        ('documental','admin','Dónde crear carpetas documentales','Ingresa a Gestión Documental > Crear carpetas. El sistema arma la estructura local para documentos de pago, empresa y personales.','/admin/crear_carpetas','crear carpetas documental estructura documentos'),
+        ('documental','admin','Dónde descargar plantilla documental','Ingresa a Gestión Documental > Plantilla Documental. Descarga el Excel base para organizar cargas de documentos.','/admin/plantilla_gestion/documental','plantilla documental excel descargar'),
+        ('documental','trabajador','Dónde veo mis boletas','Ingresa a Gestión Documental > Documentos de pago. Ahí podrás ver tus boletas normales, CTS, gratificaciones, utilidades, vacaciones o liquidaciones que RR.HH. haya cargado para tu DNI.','/panel','mis boletas ver descargar pago cts gratificacion utilidad liquidacion'),
+        ('documental','trabajador','No veo mi boleta','Si no visualizas tu boleta, puede que RR.HH. aún no la haya cargado o que el archivo no esté vinculado a tu DNI. Revisa el tipo de documento y periodo; si no aparece, comunícate con RR.HH.','/panel','no veo mi boleta no aparece documento'),
+        ('documental','ambos','Qué significa documento pendiente','Un documento pendiente es aquel que fue cargado, pero aún no registra lectura, aceptación, firma o aprobación final, según el flujo configurado por RR.HH.','','documento pendiente estado lectura firma aprobacion'),
+        ('vacacional','admin','Dónde cargar saldos vacacionales','Ingresa a Gestión Vacacional > Saldos Vacacionales o al Dashboard Vacacional. Desde ahí puedes cargar el Excel de saldos por DNI, periodo, días ganados, gozados y saldo.','/admin/vacaciones#cargar-saldos','cargar saldos vacaciones vacacionales excel saldo'),
+        ('vacacional','admin','Dónde aprobar vacaciones','Ingresa a Gestión Vacacional > Aprobaciones. Allí se revisan solicitudes pendientes de jefe y de Gestión Humana, según el flujo.','/admin/vacaciones#aprobaciones','aprobar vacaciones aprobaciones jefe gestion humana'),
+        ('vacacional','admin','Dónde ver reportes vacacionales','Ingresa a Gestión Vacacional > Reportes. Podrás revisar solicitudes, saldos, aprobadas, rechazadas y pendientes.','/admin/vacaciones#reportes','reportes vacaciones vacacional indicadores'),
+        ('vacacional','trabajador','Cómo solicito vacaciones','Ingresa a Gestión Vacacional > Saldo y solicitud. Selecciona el periodo con saldo, registra fechas y envía la solicitud para aprobación.','/vacaciones/mi_solicitud#solicitar','solicitar vacaciones pedido solicitud saldo'),
+        ('vacacional','trabajador','Dónde veo mi saldo vacacional','Ingresa a Gestión Vacacional > Dashboard vacacional. Ahí verás tus periodos, días ganados, gozados y saldo disponible.','/vacaciones/mi_solicitud','mi saldo vacaciones cuantos dias tengo'),
+        ('vacacional','trabajador','Dónde veo el estado de mi solicitud','Ingresa a Gestión Vacacional > Dashboard vacacional. En Mis solicitudes verás si está pendiente, aprobada, rechazada o anulada.','/vacaciones/mi_solicitud','estado solicitud vacaciones pendiente aprobada rechazada'),
+        ('portal','ambos','Qué puede hacer la IA HR','La IA HR ayuda con dudas del sistema, gestión documental, boletas, vacaciones y conceptos laborales peruanos. Las respuestas se filtran por rol: administrador o trabajador.','','ia asistente ayuda portal rrhh'),
+        ('portal','trabajador','Por qué no puedo cargar base de trabajadores','Esa opción es solo para administradores. Como trabajador puedes consultar tus documentos, boletas, vacaciones y estado de tus solicitudes.','','cargar base trabajadores no puedo'),
+    ]
+    semillas_legal = [
+        ('Boleta de pago','Qué es una boleta de pago','La boleta de pago es el documento que informa al trabajador el detalle de su remuneración, descuentos, aportes y otros conceptos registrados en planilla. Sirve como constancia del pago realizado.','D.S. N.° 001-98-TR y modificatorias','El D.S. N.° 001-98-TR regula la obligación de llevar planillas y entregar boletas; el D.S. N.° 009-2011-TR modificó reglas de entrega.','boleta pago remuneracion descuentos aportes planilla'),
+        ('CTS','Qué es CTS','La Compensación por Tiempo de Servicios (CTS) es un beneficio social de previsión frente al cese. En términos simples, funciona como un fondo de protección para el trabajador cuando termina el vínculo laboral.','TUO de la Ley de CTS - D.S. N.° 001-97-TR','La CTS se regula por el TUO aprobado por D.S. N.° 001-97-TR y su reglamento.','cts compensacion tiempo servicios deposito mayo noviembre'),
+        ('Gratificación','Qué es gratificación','La gratificación legal es un beneficio que corresponde en Fiestas Patrias y Navidad, siempre que se cumplan los requisitos legales. Se paga en julio y diciembre según corresponda.','Ley N.° 27735 y D.S. N.° 005-2002-TR','La Ley N.° 27735 regula las gratificaciones de Fiestas Patrias y Navidad; su reglamento precisa oportunidad y requisitos.','gratificacion julio diciembre fiestas patrias navidad'),
+        ('Vacaciones','Cuándo gano vacaciones','En el régimen laboral privado general, el trabajador adquiere derecho a 30 días calendario de descanso vacacional por cada año completo de servicios, sujeto al cumplimiento del récord vacacional aplicable.','D. Leg. N.° 713 y reglamento','El D. Leg. N.° 713 regula descansos remunerados; el derecho vacacional se genera por año completo y récord.','vacaciones cuando gano derecho record vacacional 30 dias'),
+        ('Vacaciones','Qué es récord vacacional','El récord vacacional es el requisito de días efectivamente laborados que debe cumplir el trabajador dentro del año de servicios para acceder al descanso vacacional.','D. Leg. N.° 713','El récord depende de la jornada; por ejemplo, para jornadas de 6 días se exige un mínimo mayor que para jornadas de 5 días.','record vacacional requisito dias laborados'),
+        ('Vacaciones','Qué son vacaciones truncas','Las vacaciones truncas son el pago proporcional que corresponde cuando el trabajador cesa antes de cumplir un nuevo año completo, siempre que haya generado el derecho proporcional conforme a ley.','D. Leg. N.° 713 y normas complementarias','Se calculan de forma proporcional al tiempo laborado pendiente.','vacaciones truncas cese liquidacion proporcional'),
+        ('Liquidación','Qué es liquidación','La liquidación de beneficios sociales es el cálculo de conceptos pendientes al cese, como remuneraciones, vacaciones truncas o pendientes, CTS, gratificación trunca u otros conceptos aplicables.','Normativa laboral peruana según beneficio','Depende del tipo de cese, régimen laboral y conceptos generados.','liquidacion beneficios sociales renuncia cese'),
+        ('Utilidades','Qué son utilidades','La participación en utilidades es un beneficio que puede corresponder a trabajadores de empresas que generan renta empresarial y cumplen condiciones legales. Su cálculo depende de la actividad y resultados de la empresa.','D. Leg. N.° 892 y normas complementarias','La obligación depende de la actividad empresarial, renta y número de trabajadores, entre otros factores.','utilidades participacion trabajadores empresa'),
+        ('AFP ONP','Qué es AFP y ONP','AFP y ONP son sistemas de pensiones. La AFP pertenece al sistema privado de pensiones; la ONP corresponde al sistema nacional de pensiones. El trabajador aporta según el sistema elegido.','Sistema pensionario peruano','La afiliación y aportes se rigen por normas del sistema pensionario aplicable.','afp onp pension aporte descuento'),
+        ('Vida Ley','Qué es Vida Ley','El Seguro Vida Ley es un seguro obligatorio a favor del trabajador, conforme a los supuestos y reglas de la normativa laboral peruana.','D. Leg. N.° 688 y normas complementarias','Tiene finalidad de protección ante contingencias cubiertas por la póliza.','vida ley seguro trabajador'),
+        ('SCTR','Qué es SCTR','El Seguro Complementario de Trabajo de Riesgo cubre actividades de alto riesgo cuando corresponda según la normativa aplicable.','Ley N.° 26790 y normas complementarias','Aplica según actividad de riesgo y cobertura definida por ley.','sctr seguro complementario trabajo riesgo'),
+    ]
+    with db() as con:
+        con.execute("""CREATE TABLE IF NOT EXISTS ia_base_conocimiento_hr(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            modulo TEXT,
+            rol_destino TEXT DEFAULT 'ambos',
+            pregunta_clave TEXT,
+            respuesta TEXT,
+            ruta TEXT,
+            palabras_clave TEXT,
+            activo INTEGER DEFAULT 1,
+            fecha_registro TEXT,
+            registrado_por TEXT
+        )""")
+        con.execute("""CREATE TABLE IF NOT EXISTS ia_legislacion_peru(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tema TEXT,
+            pregunta_clave TEXT,
+            respuesta TEXT,
+            base_legal TEXT,
+            detalle_legal TEXT,
+            palabras_clave TEXT,
+            activo INTEGER DEFAULT 1,
+            fecha_actualizacion TEXT
+        )""")
+        con.execute("""CREATE TABLE IF NOT EXISTS ia_hr_log(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rol TEXT,
+            modulo TEXT,
+            dni TEXT,
+            pregunta TEXT,
+            respuesta_tipo TEXT,
+            fecha TEXT,
+            usuario TEXT
+        )""")
+        for modulo, rol, preg, resp, ruta, keys in semillas_sistema:
+            existe = con.execute('SELECT id FROM ia_base_conocimiento_hr WHERE UPPER(pregunta_clave)=UPPER(?) AND rol_destino=? LIMIT 1', (preg, rol)).fetchone()
+            if not existe:
+                con.execute("""INSERT INTO ia_base_conocimiento_hr(modulo,rol_destino,pregunta_clave,respuesta,ruta,palabras_clave,activo,fecha_registro,registrado_por)
+                               VALUES(?,?,?,?,?,?,1,?,?)""", (modulo,rol,preg,resp,ruta,keys,now_txt(),'SISTEMA'))
+        for tema, preg, resp, base, det, keys in semillas_legal:
+            existe = con.execute('SELECT id FROM ia_legislacion_peru WHERE UPPER(pregunta_clave)=UPPER(?) LIMIT 1', (preg,)).fetchone()
+            if not existe:
+                con.execute("""INSERT INTO ia_legislacion_peru(tema,pregunta_clave,respuesta,base_legal,detalle_legal,palabras_clave,activo,fecha_actualizacion)
+                               VALUES(?,?,?,?,?,?,1,?)""", (tema,preg,resp,base,det,keys,now_txt()))
+        con.commit()
+
+
+def ia_registrar_log(rol, modulo, dni, pregunta, tipo):
+    try:
+        with db() as con:
+            con.execute('INSERT INTO ia_hr_log(rol,modulo,dni,pregunta,respuesta_tipo,fecha,usuario) VALUES(?,?,?,?,?,?,?)',
+                        (rol, modulo, dni, pregunta, tipo, now_txt(), session.get('admin_nombre') or session.get('nombre') or session.get('dni') or 'Sistema'))
+            con.commit()
+    except Exception:
+        pass
+
+
+def ia_buscar_base_conocimiento(pregunta, rol, modulo=''):
+    try:
+        with db() as con:
+            rows = con.execute("""SELECT * FROM ia_base_conocimiento_hr
+                                  WHERE activo=1 AND rol_destino IN ('ambos', ?)""", (rol,)).fetchall()
+        if not rows:
+            return None
+        ranked = sorted(rows, key=lambda r: ia_score(pregunta + ' ' + modulo, r), reverse=True)
+        if ranked and ia_score(pregunta + ' ' + modulo, ranked[0]) >= 1:
+            r = ranked[0]
+            ruta = f"<p><b>Ruta sugerida:</b> <a href='{h(r['ruta'])}'>{h(r['ruta'])}</a></p>" if clean(r['ruta']) else ''
+            return f"<div class='ia-result ok'><h3>{h(r['pregunta_clave'])}</h3><p>{h(r['respuesta'])}</p>{ruta}</div>"
+    except Exception:
+        pass
+    return None
+
+
+def ia_buscar_legal(pregunta):
+    try:
+        with db() as con:
+            rows = con.execute('SELECT * FROM ia_legislacion_peru WHERE activo=1').fetchall()
+        ranked = sorted(rows, key=lambda r: ia_score(pregunta, r), reverse=True)
+        if ranked and ia_score(pregunta, ranked[0]) >= 1:
+            r = ranked[0]
+            return f"""
+            <div class='ia-result legal'>
+              <h3>{h(r['pregunta_clave'])}</h3>
+              <p>{h(r['respuesta'])}</p>
+              <p><b>Base legal referencial:</b> {h(r['base_legal'])}</p>
+              <p class='muted'>{h(r['detalle_legal'])}</p>
+              <small>Respuesta informativa. Para casos especiales, RR.HH. debe validar régimen laboral, jornada y situación concreta.</small>
+            </div>"""
+    except Exception:
+        pass
+    return None
+
+
+def ia_resumen_documental(rol, dni=''):
+    with db() as con:
+        if rol == 'admin':
+            total = ia_sql_count(con, 'SELECT COUNT(*) FROM documentos')
+            pendientes = ia_sql_count(con, "SELECT COUNT(*) FROM documentos WHERE COALESCE(estado,'Pendiente') IN ('Pendiente','Aceptado','Firmado')")
+            rechazados = ia_sql_count(con, "SELECT COUNT(*) FROM documentos WHERE estado='Rechazado'")
+            leidos = ia_sql_count(con, "SELECT COUNT(*) FROM documentos WHERE COALESCE(fecha_lectura,'')<>''")
+            rows = ia_sql_rows(con, 'SELECT tipo, COUNT(*) c FROM documentos GROUP BY tipo ORDER BY c DESC LIMIT 6')
+            detalle = ''.join([f"<li>{h(r['tipo'])}: <b>{r['c']}</b></li>" for r in rows]) or '<li>Sin documentos cargados.</li>'
+            return f"<div class='ia-result ok'><h3>Resumen documental administrador</h3><p>Total: <b>{total}</b> · Pendientes: <b>{pendientes}</b> · Leídos: <b>{leidos}</b> · Rechazados: <b>{rechazados}</b></p><ul>{detalle}</ul><p>Ruta: Gestión Documental > Subir / gestionar documentos.</p></div>"
+        dni = normalizar_dni(dni)
+        total = ia_sql_count(con, 'SELECT COUNT(*) FROM documentos WHERE dni=?', (dni,))
+        leidos = ia_sql_count(con, "SELECT COUNT(*) FROM documentos WHERE dni=? AND COALESCE(fecha_lectura,'')<>''", (dni,))
+        rows = ia_sql_rows(con, 'SELECT tipo, periodo, estado, fecha_subida FROM documentos WHERE dni=? ORDER BY id DESC LIMIT 6', (dni,))
+        detalle = ''.join([f"<li>{h(r['tipo'])} · {h(r['periodo'])} · {h(r['estado'] or 'Pendiente')}</li>" for r in rows]) or '<li>Aún no tienes documentos cargados para tu DNI.</li>'
+        return f"<div class='ia-result ok'><h3>Mis documentos</h3><p>Tienes <b>{total}</b> documento(s) cargado(s). Leídos: <b>{leidos}</b>.</p><ul>{detalle}</ul><p>Ruta: Gestión Documental > Documentos de pago / empresa / personales.</p></div>"
+
+
+def ia_resumen_vacacional(rol, dni=''):
+    with db() as con:
+        if rol == 'admin':
+            saldos = ia_sql_count(con, 'SELECT COUNT(*) FROM vacaciones_saldos')
+            solicitudes = ia_sql_count(con, 'SELECT COUNT(*) FROM vacaciones_solicitudes')
+            pendientes = ia_sql_count(con, "SELECT COUNT(*) FROM vacaciones_solicitudes WHERE estado LIKE 'Pendiente%'")
+            aprobadas = ia_sql_count(con, "SELECT COUNT(*) FROM vacaciones_solicitudes WHERE estado LIKE 'Aprobado%'")
+            return f"<div class='ia-result warn'><h3>Resumen vacacional administrador</h3><p>Saldos registrados: <b>{saldos}</b> · Solicitudes: <b>{solicitudes}</b> · Pendientes: <b>{pendientes}</b> · Aprobadas: <b>{aprobadas}</b>.</p><p>Ruta: Gestión Vacacional > Dashboard / Saldos / Aprobaciones / Reportes.</p></div>"
+        dni = normalizar_dni(dni)
+        rows = ia_sql_rows(con, 'SELECT periodo_inicio, periodo_fin, dias_ganados, dias_gozados, saldo FROM vacaciones_saldos WHERE dni=? ORDER BY periodo_inicio DESC, periodo_fin DESC', (dni,))
+        total_saldo = sum(float(r['saldo'] or 0) for r in rows)
+        sol = ia_sql_rows(con, 'SELECT fecha_inicio, fecha_fin, dias, estado FROM vacaciones_solicitudes WHERE dni=? ORDER BY id DESC LIMIT 5', (dni,))
+        detalle = ''.join([f"<li>Periodo {h(r['periodo_inicio'])}/{h(r['periodo_fin'])}: saldo <b>{r['saldo']}</b> día(s)</li>" for r in rows[:5]]) or '<li>No se encontraron saldos cargados para tu DNI.</li>'
+        solicitudes = ''.join([f"<li>{h(s['fecha_inicio'])} al {h(s['fecha_fin'])}: {h(s['estado'])}</li>" for s in sol]) or '<li>No tienes solicitudes registradas.</li>'
+        return f"<div class='ia-result warn'><h3>Mis vacaciones</h3><p>Saldo total referencial: <b>{total_saldo:g}</b> día(s).</p><h4>Saldos</h4><ul>{detalle}</ul><h4>Solicitudes recientes</h4><ul>{solicitudes}</ul><p>Ruta: Gestión Vacacional > Saldo y solicitud.</p></div>"
+
+
+def ia_hr_responder(pregunta, modulo='', rol=None, dni=None):
+    pregunta = clean(pregunta)
+    rol = rol or ('admin' if session.get('admin_id') else 'trabajador')
+    dni = normalizar_dni(dni or session.get('dni') or '')
+    q = ia_norm(pregunta)
+    if not pregunta:
+        return "<div class='ia-result warn'><h3>IA HR</h3><p>Escribe una pregunta. Ejemplo: ¿qué es CTS?, ¿dónde veo mis boletas?, ¿cuánto saldo tengo?</p></div>", 'vacio'
+    admin_terms = ['cargar base','cargar trabajadores','subir saldos','cargar saldos','subir boletas masiva','sincronizar pdf','crear carpetas','reporte general','todos los trabajadores']
+    if rol != 'admin' and any(t in q for t in admin_terms):
+        return "<div class='ia-result bad'><h3>Acceso limitado</h3><p>Esa consulta corresponde a opciones administrativas. Desde tu portal puedes consultar tus boletas, documentos, saldo vacacional, solicitudes y conceptos laborales.</p></div>", 'bloqueo_rol'
+    if any(x in q for x in ['mis boletas','mis documentos','documentos','boleta','cts','gratificacion','utilidad','liquidacion']) and any(x in q for x in ['tengo','ver','donde','mis','cargadas','aparece','pendiente','resumen']):
+        return ia_resumen_documental(rol, dni), 'datos_documental'
+    if any(x in q for x in ['vacacion','saldo','solicitud','aprobacion','dias']) and any(x in q for x in ['tengo','mis','estado','pendiente','resumen','cuanto','cuantos']):
+        return ia_resumen_vacacional(rol, dni), 'datos_vacacional'
+    r = ia_buscar_base_conocimiento(pregunta, rol, modulo)
+    if r:
+        return r, 'base_conocimiento'
+    r = ia_buscar_legal(pregunta)
+    if r:
+        return r, 'legal_peru'
+    if 'vac' in ia_norm(modulo):
+        return ia_resumen_vacacional(rol, dni), 'fallback_vacacional'
+    if 'doc' in ia_norm(modulo) or 'panel' in ia_norm(modulo):
+        return ia_resumen_documental(rol, dni), 'fallback_documental'
+    if rol == 'admin':
+        return "<div class='ia-result ok'><h3>IA HR Administrador</h3><p>Puedo ayudarte con Gestión Documental, boletas, carga de saldos, vacaciones, reportes e información legal laboral peruana. Prueba: ¿dónde cargo boletas?, ¿qué documentos están pendientes?, ¿qué es CTS?</p></div>", 'fallback'
+    return "<div class='ia-result ok'><h3>IA HR Trabajador</h3><p>Puedo ayudarte a revisar tus boletas, documentos, vacaciones, solicitudes y conceptos laborales. Prueba: ¿qué es CTS?, ¿cuánto saldo tengo?, ¿dónde veo mi boleta?</p></div>", 'fallback'
+
+
+def ia_widget_hr(active=''):
+    if not (session.get('admin_id') or session.get('dni')):
+        return ''
+    rol = 'Administrador' if session.get('admin_id') else 'Trabajador'
+    ejemplos = '¿Dónde cargo boletas? | ¿Qué documentos están pendientes? | ¿Qué es CTS?' if session.get('admin_id') else '¿Dónde veo mi boleta? | ¿Cuánto saldo tengo? | ¿Qué es gratificación?'
+    return f"""
+    <div class='iahr-fab' onclick='iahrToggle()'><i class='bi bi-robot'></i><span>IA HR</span></div>
+    <div class='iahr-panel' id='iahrPanel'>
+      <div class='iahr-head'><div><b>🤖 IA HR PRO</b><small>{h(rol)} · {h(active)}</small></div><button type='button' onclick='iahrToggle()'>×</button></div>
+      <div class='iahr-body'>
+        <div class='iahr-ex'>{h(ejemplos)}</div>
+        <input id='iahrModulo' type='hidden' value='{h(active)}'>
+        <textarea id='iahrPregunta' placeholder='Escribe tu pregunta aquí...'></textarea>
+        <button type='button' class='btn-green iahr-send' onclick='iahrAsk()'>Consultar IA</button>
+        <div id='iahrRespuesta' class='iahr-respuesta'><div class='muted'>La respuesta se filtrará según tu rol.</div></div>
+      </div>
+    </div>"""
 
 def sincronizar_jefes_vacaciones(con):
     """Sincroniza JEFE INMEDIATO por DNI entre saldos, trabajadores y solicitudes."""
@@ -1161,6 +1406,78 @@ def portal_required(fn):
             return redirect(url_for("login"))
         return fn(*args, **kwargs)
     return wrapper
+
+
+@app.route('/ia_hr/api', methods=['POST'])
+@portal_required
+def ia_hr_api():
+    data = request.get_json(silent=True) or request.form
+    pregunta = clean(data.get('pregunta'))
+    modulo = clean(data.get('modulo'))
+    rol = 'admin' if session.get('admin_id') else 'trabajador'
+    dni = session.get('dni') or clean(data.get('dni'))
+    html_resp, tipo = ia_hr_responder(pregunta, modulo, rol, dni)
+    ia_registrar_log(rol, modulo, normalizar_dni(dni), pregunta, tipo)
+    return jsonify({'ok': True, 'html': html_resp, 'tipo': tipo, 'rol': rol})
+
+
+@app.route('/admin/ia_hr', methods=['GET','POST'])
+@admin_required
+def admin_ia_hr():
+    if request.method == 'POST':
+        tipo = clean(request.form.get('tipo'))
+        with db() as con:
+            if tipo == 'legal':
+                con.execute("""INSERT INTO ia_legislacion_peru(tema,pregunta_clave,respuesta,base_legal,detalle_legal,palabras_clave,activo,fecha_actualizacion)
+                               VALUES(?,?,?,?,?,?,1,?)""", (clean(request.form.get('tema')), clean(request.form.get('pregunta_clave')), clean(request.form.get('respuesta')), clean(request.form.get('base_legal')), clean(request.form.get('detalle_legal')), clean(request.form.get('palabras_clave')), now_txt()))
+            else:
+                con.execute("""INSERT INTO ia_base_conocimiento_hr(modulo,rol_destino,pregunta_clave,respuesta,ruta,palabras_clave,activo,fecha_registro,registrado_por)
+                               VALUES(?,?,?,?,?,?,1,?,?)""", (clean(request.form.get('modulo')), clean(request.form.get('rol_destino') or 'ambos'), clean(request.form.get('pregunta_clave')), clean(request.form.get('respuesta')), clean(request.form.get('ruta')), clean(request.form.get('palabras_clave')), now_txt(), session.get('admin_nombre','admin')))
+            con.commit()
+        flash('Respuesta IA registrada correctamente.', 'ok')
+        return redirect(url_for('admin_ia_hr'))
+    asegurar_ia_hr_pro()
+    with db() as con:
+        sistema = con.execute('SELECT * FROM ia_base_conocimiento_hr WHERE activo=1 ORDER BY modulo, rol_destino, id DESC').fetchall()
+        legal = con.execute('SELECT * FROM ia_legislacion_peru WHERE activo=1 ORDER BY tema, id DESC').fetchall()
+        logs = con.execute('SELECT * FROM ia_hr_log ORDER BY id DESC LIMIT 30').fetchall()
+    rows_s = ''.join([f"<tr><td>{h(r['modulo'])}</td><td>{h(r['rol_destino'])}</td><td><b>{h(r['pregunta_clave'])}</b><br><small>{h(r['palabras_clave'])}</small></td><td>{h(r['ruta'])}</td><td><a class='btn-red mini-btn' href='/admin/ia_hr/eliminar/sistema/{r['id']}'>Eliminar</a></td></tr>" for r in sistema]) or "<tr><td colspan='5'>Sin respuestas.</td></tr>"
+    rows_l = ''.join([f"<tr><td>{h(r['tema'])}</td><td><b>{h(r['pregunta_clave'])}</b><br><small>{h(r['base_legal'])}</small></td><td>{h(r['fecha_actualizacion'])}</td><td><a class='btn-red mini-btn' href='/admin/ia_hr/eliminar/legal/{r['id']}'>Eliminar</a></td></tr>" for r in legal]) or "<tr><td colspan='4'>Sin base legal.</td></tr>"
+    rows_log = ''.join([f"<tr><td>{h(r['fecha'])}</td><td>{h(r['rol'])}</td><td>{h(r['modulo'])}</td><td>{h(r['pregunta'])}</td><td>{h(r['respuesta_tipo'])}</td></tr>" for r in logs]) or "<tr><td colspan='5'>Sin consultas.</td></tr>"
+    content=f"""
+    <div class='hero'><div class='topbar'><div><h1>Base <span class='accent'>IA HR</span></h1><div class='subtitle'>Administra el manual inteligente, la base legal Perú y revisa consultas realizadas.</div></div><a class='btn-green' href='/admin/ia_hr/cargar_base'>Cargar respuestas base IA</a></div></div>
+    <section class='grid'>
+      <div class='card span-12'><h2>Agregar respuesta del sistema</h2><form method='post' class='ia-admin-form'>
+        <input type='hidden' name='tipo' value='sistema'><label>Módulo<input name='modulo' placeholder='documental / vacacional / portal'></label><label>Rol<select name='rol_destino'><option value='ambos'>Ambos</option><option value='admin'>Administrador</option><option value='trabajador'>Trabajador</option></select></label>
+        <label class='full'>Pregunta clave<input name='pregunta_clave' required placeholder='¿Dónde cargo boletas?'></label><label class='full'>Respuesta<textarea name='respuesta' required></textarea></label><label>Ruta<input name='ruta' placeholder='/admin/documentos'></label><label>Palabras clave<input name='palabras_clave' placeholder='boletas pago cargar'></label><button class='btn-green full'>Guardar respuesta</button></form></div>
+      <div class='card span-12'><h2>Agregar respuesta legal Perú</h2><form method='post' class='ia-admin-form'>
+        <input type='hidden' name='tipo' value='legal'><label>Tema<input name='tema' placeholder='CTS'></label><label>Base legal<input name='base_legal' placeholder='D.S. N.° 001-97-TR'></label><label class='full'>Pregunta clave<input name='pregunta_clave' required placeholder='¿Qué es CTS?'></label><label class='full'>Respuesta<textarea name='respuesta' required></textarea></label><label class='full'>Detalle legal<textarea name='detalle_legal'></textarea></label><label class='full'>Palabras clave<input name='palabras_clave'></label><button class='btn-green full'>Guardar legal</button></form></div>
+      <div class='card span-12'><h2>Respuestas del sistema</h2><div class='table-wrap'><table class='c-table ia-table'><tr><th>Módulo</th><th>Rol</th><th>Pregunta</th><th>Ruta</th><th></th></tr>{rows_s}</table></div></div>
+      <div class='card span-12'><h2>Base legal Perú</h2><div class='table-wrap'><table class='c-table ia-table'><tr><th>Tema</th><th>Pregunta / Base</th><th>Actualización</th><th></th></tr>{rows_l}</table></div></div>
+      <div class='card span-12'><h2>Últimas consultas IA</h2><div class='table-wrap'><table class='c-table'><tr><th>Fecha</th><th>Rol</th><th>Módulo</th><th>Pregunta</th><th>Tipo</th></tr>{rows_log}</table></div></div>
+    </section>"""
+    return render_page(content, active='IA HR')
+
+
+@app.route('/admin/ia_hr/cargar_base')
+@admin_required
+def admin_ia_hr_cargar_base():
+    asegurar_ia_hr_pro()
+    flash('Base inicial IA HR cargada/actualizada.', 'ok')
+    return redirect(url_for('admin_ia_hr'))
+
+
+@app.route('/admin/ia_hr/eliminar/<tipo>/<int:item_id>')
+@admin_required
+def admin_ia_hr_eliminar(tipo, item_id):
+    with db() as con:
+        if tipo == 'legal':
+            con.execute('UPDATE ia_legislacion_peru SET activo=0 WHERE id=?', (item_id,))
+        else:
+            con.execute('UPDATE ia_base_conocimiento_hr SET activo=0 WHERE id=?', (item_id,))
+        con.commit()
+    flash('Registro IA desactivado.', 'ok')
+    return redirect(url_for('admin_ia_hr'))
 
 # =============================
 # DB HELPERS
@@ -2448,6 +2765,11 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
   .login-body:after{font-size:12px!important;bottom:14px!important;}
 }
 
+
+/* === IA HR PRO - Widget global === */
+.iahr-fab{position:fixed;right:22px;bottom:22px;z-index:9998;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border-radius:999px;padding:13px 17px;box-shadow:0 18px 40px rgba(0,0,0,.35);display:flex;align-items:center;gap:8px;font-weight:900;cursor:pointer;border:1px solid rgba(255,255,255,.22)}
+.iahr-fab i{font-size:18px}.iahr-panel{position:fixed;right:22px;bottom:82px;width:min(430px,calc(100vw - 28px));max-height:70vh;z-index:9999;background:#111827;border:1px solid rgba(148,163,184,.35);border-radius:20px;box-shadow:0 25px 70px rgba(0,0,0,.48);display:none;overflow:hidden}.iahr-panel.open{display:block}.iahr-head{display:flex;justify-content:space-between;align-items:center;padding:15px 16px;background:linear-gradient(135deg,#064e3b,#111827);border-bottom:1px solid rgba(255,255,255,.08)}.iahr-head b{display:block;color:#fff}.iahr-head small{display:block;color:#bbf7d0;font-size:11px;margin-top:3px}.iahr-head button{background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:10px;width:32px;height:32px;font-size:20px;cursor:pointer}.iahr-body{padding:14px}.iahr-ex{font-size:12px;color:#cbd5e1;background:#0f172a;border:1px solid rgba(148,163,184,.25);border-radius:12px;padding:10px;margin-bottom:10px}.iahr-body textarea{width:100%;height:92px;border-radius:14px;border:1px solid #334155;background:#f8fafc;color:#0f172a;padding:12px;font-weight:700;resize:vertical}.iahr-send{width:100%;margin-top:10px;justify-content:center}.iahr-respuesta{margin-top:12px;max-height:310px;overflow:auto}.ia-result{border-radius:14px;padding:13px;border:1px solid rgba(148,163,184,.25);background:#0f172a;color:#e5e7eb}.ia-result h3{margin:0 0 8px;color:#fff}.ia-result h4{margin:10px 0 6px}.ia-result p{margin:7px 0;line-height:1.45}.ia-result ul{margin:8px 0 0 18px;padding:0}.ia-result.ok{border-color:rgba(34,197,94,.45);background:linear-gradient(135deg,rgba(6,78,59,.75),#0f172a)}.ia-result.warn{border-color:rgba(245,158,11,.5);background:linear-gradient(135deg,rgba(120,53,15,.58),#0f172a)}.ia-result.bad{border-color:rgba(239,68,68,.55);background:linear-gradient(135deg,rgba(127,29,29,.62),#0f172a)}.ia-result.legal{border-color:rgba(59,130,246,.55);background:linear-gradient(135deg,rgba(30,64,175,.58),#0f172a)}.ia-result a{color:#86efac;font-weight:900}.ia-result small,.ia-result .muted{color:#cbd5e1}.ia-admin-form{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px}.ia-admin-form textarea{grid-column:1/-1;min-height:110px}.ia-admin-form .full{grid-column:1/-1}.ia-table td{vertical-align:top}@media(max-width:700px){.iahr-fab{right:14px;bottom:14px}.iahr-panel{right:14px;bottom:72px}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -2459,6 +2781,21 @@ function toggleGroup(id){const g=document.getElementById(id); if(!g)return; g.cl
 function initSide(){const s=side(), a=appShell(); if(!s)return; const c=localStorage.getItem('sideCollapsed')==='1' && window.innerWidth>=1000; s.classList.toggle('collapsed',c); if(a)a.classList.toggle('side-collapsed',c); document.querySelectorAll('.menu-group[data-group]').forEach(g=>{const id=g.id; const saved=localStorage.getItem('group_'+id); if(saved==='1' && !g.classList.contains('force-open')) g.classList.add('closed')}); if(!location.hash){setTimeout(restoreSideScroll,60)}; document.querySelectorAll('.menu-item').forEach(a=>a.addEventListener('click',()=>{saveSideScroll(); if(window.innerWidth<1000){const s=side(); if(s)s.classList.remove('open')}}));}
 function filterCards(){const q=(document.getElementById('cardSearch')?.value||'').toLowerCase();document.querySelectorAll('.doc-card').forEach(c=>{c.style.display=c.innerText.toLowerCase().includes(q)?'block':'none'})}
 window.addEventListener('DOMContentLoaded',()=>{initSide(); if(location.hash){document.querySelectorAll('.menu-item').forEach(x=>{if(x.getAttribute('href')&&x.getAttribute('href').endsWith(location.hash)) x.classList.add('active')}); setTimeout(()=>{document.querySelector(location.hash)?.scrollIntoView({block:'start'});},120)}});window.addEventListener('beforeunload',saveSideScroll)
+
+
+function iahrToggle(){const p=document.getElementById('iahrPanel'); if(p)p.classList.toggle('open')}
+async function iahrAsk(){
+  const q=document.getElementById('iahrPregunta')?.value||'';
+  const modulo=document.getElementById('iahrModulo')?.value||'';
+  const box=document.getElementById('iahrRespuesta');
+  if(!box)return;
+  box.innerHTML='<div class="ia-result warn"><p>Analizando...</p></div>';
+  try{
+    const r=await fetch('/ia_hr/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pregunta:q,modulo:modulo})});
+    const data=await r.json();
+    box.innerHTML=data.html||'<div class="ia-result bad">No se obtuvo respuesta.</div>';
+  }catch(e){box.innerHTML='<div class="ia-result bad"><h3>Error IA</h3><p>No se pudo consultar la IA. Revisa conexión o sesión.</p></div>'}
+}
 
 document.addEventListener('click',function(e){
   document.querySelectorAll('.admin-dropdown.open').forEach(function(d){
@@ -2501,7 +2838,7 @@ def render_page(content, title="PORTAL HR PRO", active="Inicio"):
     body = f'''
     <div class="mobile-head"><button class="toggle" onclick="toggleSide()">☰</button><b>PORTAL HR PRO</b><a href="/logout">Salir</a></div>
     <div class="app"><aside class="side"><div class="side-head-pro"><button class="toggle side-toggle-left" title="Expandir / contraer panel" onclick="toggleSide()"><i class="bi bi-list"></i></button><div class="side-brand-pro"><div class="side-brand-icon"><i class="bi bi-kanban"></i></div><div class="side-brand-text"><b>PORTAL HR PRO</b><small>Dashboard</small></div></div><button class="toggle side-toggle-right" title="Expandir / contraer panel" onclick="toggleSide()"><i class="bi bi-list"></i></button></div>
-      {sidebar(active)}<div class="side-user"><div class="avatar"><i class="bi bi-person-fill"></i></div><div><b>{primer_nombre}</b><br><small>{'Administrador' if session.get('admin_id') else 'Trabajador'}</small></div></div></aside><main class="main">{flashes()}{content}</main></div>'''
+      {sidebar(active)}<div class="side-user"><div class="avatar"><i class="bi bi-person-fill"></i></div><div><b>{primer_nombre}</b><br><small>{'Administrador' if session.get('admin_id') else 'Trabajador'}</small></div></div></aside><main class="main">{flashes()}{content}</main>{ia_widget_hr(active)}</div>'''
     return render_template_string(BASE, body=body, title=title)
 
 
@@ -2614,6 +2951,7 @@ def sidebar(active):
                 <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><i class='bi bi-lock'></i><span class='label'>Usuarios y claves</span></a>
               </div>
             </div>
+            <a class='menu-item {'active' if active == 'IA HR' else ''}' onclick='saveSideScroll()' href='/admin/ia_hr'><i class='bi bi-robot'></i><span class='label'>Base IA HR</span></a>
             <a class='{cls_test}' onclick='saveSideScroll()' href='/admin/modo_prueba'><i class='bi bi-magic'></i><span class='label'>Modo prueba y limpieza</span></a>
           </div>
         </div>"""
