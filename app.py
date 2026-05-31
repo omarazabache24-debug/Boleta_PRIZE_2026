@@ -686,6 +686,16 @@ def asegurar_ia_hr_pro():
             fecha TEXT,
             usuario TEXT
         )""")
+        con.execute("""CREATE TABLE IF NOT EXISTS ia_actualizaciones_hr(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT,
+            fuente TEXT,
+            registros INTEGER DEFAULT 0,
+            detalle TEXT,
+            fecha TEXT,
+            usuario TEXT
+        )""")
+
         for modulo, rol, preg, resp, ruta, keys in semillas_sistema:
             existe = con.execute('SELECT id FROM ia_base_conocimiento_hr WHERE UPPER(pregunta_clave)=UPPER(?) AND rol_destino=? LIMIT 1', (preg, rol)).fetchone()
             if not existe:
@@ -697,6 +707,101 @@ def asegurar_ia_hr_pro():
                 con.execute("""INSERT INTO ia_legislacion_peru(tema,pregunta_clave,respuesta,base_legal,detalle_legal,palabras_clave,activo,fecha_actualizacion)
                                VALUES(?,?,?,?,?,?,1,?)""", (tema,preg,resp,base,det,keys,now_txt()))
         con.commit()
+
+
+
+def ia_upsert_legal(tema, pregunta_clave, respuesta, base_legal, detalle_legal='', palabras_clave=''):
+    """Inserta o actualiza una respuesta legal de IA por pregunta clave."""
+    tema = clean(tema)
+    pregunta_clave = clean(pregunta_clave)
+    if not pregunta_clave:
+        return 0
+    with db() as con:
+        row = con.execute('SELECT id FROM ia_legislacion_peru WHERE UPPER(pregunta_clave)=UPPER(?) LIMIT 1', (pregunta_clave,)).fetchone()
+        if row:
+            con.execute("""UPDATE ia_legislacion_peru
+                              SET tema=?, respuesta=?, base_legal=?, detalle_legal=?, palabras_clave=?, activo=1, fecha_actualizacion=?
+                            WHERE id=?""", (tema, clean(respuesta), clean(base_legal), clean(detalle_legal), clean(palabras_clave), now_txt(), row['id']))
+        else:
+            con.execute("""INSERT INTO ia_legislacion_peru(tema,pregunta_clave,respuesta,base_legal,detalle_legal,palabras_clave,activo,fecha_actualizacion)
+                           VALUES(?,?,?,?,?,?,1,?)""", (tema, pregunta_clave, clean(respuesta), clean(base_legal), clean(detalle_legal), clean(palabras_clave), now_txt()))
+        con.commit()
+    return 1
+
+
+def ia_upsert_sistema(modulo, rol_destino, pregunta_clave, respuesta, ruta='', palabras_clave=''):
+    """Inserta o actualiza una respuesta operativa del sistema por pregunta clave y rol."""
+    modulo = clean(modulo)
+    rol_destino = clean(rol_destino or 'ambos')
+    pregunta_clave = clean(pregunta_clave)
+    if not pregunta_clave:
+        return 0
+    with db() as con:
+        row = con.execute('SELECT id FROM ia_base_conocimiento_hr WHERE UPPER(pregunta_clave)=UPPER(?) AND rol_destino=? LIMIT 1', (pregunta_clave, rol_destino)).fetchone()
+        if row:
+            con.execute("""UPDATE ia_base_conocimiento_hr
+                              SET modulo=?, respuesta=?, ruta=?, palabras_clave=?, activo=1, fecha_registro=?, registrado_por=?
+                            WHERE id=?""", (modulo, clean(respuesta), clean(ruta), clean(palabras_clave), now_txt(), 'ACTUALIZADOR IA', row['id']))
+        else:
+            con.execute("""INSERT INTO ia_base_conocimiento_hr(modulo,rol_destino,pregunta_clave,respuesta,ruta,palabras_clave,activo,fecha_registro,registrado_por)
+                           VALUES(?,?,?,?,?,?,1,?,?)""", (modulo, rol_destino, pregunta_clave, clean(respuesta), clean(ruta), clean(palabras_clave), now_txt(), 'ACTUALIZADOR IA'))
+        con.commit()
+    return 1
+
+
+def ia_hr_actualizar_base_plus(fuente='Base PRO interna'):
+    """Actualiza la base IA sin borrar personalizaciones del administrador."""
+    asegurar_ia_hr_pro()
+    legales_extra = [
+        ('Vacaciones','Qué son vacaciones ordinarias','Las vacaciones ordinarias son el descanso vacacional anual que corresponde al trabajador por cada año completo de servicios, siempre que cumpla el récord vacacional. En el régimen privado general equivale a 30 días calendario de descanso remunerado.','D. Leg. N.° 713 y D.S. N.° 012-92-TR','No es lo mismo que vacaciones truncas. Las ordinarias son descanso anual; las truncas son pago proporcional al cese.','vacaciones ordinarias descanso vacacional anual normales 30 dias calendario'),
+        ('Vacaciones','Qué son vacaciones vencidas','Son vacaciones generadas que no fueron gozadas dentro del plazo legal. Pueden generar contingencia laboral e incluso indemnización vacacional si se cumplen los supuestos legales.','D. Leg. N.° 713 y D.S. N.° 012-92-TR','RR.HH. debe revisar fecha de ingreso, periodo, goce efectivo y oportunidad del descanso.','vacaciones vencidas no gozadas indemnizacion vacacional periodo vencido'),
+        ('Vacaciones','Diferencia entre vacaciones ordinarias y truncas','Las vacaciones ordinarias son el descanso anual de 30 días calendario cuando el trabajador cumplió un año de servicios y récord. Las vacaciones truncas son el pago proporcional generado al cese antes de completar un nuevo año.','D. Leg. N.° 713','La diferencia principal es que una se goza como descanso y la otra normalmente se paga en liquidación al cese.','diferencia vacaciones ordinarias truncas descanso anual liquidacion cese'),
+        ('Boleta de pago','Qué es boleta de utilidades','La boleta o constancia de utilidades informa al trabajador el monto pagado por participación en utilidades, cuando corresponde según la actividad, renta empresarial y requisitos legales. No es una boleta mensual de remuneración, sino un documento de pago específico del beneficio.','D. Leg. N.° 892 y D.S. N.° 009-98-TR','La participación en utilidades aplica a empresas que generan rentas de tercera categoría y cumplen condiciones legales.','boleta utilidades constancia participacion utilidades pago utilidad'),
+        ('Utilidades','Qué es participación en utilidades','Es el derecho de los trabajadores a participar en las utilidades de empresas que desarrollan actividades generadoras de renta de tercera categoría, cuando cumplen los requisitos legales. El porcentaje depende de la actividad económica de la empresa.','D. Leg. N.° 892 y D.S. N.° 009-98-TR','Debe revisarse si la empresa está obligada, número de trabajadores, renta y actividad económica.','participacion utilidades trabajadores porcentaje renta tercera categoria'),
+        ('CTS','Qué es boleta CTS','Es el documento o constancia que informa el cálculo o depósito de la Compensación por Tiempo de Servicios. Permite al trabajador revisar periodo, remuneración computable, días considerados y entidad depositaria, según el flujo de la empresa.','D.S. N.° 001-97-TR y D.S. N.° 004-97-TR','La CTS se deposita normalmente en mayo y noviembre, salvo reglas especiales.','boleta cts constancia compensacion tiempo servicios deposito'),
+        ('Gratificación','Qué es boleta de gratificación','Es el documento que informa el pago de gratificación legal de julio o diciembre, incluyendo monto, descuentos si correspondiera y bonificación extraordinaria cuando aplique.','Ley N.° 27735 y D.S. N.° 005-2002-TR','La gratificación depende del semestre laborado y requisitos aplicables.','boleta gratificacion julio diciembre fiestas patrias navidad'),
+        ('Remuneración','Qué es remuneración básica','La remuneración básica es el monto principal pactado por la prestación de servicios. Sirve como referencia para diversos cálculos, aunque no siempre es la única base computable de beneficios.','TUO del D. Leg. N.° 728 y normas complementarias','Debe diferenciarse entre básico, remuneración computable y conceptos no remunerativos.','remuneracion basica sueldo basico computable beneficios'),
+        ('Régimen agrario','Qué es remuneración diaria agraria','En el régimen laboral agrario, la remuneración diaria integra conceptos según la Ley 31110, y puede incluir reglas especiales sobre remuneración básica, gratificaciones, CTS y BETA según corresponda.','Ley N.° 31110 y D.S. N.° 005-2021-MIDAGRI','Debe validarse si el trabajador y la actividad están comprendidos en el régimen agrario.','remuneracion diaria agraria rd beta ley 31110'),
+        ('Régimen agrario','Qué es BETA agrario','La BETA es la Bonificación Especial por Trabajo Agrario prevista en la Ley 31110. Tiene carácter no remunerativo y equivale al porcentaje establecido por la norma respecto de la RMV.','Ley N.° 31110 y D.S. N.° 005-2021-MIDAGRI','No constituye remuneración para efectos legales, según la norma especial.','beta bonificacion especial trabajo agrario ley 31110'),
+        ('Licencias','Qué es licencia por adopción','Es la licencia laboral otorgada al trabajador por adopción, conforme a la normativa aplicable, para atender el proceso de integración familiar.','Ley N.° 27409','RR.HH. debe validar resolución o documento sustentatorio y oportunidad de goce.','licencia adopcion trabajador hijo adoptivo'),
+        ('Licencias','Qué es licencia por familiar grave','Es la licencia para trabajadores con familiares directos que se encuentran con enfermedad grave o terminal, o sufren accidente grave, conforme a la ley y reglamento.','Ley N.° 30012 y D.S. N.° 008-2017-TR','Debe acreditarse el vínculo y la condición médica conforme al procedimiento interno y norma.','licencia familiar enfermedad grave terminal accidente grave'),
+        ('Licencias','Qué es licencia por rehabilitación de persona con discapacidad','Es la licencia para asistencia médica y terapia de rehabilitación de personas con discapacidad, cuando se cumplen los requisitos legales.','Ley N.° 30119 y D.S. N.° 013-2017-TR','Debe sustentarse vínculo, discapacidad y citas o terapias.','licencia rehabilitacion discapacidad terapia asistencia medica'),
+        ('Planillas','Qué es T-Registro','T-Registro es el registro de información laboral de empleadores, trabajadores, pensionistas, prestadores y otros sujetos, como parte de la Planilla Electrónica.','Normas de Planilla Electrónica SUNAT/MTPE','Se vincula con la declaración mensual PLAME.','t registro planilla electronica trabajador alta baja'),
+        ('Planillas','Qué es PLAME','PLAME es el componente de Planilla Electrónica usado para declarar remuneraciones, descuentos, aportes y tributos laborales mensuales ante SUNAT.','Normas de Planilla Electrónica SUNAT/MTPE','Debe conciliarse con boletas, AFP/ONP, EsSalud y registros laborales.','plame planilla electronica remuneraciones aportes sunat'),
+    ]
+    sistema_extra = [
+        ('portal','admin','Cómo actualizar la IA HR','Ingresa a Base IA HR y usa el botón Actualizar base IA. El sistema agrega o actualiza respuestas legales y del manual sin borrar tus registros personalizados.','/admin/ia_hr','actualizar ia base legal respuestas manual'),
+        ('portal','admin','Cómo importar normativa PDF','Ingresa a Base IA HR, sección Importar normativa PDF. Carga el archivo legal y el sistema guardará una ficha de referencia para que la IA la considere como fuente interna.','/admin/ia_hr','importar normativa pdf ley reglamento compendio'),
+        ('portal','admin','Cómo ver historial de actualización IA','Ingresa a Base IA HR y revisa el bloque Historial de actualizaciones. Ahí verás fecha, usuario, fuente y cantidad de registros agregados.','/admin/ia_hr','historial actualizaciones ia fecha usuario fuente'),
+    ]
+    total = 0
+    for item in legales_extra:
+        total += ia_upsert_legal(*item)
+    for item in sistema_extra:
+        total += ia_upsert_sistema(*item)
+    with db() as con:
+        con.execute("""INSERT INTO ia_actualizaciones_hr(tipo,fuente,registros,detalle,fecha,usuario)
+                       VALUES(?,?,?,?,?,?)""", ('actualizacion_base', fuente, total, 'Actualización PRO de base legal y manual del sistema.', now_txt(), session.get('admin_nombre') or 'admin'))
+        con.commit()
+    return total
+
+
+def ia_hr_registrar_fuente_pdf(nombre_archivo, ruta_archivo, resumen=''):
+    """Registra un PDF como fuente legal interna. No reemplaza la revisión legal humana."""
+    asegurar_ia_hr_pro()
+    nombre = clean(nombre_archivo)
+    tema = 'Normativa PDF'
+    pregunta = f'Fuente normativa: {nombre}'
+    respuesta = resumen or f'Se registró el documento legal {nombre} como fuente interna de consulta para RR.HH. Puedes agregar preguntas específicas desde Base IA HR.'
+    base = nombre
+    detalle = f'Archivo importado por administrador. Ruta interna: {ruta_archivo}'
+    keys = ia_norm(nombre).replace(' ', ' ') + ' normativa pdf ley reglamento'
+    creado = ia_upsert_legal(tema, pregunta, respuesta, base, detalle, keys)
+    with db() as con:
+        con.execute("""INSERT INTO ia_actualizaciones_hr(tipo,fuente,registros,detalle,fecha,usuario)
+                       VALUES(?,?,?,?,?,?)""", ('importacion_pdf', nombre, creado, detalle, now_txt(), session.get('admin_nombre') or 'admin'))
+        con.commit()
+    return creado
 
 
 def ia_registrar_log(rol, modulo, dni, pregunta, tipo):
@@ -732,9 +837,52 @@ def ia_buscar_base_conocimiento(pregunta, rol, modulo=''):
 
 
 def ia_buscar_legal(pregunta):
+    """Busca primero coincidencias exactas/frases y luego por puntaje."""
     try:
+        pregunta_n = ia_norm(pregunta)
         with db() as con:
             rows = con.execute('SELECT * FROM ia_legislacion_peru WHERE activo=1').fetchall()
+        if not rows:
+            return None
+
+        # 1) Coincidencia exacta por pregunta clave normalizada.
+        for r in rows:
+            clave_n = ia_norm(r['pregunta_clave'])
+            if pregunta_n == clave_n or clave_n in pregunta_n or pregunta_n in clave_n:
+                return f"""
+                <div class='ia-result legal'>
+                  <h3>{h(r['pregunta_clave'])}</h3>
+                  <p>{h(r['respuesta'])}</p>
+                  <p><b>Base legal referencial:</b> {h(r['base_legal'])}</p>
+                  <p class='muted'>{h(r['detalle_legal'])}</p>
+                  <small>Respuesta informativa. RR.HH. debe validar régimen, jornada, fecha, documentos y caso concreto antes de aplicar.</small>
+                </div>"""
+
+        # 2) Frases críticas para evitar confusiones.
+        sinonimos = {
+            'vacaciones ordinarias': ['vacaciones ordinarias','vacaciones normales','descanso vacacional anual','vacacion ordinaria'],
+            'vacaciones truncas': ['vacaciones truncas','vacacion trunca','truncas'],
+            'vacaciones vencidas': ['vacaciones vencidas','vacacion vencida','no gozadas','no goce vacaciones'],
+            'boleta de utilidades': ['boleta de utilidades','boletas utilidades','constancia de utilidades','boleta utilidad'],
+            'boleta de pago': ['boleta de pago','boleta mensual','boleta remuneracion'],
+            'boleta cts': ['boleta cts','boleta de cts','constancia cts'],
+            'boleta de gratificación': ['boleta gratificacion','boleta de gratificacion','constancia gratificacion'],
+        }
+        for objetivo, frases in sinonimos.items():
+            if any(f in pregunta_n for f in frases):
+                ranked_exact = [r for r in rows if objetivo in ia_norm(r['pregunta_clave']) or objetivo in ia_norm(r['palabras_clave'])]
+                if ranked_exact:
+                    r = ranked_exact[0]
+                    return f"""
+                    <div class='ia-result legal'>
+                      <h3>{h(r['pregunta_clave'])}</h3>
+                      <p>{h(r['respuesta'])}</p>
+                      <p><b>Base legal referencial:</b> {h(r['base_legal'])}</p>
+                      <p class='muted'>{h(r['detalle_legal'])}</p>
+                      <small>Respuesta informativa. RR.HH. debe validar régimen, jornada, fecha, documentos y caso concreto antes de aplicar.</small>
+                    </div>"""
+
+        # 3) Puntaje ponderado.
         ranked = sorted(rows, key=lambda r: ia_score(pregunta, r), reverse=True)
         if ranked and ia_score(pregunta, ranked[0]) >= 1:
             r = ranked[0]
@@ -744,10 +892,10 @@ def ia_buscar_legal(pregunta):
               <p>{h(r['respuesta'])}</p>
               <p><b>Base legal referencial:</b> {h(r['base_legal'])}</p>
               <p class='muted'>{h(r['detalle_legal'])}</p>
-              <small>Respuesta informativa. Para casos especiales, RR.HH. debe validar régimen laboral, jornada y situación concreta.</small>
+              <small>Respuesta informativa. RR.HH. debe validar régimen, jornada, fecha, documentos y caso concreto antes de aplicar.</small>
             </div>"""
-    except Exception:
-        pass
+    except Exception as e:
+        return f"<div class='ia-result bad'><h3>Error en búsqueda legal IA</h3><p>{h(e)}</p></div>"
     return None
 
 
@@ -796,6 +944,11 @@ def ia_hr_responder(pregunta, modulo='', rol=None, dni=None):
     admin_terms = ['cargar base','cargar trabajadores','subir saldos','cargar saldos','subir boletas masiva','sincronizar pdf','crear carpetas','reporte general','todos los trabajadores']
     if rol != 'admin' and any(t in q for t in admin_terms):
         return "<div class='ia-result bad'><h3>Acceso limitado</h3><p>Esa consulta corresponde a opciones administrativas. Desde tu portal puedes consultar tus boletas, documentos, saldo vacacional, solicitudes y conceptos laborales.</p></div>", 'bloqueo_rol'
+    # Preguntas conceptuales/legales primero para evitar confundir "qué son vacaciones ordinarias" con datos del saldo.
+    if any(x in q for x in ['que es', 'que son', 'cual es', 'cuantos dias', 'diferencia', 'significa']):
+        r = ia_buscar_legal(pregunta)
+        if r:
+            return r, 'legal_peru'
     if any(x in q for x in ['mis boletas','mis documentos','documentos','boleta','cts','gratificacion','utilidad','liquidacion']) and any(x in q for x in ['tengo','ver','donde','mis','cargadas','aparece','pendiente','resumen']):
         return ia_resumen_documental(rol, dni), 'datos_documental'
     if any(x in q for x in ['vacacion','saldo','solicitud','aprobacion','dias']) and any(x in q for x in ['tengo','mis','estado','pendiente','resumen','cuanto','cuantos']):
@@ -827,7 +980,7 @@ def ia_widget_hr(active=''):
       <div class='iahr-body'>
         <div class='iahr-ex'>{h(ejemplos)}</div>
         <input id='iahrModulo' type='hidden' value='{h(active)}'>
-        <textarea id='iahrPregunta' placeholder='Escribe tu pregunta aquí...'></textarea>
+        <textarea id='iahrPregunta' placeholder='Escribe tu pregunta aquí...' onkeydown="if(event.key==='Enter' && !event.shiftKey){{event.preventDefault(); iahrAsk(event);}}"></textarea>
         <button type='button' class='btn-green iahr-send' onclick='iahrAsk(event)'>Consultar IA</button>
         <div id='iahrRespuesta' class='iahr-respuesta'><div class='muted'>La respuesta se filtrará según tu rol.</div></div>
       </div>
@@ -1644,6 +1797,16 @@ def asegurar_ia_hr_pro():
             fecha TEXT,
             usuario TEXT
         )""")
+        con.execute("""CREATE TABLE IF NOT EXISTS ia_actualizaciones_hr(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT,
+            fuente TEXT,
+            registros INTEGER DEFAULT 0,
+            detalle TEXT,
+            fecha TEXT,
+            usuario TEXT
+        )""")
+
         # Índices útiles para evitar duplicados y acelerar búsqueda
         try: con.execute('CREATE INDEX IF NOT EXISTS idx_ia_leg_activo ON ia_legislacion_peru(activo, tema)')
         except Exception: pass
@@ -1783,6 +1946,7 @@ def ia_hr_responder(pregunta, modulo='', rol=None, dni=None):
 # Inicialización PRO PLUS después de redefinir funciones.
 try:
     asegurar_ia_hr_pro()
+    ia_hr_actualizar_base_plus('Inicio automático')
 except Exception as e:
     print('No se pudo inicializar IA HR PRO PLUS:', e)
 
@@ -1830,12 +1994,29 @@ def admin_ia_hr():
         sistema = con.execute('SELECT * FROM ia_base_conocimiento_hr WHERE activo=1 ORDER BY modulo, rol_destino, id DESC').fetchall()
         legal = con.execute('SELECT * FROM ia_legislacion_peru WHERE activo=1 ORDER BY tema, id DESC').fetchall()
         logs = con.execute('SELECT * FROM ia_hr_log ORDER BY id DESC LIMIT 30').fetchall()
+        actualizaciones = con.execute('SELECT * FROM ia_actualizaciones_hr ORDER BY id DESC LIMIT 30').fetchall()
     rows_s = ''.join([f"<tr><td>{h(r['modulo'])}</td><td>{h(r['rol_destino'])}</td><td><b>{h(r['pregunta_clave'])}</b><br><small>{h(r['palabras_clave'])}</small></td><td>{h(r['ruta'])}</td><td><a class='btn-red mini-btn' href='/admin/ia_hr/eliminar/sistema/{r['id']}'>Eliminar</a></td></tr>" for r in sistema]) or "<tr><td colspan='5'>Sin respuestas.</td></tr>"
     rows_l = ''.join([f"<tr><td>{h(r['tema'])}</td><td><b>{h(r['pregunta_clave'])}</b><br><small>{h(r['base_legal'])}</small></td><td>{h(r['fecha_actualizacion'])}</td><td><a class='btn-red mini-btn' href='/admin/ia_hr/eliminar/legal/{r['id']}'>Eliminar</a></td></tr>" for r in legal]) or "<tr><td colspan='4'>Sin base legal.</td></tr>"
     rows_log = ''.join([f"<tr><td>{h(r['fecha'])}</td><td>{h(r['rol'])}</td><td>{h(r['modulo'])}</td><td>{h(r['pregunta'])}</td><td>{h(r['respuesta_tipo'])}</td></tr>" for r in logs]) or "<tr><td colspan='5'>Sin consultas.</td></tr>"
+    rows_act = ''.join([f"<tr><td>{h(r['fecha'])}</td><td>{h(r['tipo'])}</td><td>{h(r['fuente'])}</td><td>{h(r['registros'])}</td><td>{h(r['usuario'])}</td></tr>" for r in actualizaciones]) or "<tr><td colspan='5'>Sin actualizaciones.</td></tr>"
     content=f"""
-    <div class='hero'><div class='topbar'><div><h1>Base <span class='accent'>IA HR</span></h1><div class='subtitle'>Administra el manual inteligente, la base legal Perú y revisa consultas realizadas.</div></div><a class='btn-green' href='/admin/ia_hr/cargar_base'>Cargar respuestas base IA</a></div></div>
+    <div class='hero'><div class='topbar'><div><h1>Base <span class='accent'>IA HR</span></h1><div class='subtitle'>Administra el manual inteligente, la base legal Perú, PDFs normativos y revisa consultas realizadas.</div></div>
+      <div style='display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end'>
+        <a class='btn-green' href='/admin/ia_hr/actualizar_base'>Actualizar base IA</a>
+        <a class='btn' href='/admin/ia_hr/cargar_base'>Restaurar base inicial</a>
+      </div></div></div>
     <section class='grid'>
+      <div class='card span-12'><h2>Actualizar / importar normativa IA</h2>
+        <div style='display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px'>
+          <a class='btn-green' href='/admin/ia_hr/actualizar_base'>Actualizar base IA</a>
+          <a class='btn' href='/admin/ia_hr/cargar_base'>Restaurar base legal inicial</a>
+        </div>
+        <form method='post' action='/admin/ia_hr/importar_pdf' enctype='multipart/form-data' class='ia-admin-form'>
+          <label class='full'>Importar normativa PDF<input type='file' name='pdf_normativa' accept='.pdf' required></label>
+          <label class='full'>Resumen / comentario opcional<textarea name='resumen' placeholder='Ejemplo: Compendio MTPE, Ley 31110, Reglamento Agrario, etc.'></textarea></label>
+          <button class='btn-green full'>Importar PDF como fuente IA</button>
+        </form>
+      </div>
       <div class='card span-12'><h2>Agregar respuesta del sistema</h2><form method='post' class='ia-admin-form'>
         <input type='hidden' name='tipo' value='sistema'><label>Módulo<input name='modulo' placeholder='documental / vacacional / portal'></label><label>Rol<select name='rol_destino'><option value='ambos'>Ambos</option><option value='admin'>Administrador</option><option value='trabajador'>Trabajador</option></select></label>
         <label class='full'>Pregunta clave<input name='pregunta_clave' required placeholder='¿Dónde cargo boletas?'></label><label class='full'>Respuesta<textarea name='respuesta' required></textarea></label><label>Ruta<input name='ruta' placeholder='/admin/documentos'></label><label>Palabras clave<input name='palabras_clave' placeholder='boletas pago cargar'></label><button class='btn-green full'>Guardar respuesta</button></form></div>
@@ -1844,6 +2025,7 @@ def admin_ia_hr():
       <div class='card span-12'><h2>Respuestas del sistema</h2><div class='table-wrap'><table class='c-table ia-table'><tr><th>Módulo</th><th>Rol</th><th>Pregunta</th><th>Ruta</th><th></th></tr>{rows_s}</table></div></div>
       <div class='card span-12'><h2>Base legal Perú</h2><div class='table-wrap'><table class='c-table ia-table'><tr><th>Tema</th><th>Pregunta / Base</th><th>Actualización</th><th></th></tr>{rows_l}</table></div></div>
       <div class='card span-12'><h2>Últimas consultas IA</h2><div class='table-wrap'><table class='c-table'><tr><th>Fecha</th><th>Rol</th><th>Módulo</th><th>Pregunta</th><th>Tipo</th></tr>{rows_log}</table></div></div>
+      <div class='card span-12'><h2>Historial de actualizaciones IA</h2><div class='table-wrap'><table class='c-table'><tr><th>Fecha</th><th>Tipo</th><th>Fuente</th><th>Registros</th><th>Usuario</th></tr>{rows_act}</table></div></div>
     </section>"""
     return render_page(content, active='IA HR')
 
@@ -1852,7 +2034,37 @@ def admin_ia_hr():
 @admin_required
 def admin_ia_hr_cargar_base():
     asegurar_ia_hr_pro()
-    flash('Base inicial IA HR cargada/actualizada.', 'ok')
+    total = ia_hr_actualizar_base_plus('Restauración base inicial + PRO')
+    flash(f'Base inicial IA HR restaurada/actualizada. Registros procesados: {total}.', 'ok')
+    return redirect(url_for('admin_ia_hr'))
+
+
+@app.route('/admin/ia_hr/actualizar_base')
+@admin_required
+def admin_ia_hr_actualizar_base():
+    total = ia_hr_actualizar_base_plus('Actualización manual desde botón administrador')
+    flash(f'Base IA HR actualizada correctamente. Registros procesados: {total}.', 'ok')
+    return redirect(url_for('admin_ia_hr'))
+
+
+@app.route('/admin/ia_hr/importar_pdf', methods=['POST'])
+@admin_required
+def admin_ia_hr_importar_pdf():
+    asegurar_ia_hr_pro()
+    f = request.files.get('pdf_normativa')
+    if not f or not f.filename:
+        flash('Selecciona un PDF para importar.', 'bad')
+        return redirect(url_for('admin_ia_hr'))
+    filename = secure_filename(f.filename)
+    destino_dir = UPLOAD_DIR / 'ia_normativa'
+    destino_dir.mkdir(parents=True, exist_ok=True)
+    destino = destino_dir / f"{now_file()}_{filename}"
+    f.save(destino)
+    resumen = clean(request.form.get('resumen'))
+    if not resumen:
+        resumen = f'PDF importado como fuente de consulta legal interna: {filename}. Agrega preguntas específicas para explotar su contenido.'
+    creados = ia_hr_registrar_fuente_pdf(filename, str(destino), resumen)
+    flash(f'PDF normativo importado para IA. Registros creados/actualizados: {creados}.', 'ok')
     return redirect(url_for('admin_ia_hr'))
 
 
@@ -3163,6 +3375,7 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
 /* === AJUSTE PRO: IA HR en verde/blanco con lectura clara === */
 .iahr-panel{
   background:#ffffff!important;
+  max-height:82vh!important;
   border:1px solid #d6efe3!important;
   box-shadow:0 26px 80px rgba(15,118,80,.24)!important;
 }
@@ -3189,7 +3402,7 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
   border-color:#16a34a!important;
   box-shadow:0 0 0 4px rgba(22,163,74,.16)!important;
 }
-.iahr-respuesta{background:#ffffff!important;}
+.iahr-respuesta{background:#ffffff!important;max-height:42vh!important;overflow-y:auto!important;padding-right:6px!important;}
 .ia-result,.ia-result.ok,.ia-result.warn,.ia-result.bad,.ia-result.legal{
   background:#ffffff!important;
   color:#0f172a!important;
