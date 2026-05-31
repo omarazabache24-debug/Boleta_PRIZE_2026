@@ -823,7 +823,7 @@ def ia_widget_hr(active=''):
         <div class='iahr-ex'>{h(ejemplos)}</div>
         <input id='iahrModulo' type='hidden' value='{h(active)}'>
         <textarea id='iahrPregunta' placeholder='Escribe tu pregunta aquí...'></textarea>
-        <button type='button' class='btn-green iahr-send' onclick='iahrAsk()'>Consultar IA</button>
+        <button type='button' class='btn-green iahr-send' onclick='iahrAsk(event)'>Consultar IA</button>
         <div id='iahrRespuesta' class='iahr-respuesta'><div class='muted'>La respuesta se filtrará según tu rol.</div></div>
       </div>
     </div>"""
@@ -1382,6 +1382,25 @@ def asegurar_plantillas_contratacion_base():
         con.commit()
 
 init_db()
+try:
+    asegurar_ia_hr_pro()
+except Exception as e:
+    print('No se pudo inicializar IA HR PRO:', e)
+try:
+    with db() as con:
+        temas_extra_ia = [
+            ('Utilidades','Qué es utilidades','La participación en utilidades es un beneficio laboral que corresponde cuando la empresa genera renta y cumple las condiciones legales. Su pago depende de la actividad económica, el número de trabajadores y los resultados de la empresa.','D. Leg. N.° 892 y normas complementarias','La participación se calcula según porcentajes por actividad y reglas legales aplicables.','utilidades utilidad participacion trabajadores renta empresa pago'),
+            ('Licencia por paternidad','Qué es licencia por paternidad','Es el permiso remunerado que corresponde al trabajador por el nacimiento de su hijo o hija, conforme a la ley aplicable.','Ley N.° 29409 y modificatorias','La duración puede variar según supuestos especiales previstos por la normativa.','licencia paternidad nacimiento hijo padre'),
+            ('Licencia por fallecimiento','Qué es licencia por luto','Es la licencia otorgada al trabajador por fallecimiento de familiares directos, conforme a las reglas legales vigentes y políticas internas aplicables.','Ley N.° 31602 y normas complementarias','Aplica según parentesco y condiciones establecidas por la norma.','licencia luto fallecimiento familiar muerte'),
+            ('Contratos','Qué es un contrato de trabajo','Es el acuerdo por el cual una persona presta servicios personales, remunerados y subordinados a favor de un empleador.','TUO del D. Leg. N.° 728 y normas complementarias','Los elementos principales son prestación personal, remuneración y subordinación.','contrato trabajo laboral tipos indeterminado plazo fijo sujeto modalidad')
+        ]
+        for tema,preg,resp,base,det,keys in temas_extra_ia:
+            ex=con.execute('SELECT id FROM ia_legislacion_peru WHERE UPPER(pregunta_clave)=UPPER(?) LIMIT 1',(preg,)).fetchone()
+            if not ex:
+                con.execute('INSERT INTO ia_legislacion_peru(tema,pregunta_clave,respuesta,base_legal,detalle_legal,palabras_clave,activo,fecha_actualizacion) VALUES(?,?,?,?,?,?,1,?)',(tema,preg,resp,base,det,keys,now_txt()))
+        con.commit()
+except Exception as e:
+    print('No se pudo cargar base legal adicional IA:', e)
 # asegurar_plantillas_contratacion_base()  # módulo retirado
 restaurar_trabajadores_desde_excel_si_db_vacia()
 restaurar_vacaciones_desde_excel_si_db_vacia()
@@ -1460,15 +1479,328 @@ def portal_required(fn):
     return wrapper
 
 
+# =============================
+# IA HR PRO PLUS - RR.HH. PERÚ / SISTEMA / DATOS REALES
+# =============================
+# Mejora: administrador puede consultar TODO (admin + trabajador + legal + datos).
+# Mejora: trabajador queda limitado a su información personal y consultas legales generales.
+# Mejora: preguntas tipo "qué es..." priorizan base legal antes que datos documentales.
+# Mejora: mayor base inicial de RR.HH. Perú, régimen privado y régimen agrario.
+
+def ia_keywords_hit(q_norm, terms):
+    return any(ia_norm(t) in q_norm for t in terms)
+
+
+def ia_score(pregunta, row):
+    """Score tolerante: coincidencia exacta + tokens + plurales simples."""
+    qn = ia_norm(pregunta)
+    q_tokens = [x for x in qn.split() if len(x) > 2]
+    q = set(q_tokens)
+    try:
+        base = ' '.join([clean(row[k]) for k in row.keys() if k in ['pregunta_clave','palabras_clave','tema','modulo','respuesta','base_legal']])
+    except Exception:
+        base = str(row)
+    bn = ia_norm(base)
+    b = set([x for x in bn.split() if len(x) > 2])
+    score = len(q & b)
+    if qn and qn in bn:
+        score += 12
+    # boost por raíz simple para plurales: utilidad/utilidades, boleta/boletas, vacacion/vacaciones
+    for tok in q:
+        raiz = tok[:-2] if tok.endswith('es') else tok[:-1] if tok.endswith('s') else tok
+        if len(raiz) >= 4 and raiz in bn:
+            score += 1
+    return score
+
+
+def ia_hr_semillas_legales_plus():
+    return [
+        ('Boleta de pago','Qué es una boleta de pago','La boleta de pago es el documento que muestra al trabajador el detalle de su remuneración, descuentos, aportes, periodo pagado y otros conceptos de planilla. Sirve como constancia del pago efectuado.','D.S. N.° 001-98-TR y normas de planilla electrónica','Debe contener información suficiente para identificar al empleador, trabajador, periodo y conceptos pagados/descontados.','boleta boletas pago remuneracion sueldo descuentos aportes planilla recibo haberes'),
+        ('Boleta de utilidades','Qué es boleta de utilidades','La boleta de utilidades es el documento o constancia donde se informa el pago de participación en utilidades cuando la empresa está obligada a distribuirlas. Muestra el importe pagado y, según el formato interno, puede detallar criterios como días laborados y remuneraciones computables.','D. Leg. N.° 892, D.S. N.° 009-98-TR y normas complementarias','En empresas obligadas, la participación se distribuye conforme a la actividad económica y reglas legales; en régimen agrario se consideran reglas especiales de Ley N.° 31110.','boleta utilidades utilidad participacion trabajadores renta empresa pago reparto'),
+        ('Utilidades','Qué son utilidades','La participación en utilidades es un beneficio por el cual ciertos trabajadores participan en un porcentaje de la renta anual antes de impuestos de empresas que generan rentas de tercera categoría y cumplen condiciones legales.','D. Leg. N.° 892, D.S. N.° 009-98-TR y modificatorias','El porcentaje depende de la actividad económica. La distribución se realiza, de forma general, en función a días laborados y remuneraciones.','utilidades utilidad participacion trabajadores renta tercera categoria porcentaje reparto'),
+        ('CTS','Qué es CTS','La Compensación por Tiempo de Servicios (CTS) es un beneficio social de previsión frente al cese. Funciona como un fondo de protección económica para el trabajador cuando termina la relación laboral.','TUO de la Ley de CTS - D.S. N.° 001-97-TR y D.S. N.° 004-97-TR','Generalmente se deposita en mayo y noviembre cuando corresponde, según régimen y cumplimiento de requisitos.','cts compensacion tiempo servicios deposito mayo noviembre cese'),
+        ('CTS','Cuándo se deposita la CTS','En el régimen privado general, la CTS se deposita semestralmente, normalmente hasta la primera quincena de mayo y noviembre, siempre que el trabajador cumpla los requisitos legales.','TUO de la Ley de CTS - D.S. N.° 001-97-TR','El tratamiento puede variar por régimen especial, tiempo parcial, microempresa o remuneración integral anual.','cuando depositan cts mayo noviembre fecha deposito'),
+        ('Gratificación','Qué es gratificación','La gratificación legal es un beneficio social que se paga por Fiestas Patrias y Navidad, usualmente en julio y diciembre, cuando el trabajador cumple los requisitos legales.','Ley N.° 27735 y D.S. N.° 005-2002-TR','Puede existir gratificación trunca si cesa antes del semestre completo y cumple condiciones.','gratificacion gratificaciones julio diciembre fiestas patrias navidad'),
+        ('Gratificación','Qué es gratificación trunca','La gratificación trunca es el pago proporcional que corresponde cuando el trabajador cesa antes de julio o diciembre, siempre que haya laborado al menos un mes completo dentro del semestre computable.','Ley N.° 27735 y D.S. N.° 005-2002-TR','Debe revisarse fecha de ingreso, cese y remuneración computable.','gratificacion trunca proporcional cese semestre'),
+        ('Vacaciones','Cuándo gano vacaciones','En el régimen laboral privado general, el trabajador adquiere derecho a 30 días calendario de descanso vacacional por cada año completo de servicios, sujeto al récord vacacional.','D. Leg. N.° 713 y D.S. N.° 012-92-TR','El récord depende de la jornada semanal y días efectivamente laborados.','vacaciones cuando gano derecho record vacacional 30 dias'),
+        ('Vacaciones','Qué es récord vacacional','El récord vacacional es el requisito de asistencia o días efectivos de labor dentro del año de servicios para acceder al descanso vacacional.','D. Leg. N.° 713 y D.S. N.° 012-92-TR','Se evalúa según jornada y supuestos legalmente considerados como días efectivos.','record vacacional dias laborados requisito asistencia'),
+        ('Vacaciones','Qué son vacaciones truncas','Las vacaciones truncas son el pago proporcional por vacaciones generado al cese antes de cumplir un nuevo año completo, conforme al tiempo laborado y reglas aplicables.','D. Leg. N.° 713 y D.S. N.° 012-92-TR','Se calculan en liquidación de beneficios sociales.','vacaciones truncas cese liquidacion proporcional'),
+        ('Vacaciones','Qué es indemnización vacacional','La indemnización vacacional puede corresponder cuando el trabajador no goza oportunamente su descanso vacacional dentro del plazo legal, según las reglas del régimen privado.','D. Leg. N.° 713','Debe evaluarse periodo vencido, oportunidad de goce y responsabilidad del empleador.','indemnizacion vacacional triple vacaciones vencidas no gozadas'),
+        ('Liquidación','Qué es liquidación de beneficios sociales','La liquidación de beneficios sociales es el cálculo de conceptos pendientes al cese: remuneraciones, CTS, gratificación trunca, vacaciones truncas o pendientes y otros pagos que correspondan.','Normativa laboral peruana según cada beneficio','Depende de régimen laboral, motivo de cese, fecha de ingreso, fecha de cese y pagos previos.','liquidacion beneficios sociales renuncia cese despido calculo'),
+        ('Asignación familiar','Qué es asignación familiar','La asignación familiar es un beneficio equivalente al 10% de la Remuneración Mínima Vital para trabajadores del régimen privado que cumplen los requisitos legales y tienen hijos a cargo según la norma.','Ley N.° 25129 y D.S. N.° 035-90-TR','El monto cambia cuando cambia la RMV. Debe sustentarse la condición familiar.','asignacion familiar hijo 10 rmv beneficio'),
+        ('Jornada','Cuál es la jornada máxima de trabajo','La jornada máxima ordinaria en Perú es de 8 horas diarias o 48 horas semanales, salvo jornadas especiales, acumulativas o atípicas válidamente implementadas.','Constitución Política del Perú y D.S. N.° 007-2002-TR','RR.HH. debe revisar régimen, jornada, horario, asistencia y descansos.','jornada maxima 8 horas 48 semanales horario trabajo'),
+        ('Horas extras','Qué son horas extras','Las horas extras son labores realizadas por encima de la jornada ordinaria. Deben ser voluntarias, registradas y pagadas con sobretasa legal o compensadas conforme a acuerdo válido.','D.S. N.° 007-2002-TR y reglamento','La sobretasa mínima usual es 25% para las dos primeras horas y 35% para las siguientes.','horas extras sobretiempo sobretasa 25 35'),
+        ('Feriados','Qué pasa si trabajo feriado','Si se trabaja en feriado no laborable, puede corresponder descanso sustitutorio o pago adicional según la norma. RR.HH. debe verificar si existió compensación.','D. Leg. N.° 713','El tratamiento depende del feriado, programación y descanso sustitutorio.','feriado trabajado pago descanso sustitutorio triple'),
+        ('Descanso semanal','Qué es descanso semanal obligatorio','Es el descanso remunerado semanal que, de forma general, debe ser de al menos 24 horas consecutivas, según la organización de la jornada.','D. Leg. N.° 713','Puede programarse según operación, turnos y régimen laboral.','descanso semanal obligatorio dso 24 horas'),
+        ('Contrato','Qué es un contrato de trabajo','Es el acuerdo por el cual una persona presta servicios personales, remunerados y subordinados para un empleador. Si existen esos elementos, se configura relación laboral.','TUO del D. Leg. N.° 728 - D.S. N.° 003-97-TR','Los elementos clave son prestación personal, remuneración y subordinación.','contrato trabajo relacion laboral subordinacion remuneracion servicios'),
+        ('Contrato','Cuántos tipos de contrato hay','En el régimen privado se suele distinguir contratos a plazo indeterminado y contratos sujetos a modalidad o plazo fijo. También existen contratos a tiempo parcial y modalidades especiales según actividad.','TUO del D. Leg. N.° 728 - D.S. N.° 003-97-TR','Los contratos sujetos a modalidad requieren causa objetiva y formalidades.','tipos contrato indeterminado plazo fijo sujeto modalidad parcial'),
+        ('Contrato','Qué es contrato intermitente','Es un contrato sujeto a modalidad para actividades permanentes pero discontinuas, donde la prestación se activa según necesidad de la actividad.','TUO del D. Leg. N.° 728 - D.S. N.° 003-97-TR','Debe existir causa objetiva y respetarse la formalidad contractual.','contrato intermitente discontinuo campaña agro actividad'),
+        ('Contrato','Qué es periodo de prueba','El periodo de prueba es la etapa inicial de la relación laboral durante la cual se evalúa la adaptación del trabajador al puesto. En general es de 3 meses, con reglas especiales para cargos de confianza o dirección.','TUO del D. Leg. N.° 728 - D.S. N.° 003-97-TR','Debe verificarse puesto, convenio y condiciones pactadas.','periodo prueba tres meses confianza direccion'),
+        ('Licencia por paternidad','Qué es licencia por paternidad','Es el permiso remunerado que corresponde al trabajador padre por nacimiento de hijo o hija. La regla general vigente es 10 días calendario consecutivos, con ampliaciones en supuestos especiales.','Ley N.° 29409 modificada por Ley N.° 30807','Puede ser 20 o 30 días en supuestos especiales como nacimiento prematuro, parto múltiple, enfermedad congénita terminal, discapacidad severa o complicaciones graves de la madre.','licencia paternidad nacimiento hijo padre 10 dias parto multiple prematuro'),
+        ('Licencia por paternidad','Cuántos días son de licencia por paternidad','La licencia por paternidad es de 10 días calendario consecutivos en parto natural o cesárea. Puede ampliarse a 20 o 30 días en casos especiales regulados.','Ley N.° 29409 modificada por Ley N.° 30807','RR.HH. debe validar el certificado y el supuesto aplicable.','dias licencia paternidad 10 20 30 parto cesarea'),
+        ('Licencia por maternidad','Qué es licencia por maternidad','Es el descanso pre y postnatal de la trabajadora gestante. En Perú suma 98 días naturales, usualmente 49 días antes y 49 días después del parto, con ampliaciones en casos especiales.','Ley N.° 26644 y normas modificatorias','Puede ampliarse por nacimiento múltiple o niño con discapacidad, entre otros supuestos.','licencia maternidad prenatal postnatal 98 dias gestante'),
+        ('Lactancia','Qué es permiso por lactancia','Es el derecho de la madre trabajadora a una hora diaria de permiso por lactancia materna hasta que su hijo cumpla un año, conforme a la ley.','Ley N.° 27240 y normas modificatorias','El horario debe coordinarse sin afectar el derecho.','lactancia permiso hora diaria madre hijo un año'),
+        ('Licencia por fallecimiento','Qué es licencia por luto','Es la licencia remunerada por fallecimiento de familiares directos. En el sector privado comprende 5 días calendario por fallecimiento de cónyuge, padres, hijos o hermanos, con reglas de ampliación por traslado.','Ley N.° 31602 y D.S. N.° 013-2023-TR','El trabajador debe sustentar parentesco y fallecimiento; la extensión depende del traslado.','licencia luto fallecimiento muerte familiar conyuge padres hijos hermanos 5 dias'),
+        ('Licencia por adopción','Qué es licencia por adopción','Es una licencia laboral vinculada al proceso de adopción, según los supuestos y requisitos establecidos por la ley.','Ley N.° 27409','RR.HH. debe validar resolución o documento sustentatorio aplicable.','licencia adopcion trabajador hijo adoptivo'),
+        ('Licencia familiar grave','Qué es licencia por familiar grave','Es la licencia para trabajadores con familiares directos con enfermedad grave o terminal o que sufran accidente grave, bajo requisitos legales.','Ley N.° 30012 y D.S. N.° 008-2017-TR','Debe acreditarse el vínculo y la condición médica según reglamento.','licencia familiar enfermedad grave terminal accidente grave'),
+        ('Descanso médico','Qué es descanso médico','Es la indicación de reposo emitida por profesional autorizado por incapacidad temporal. Sirve para justificar inasistencia y, según corresponda, gestionar subsidios.','Ley N.° 26790, normas EsSalud y procedimientos aplicables','RR.HH. debe validar certificado, CITT o canje, fechas y requisitos.','descanso medico certificado incapacidad temporal citt essalud'),
+        ('Subsidio','Qué es subsidio por incapacidad temporal','Es una prestación económica vinculada a incapacidad temporal para el trabajo, conforme a reglas de EsSalud y requisitos de aportación/acreditación.','Ley N.° 26790 y normas EsSalud','El procedimiento depende de días, acreditación y documentación médica.','subsidio incapacidad temporal essalud descanso medico'),
+        ('Subsidio','Qué es subsidio por maternidad','Es la prestación económica asociada al descanso por maternidad, sujeta a requisitos de acreditación y aportes ante EsSalud.','Ley N.° 26790 y normas EsSalud','Debe revisarse acreditación, vínculo laboral y descanso pre/postnatal.','subsidio maternidad essalud descanso prenatal postnatal'),
+        ('AFP ONP','Qué es AFP y ONP','AFP y ONP son sistemas de pensiones. AFP corresponde al Sistema Privado de Pensiones y ONP al Sistema Nacional de Pensiones. El trabajador aporta según su afiliación.','Normativa del sistema pensionario peruano','RR.HH. debe validar afiliación, comisión, aportes y declaración en planilla.','afp onp pension aporte descuento sistema previsional'),
+        ('Seguro Vida Ley','Qué es Vida Ley','El Seguro Vida Ley es un seguro obligatorio de vida a favor del trabajador, contratado por el empleador según los supuestos y coberturas reguladas.','D. Leg. N.° 688 y normas complementarias','Otorga coberturas por fallecimiento o invalidez según la póliza y norma.','vida ley seguro vida obligatorio trabajador'),
+        ('SCTR','Qué es SCTR','El Seguro Complementario de Trabajo de Riesgo cubre prestaciones de salud y pensiones por accidentes de trabajo o enfermedades profesionales en actividades de alto riesgo.','Ley N.° 26790 y normas complementarias','Aplica según actividad económica y riesgo.','sctr seguro complementario trabajo riesgo salud pension'),
+        ('SST','Qué es SST','SST significa Seguridad y Salud en el Trabajo. Es el sistema de prevención de riesgos laborales para proteger la vida, salud e integridad de los trabajadores.','Ley N.° 29783 y reglamento','Incluye IPERC, capacitaciones, comité/supervisor, investigación de accidentes y medidas preventivas.','sst seguridad salud trabajo prevencion riesgos'),
+        ('IPERC','Qué es IPERC','IPERC es la Identificación de Peligros, Evaluación de Riesgos y Controles. Sirve para reconocer peligros, valorar riesgos y definir controles preventivos.','Ley N.° 29783 y D.S. N.° 005-2012-TR','Debe actualizarse según cambios de proceso, incidentes o condiciones de trabajo.','iperc peligros riesgos controles matriz sst'),
+        ('Accidente de trabajo','Qué es accidente de trabajo','Es todo suceso repentino que sobreviene por causa o con ocasión del trabajo y que produce lesión, perturbación funcional, invalidez o muerte, según la normativa de SST.','Ley N.° 29783 y reglamento','Debe investigarse, registrarse y reportarse según corresponda.','accidente trabajo lesion investigacion sst'),
+        ('Incidente','Qué es incidente de trabajo','Es un suceso relacionado con el trabajo que pudo causar daño o lesión, aunque no necesariamente haya producido una lesión. Sirve para prevenir accidentes.','Ley N.° 29783 y reglamento','Debe analizarse para tomar acciones preventivas.','incidente trabajo casi accidente sst'),
+        ('Hostigamiento sexual','Qué es hostigamiento sexual laboral','Es una forma de violencia que puede presentarse en el ámbito laboral mediante conductas de naturaleza sexual o sexista no deseadas. Debe atenderse mediante procedimiento interno y medidas de protección.','Ley N.° 27942 y normas complementarias','El empleador debe prevenir, investigar y sancionar conforme al procedimiento aplicable.','hostigamiento sexual laboral acoso procedimiento comite'),
+        ('Teletrabajo','Qué es teletrabajo','El teletrabajo es una modalidad especial de prestación de servicios usando tecnologías de la información, fuera del centro de trabajo o con esquema híbrido, según acuerdo y normativa.','Ley N.° 31572 y reglamento','Debe regularse mediante acuerdo, condiciones, seguridad de información y SST.','teletrabajo trabajo remoto hibrido ley 31572'),
+        ('Régimen general','Qué es régimen laboral general privado','Es el régimen laboral aplicable a trabajadores de la actividad privada bajo el marco del D. Leg. N.° 728 y normas complementarias, salvo regímenes especiales.','TUO del D. Leg. N.° 728 - D.S. N.° 003-97-TR','Incluye reglas generales sobre contratación, beneficios, jornada y extinción.','regimen general privado 728 actividad privada'),
+        ('Régimen MYPE','Qué es régimen MYPE','Es un régimen especial para micro y pequeña empresa inscrita según la normativa aplicable. Los beneficios laborales pueden variar respecto del régimen general.','TUO de la Ley MYPE y normas complementarias','Debe verificarse inscripción REMYPE, fecha y categoría de empresa.','regimen mype microempresa pequena empresa remype beneficios'),
+        ('Régimen agrario','Qué es régimen laboral agrario','Es un régimen especial para actividades agrarias y agroindustriales comprendidas en Ley N.° 31110. Tiene reglas sobre remuneración básica, remuneración diaria, CTS/gratificaciones, BETA, jornada y otros derechos.','Ley N.° 31110 y D.S. N.° 005-2021-MIDAGRI','No todo personal está comprendido; debe revisarse actividad, área y alcance de la ley.','regimen agrario ley 31110 trabajador agrario agroindustrial beta rd rb'),
+        ('Régimen agrario','Qué es BETA agrario','La BETA es la Bonificación Especial por Trabajo Agrario equivalente al 30% de la RMV, con carácter no remunerativo y no pensionable, según Ley N.° 31110.','Ley N.° 31110 y D.S. N.° 005-2021-MIDAGRI','Puede pagarse mensual o proporcionalmente según días laborados, conforme a la norma.','beta bonificacion especial trabajo agrario 30 rmv'),
+        ('Régimen agrario','Cómo se paga CTS y gratificación en régimen agrario','En régimen agrario, la RB no puede ser menor a la RMV; las gratificaciones equivalen a 16.66% de la RB y la CTS a 9.72% de la RB, pudiendo integrarse en la remuneración diaria o pagarse en oportunidades generales si el trabajador lo elige conforme a la norma.','Ley N.° 31110 y D.S. N.° 005-2021-MIDAGRI','La decisión debe comunicarse por escrito dentro del plazo establecido en el reglamento.','cts gratificacion regimen agrario 9.72 16.66 remuneracion diaria'),
+        ('CAS','Qué es régimen CAS','El CAS es un régimen de contratación administrativa de servicios usado en el sector público, con reglas propias y diferentes al régimen laboral privado.','D. Leg. N.° 1057 y normas complementarias','No debe confundirse con el régimen privado D. Leg. 728.','cas contrato administrativo servicios sector publico'),
+        ('Practicantes','Qué son modalidades formativas laborales','Son convenios formativos como prácticas preprofesionales o profesionales, orientados al aprendizaje y formación, no equivalentes automáticamente a contrato laboral si cumplen la ley.','Ley N.° 28518 y D.S. N.° 007-2005-TR','Deben respetarse subvención, jornada formativa, convenio y plan de aprendizaje.','practicantes practicas preprofesionales profesionales modalidades formativas'),
+        ('Intermediación','Qué es intermediación laboral','Es la provisión de personal mediante empresas autorizadas para servicios temporales, complementarios o especializados, bajo reglas legales específicas.','Ley N.° 27626 y D.S. N.° 003-2002-TR','Debe verificarse registro y límites legales.','intermediacion laboral services cooperativas tercerizacion'),
+        ('Tercerización','Qué es tercerización laboral','Es la contratación de una empresa para realizar una actividad con autonomía empresarial, recursos propios y asunción de riesgos, conforme a la normativa.','Ley N.° 29245, D. Leg. N.° 1038 y reglamento','No debe usarse para simple provisión de personal.','tercerizacion outsourcing autonomia empresarial'),
+        ('Remuneración','Qué es remuneración computable','Es la remuneración que se toma como base para calcular determinados beneficios, según la naturaleza del concepto y la norma de cada beneficio.','Normativa laboral peruana según beneficio','No todos los conceptos pagados son computables para todos los beneficios.','remuneracion computable calculo beneficios cts gratificacion'),
+        ('Conceptos no remunerativos','Qué conceptos no son remunerativos','Algunos conceptos pueden no tener carácter remunerativo por ley o por su naturaleza, como ciertas condiciones de trabajo, movilidad supeditada, gratificaciones extraordinarias, entre otros, según evaluación.','TUO del D. Leg. N.° 728 y normas complementarias','Debe analizarse regularidad, libre disposición y finalidad del pago.','conceptos no remunerativos movilidad condiciones trabajo'),
+        ('Despido','Qué es despido arbitrario','Es la extinción unilateral del vínculo por el empleador sin causa justa o sin cumplir el procedimiento legal. Puede generar indemnización según el régimen aplicable.','TUO del D. Leg. N.° 728 - D.S. N.° 003-97-TR','Debe revisarse tipo de contrato, antigüedad, remuneración y causal.','despido arbitrario indemnizacion causa justa'),
+        ('Renuncia','Qué pasa si renuncio','La renuncia es la decisión del trabajador de terminar el vínculo laboral. Usualmente debe comunicarse con anticipación o solicitar exoneración del plazo. Corresponde liquidación de beneficios generados.','TUO del D. Leg. N.° 728 y normas complementarias','RR.HH. debe calcular beneficios pendientes hasta la fecha de cese.','renuncia voluntaria cese carta liquidacion 30 dias'),
+        ('Suspensión perfecta','Qué es suspensión perfecta','Es la suspensión temporal de la obligación de trabajar y pagar remuneración, bajo supuestos legales específicos. Debe estar sustentada y cumplir requisitos.','TUO del D. Leg. N.° 728 y normas especiales','Debe evaluarse caso concreto y formalidades.','suspension perfecta contrato remuneracion temporal'),
+        ('Reglamento interno','Qué es reglamento interno de trabajo','Es el documento interno que contiene reglas de orden laboral, deberes, derechos, disciplina, horarios y procedimientos dentro de la empresa, cuando corresponde.','D.S. N.° 039-91-TR','Debe difundirse y aplicarse respetando la ley.','reglamento interno trabajo rit normas empresa'),
+        ('Sindicato','Qué es libertad sindical','Es el derecho de trabajadores a organizarse, afiliarse, constituir sindicatos y realizar actividad sindical conforme a la ley.','Constitución, convenios OIT y normas laborales peruanas','El empleador debe respetar la actividad sindical lícita.','sindicato libertad sindical afiliacion negociacion colectiva'),
+        ('Inspección laboral','Qué es SUNAFIL','SUNAFIL es la entidad inspectiva encargada de fiscalizar el cumplimiento de normas sociolaborales y de seguridad y salud en el trabajo.','Ley N.° 29981 y normas inspectivas','Puede realizar actuaciones inspectivas y proponer sanciones ante incumplimientos.','sunafil inspeccion laboral fiscalizacion multa'),
+        ('Boleta vacaciones','Qué es boleta de vacaciones','Es el documento de pago asociado a remuneración vacacional o concepto vinculado al descanso vacacional, según el proceso de planilla de la empresa.','D. Leg. N.° 713 y normas de planillas','Debe corresponder al periodo, monto y trabajador correcto.','boleta vacaciones pago vacacional remuneracion vacacional'),
+        ('Boleta CTS','Qué es boleta CTS','Es el documento o constancia asociada al depósito o cálculo de CTS. Informa el beneficio calculado para el periodo correspondiente.','D.S. N.° 001-97-TR y normas de planilla','Puede estar vinculada al depósito semestral o liquidación, según el caso.','boleta cts deposito compensacion tiempo servicios'),
+        ('Boleta gratificación','Qué es boleta de gratificación','Es el documento que informa el pago de la gratificación legal de julio o diciembre, o gratificación trunca si corresponde.','Ley N.° 27735 y normas de planilla','Debe reflejar monto, periodo y bonificación extraordinaria cuando aplique.','boleta gratificacion julio diciembre bonificacion extraordinaria'),
+    ]
+
+
+def ia_hr_semillas_sistema_plus():
+    return [
+        ('documental','admin','Dónde cargar boletas de pago','Para cargar boletas ingresa a Gestión Documental > Documentos de pago o Subir / gestionar documentos. Selecciona tipo: Normal, CTS, Gratificación, Utilidad, Vacaciones o Liquidación, periodo y archivo.','/admin/documentos','boleta boletas pago cargar subir normal cts gratificacion utilidad liquidacion documentos pago'),
+        ('documental','admin','Dónde cargar boletas utilidades','Ingresa a Gestión Documental > Documentos de pago > Utilidad. También puedes cargar desde Subir / gestionar documentos seleccionando tipo Utilidad y periodo correspondiente.','/admin/documentos?tipo=Utilidad','cargar boletas utilidades utilidad subir documentos pago'),
+        ('documental','admin','Dónde sincronizar PDFs por DNI','Ingresa a Gestión Documental > Detectar PDFs o Sincronizar carpetas. El sistema revisa la carpeta DOCUMENTOS_PRIZE_AUTO, identifica DNI y registra documentos vinculados al trabajador.','/admin/sincronizar','detectar pdf dni sincronizar carpeta documentos prize auto'),
+        ('documental','admin','Dónde crear carpetas documentales','Ingresa a Gestión Documental > Crear carpetas. El sistema arma la estructura local para documentos de pago, empresa y personales.','/admin/crear_carpetas','crear carpetas documental estructura documentos'),
+        ('documental','admin','Dónde descargar plantilla documental','Ingresa a Gestión Documental > Plantilla Documental. Descarga el Excel base para organizar cargas de documentos.','/admin/plantilla_gestion/documental','plantilla documental excel descargar'),
+        ('documental','admin','Qué documentos están pendientes','Consulta Gestión Documental > Subir / gestionar documentos o usa la IA preguntando por resumen documental. Verás pendientes, leídos, aceptados, firmados y rechazados.','/admin/documentos','documentos pendientes lectura aceptacion firma rechazo'),
+        ('documental','admin','Cómo revisar documentos rechazados','Ingresa a Gestión Documental > Subir / gestionar documentos y filtra por estado Rechazado. Revisa comentario, trabajador, tipo y periodo.','/admin/documentos','documentos rechazados comentario estado filtro'),
+        ('documental','trabajador','Dónde veo mis boletas','Ingresa a Gestión Documental > Documentos de pago. Ahí verás tus boletas normales, CTS, gratificaciones, utilidades, vacaciones o liquidaciones cargadas para tu DNI.','/panel','mis boletas ver descargar pago cts gratificacion utilidad liquidacion'),
+        ('documental','trabajador','No veo mi boleta','Si no visualizas tu boleta, puede que RR.HH. aún no la haya cargado o que el archivo no esté vinculado a tu DNI. Revisa tipo y periodo; si no aparece, consulta con RR.HH.','/panel','no veo mi boleta no aparece documento'),
+        ('documental','ambos','Qué significa documento pendiente','Un documento pendiente es aquel que fue cargado, pero aún no registra lectura, aceptación, firma o aprobación final, según el flujo configurado por RR.HH.','','documento pendiente estado lectura firma aprobacion'),
+        ('vacacional','admin','Dónde cargar saldos vacacionales','Ingresa a Gestión Vacacional > Saldos Vacacionales o Dashboard Vacacional. Desde ahí cargas Excel con DNI, periodo, días ganados, gozados y saldo.','/admin/vacaciones#cargar-saldos','cargar saldos vacaciones vacacionales excel saldo'),
+        ('vacacional','admin','Dónde aprobar vacaciones','Ingresa a Gestión Vacacional > Aprobaciones. Revisa solicitudes pendientes de jefe y Gestión Humana, según el flujo.','/admin/vacaciones#aprobaciones','aprobar vacaciones aprobaciones jefe gestion humana'),
+        ('vacacional','admin','Dónde ver reportes vacacionales','Ingresa a Gestión Vacacional > Reportes. Revisa solicitudes, saldos, aprobadas, rechazadas y pendientes.','/admin/vacaciones#reportes','reportes vacaciones vacacional indicadores'),
+        ('vacacional','admin','Cómo anular solicitud de vacaciones','Ingresa a Gestión Vacacional > Solicitudes o Aprobaciones, ubica el registro, revisa estado y usa la acción de anulación si está habilitada para administrador.','/admin/vacaciones','anular solicitud vacaciones eliminar rechazar'),
+        ('vacacional','trabajador','Cómo solicito vacaciones','Ingresa a Gestión Vacacional > Saldo y solicitud. Selecciona periodo con saldo, registra fechas y envía la solicitud para aprobación.','/vacaciones/mi_solicitud#solicitar','solicitar vacaciones pedido solicitud saldo'),
+        ('vacacional','trabajador','Dónde veo mi saldo vacacional','Ingresa a Gestión Vacacional > Dashboard vacacional. Ahí verás periodos, días ganados, gozados y saldo disponible.','/vacaciones/mi_solicitud','mi saldo vacaciones cuantos dias tengo'),
+        ('vacacional','trabajador','Dónde veo el estado de mi solicitud','Ingresa a Gestión Vacacional > Dashboard vacacional. En Mis solicitudes verás si está pendiente, aprobada, rechazada o anulada.','/vacaciones/mi_solicitud','estado solicitud vacaciones pendiente aprobada rechazada'),
+        ('portal','ambos','Qué puede hacer la IA HR','La IA HR ayuda con dudas del sistema, gestión documental, boletas, vacaciones, datos reales y conceptos laborales peruanos. La respuesta se filtra por rol.','','ia asistente ayuda portal rrhh'),
+        ('portal','trabajador','Por qué no puedo cargar base de trabajadores','Esa opción es solo para administradores. Como trabajador puedes consultar tus documentos, boletas, vacaciones y estado de tus solicitudes.','','cargar base trabajadores no puedo'),
+        ('portal','admin','Qué puede consultar el administrador','El administrador puede consultar todo: manual del sistema, datos documentales, datos vacacionales, consultas legales y preguntas orientadas al trabajador para validar cómo respondería el portal.','','administrador consultar todo roles trabajador legal datos'),
+    ]
+
+
+def asegurar_ia_hr_pro():
+    """Crea y precarga IA HR. No borra respuestas editadas; agrega/actualiza catálogo base amplio."""
+    with db() as con:
+        con.execute("""CREATE TABLE IF NOT EXISTS ia_base_conocimiento_hr(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            modulo TEXT,
+            rol_destino TEXT DEFAULT 'ambos',
+            pregunta_clave TEXT,
+            respuesta TEXT,
+            ruta TEXT,
+            palabras_clave TEXT,
+            activo INTEGER DEFAULT 1,
+            fecha_registro TEXT,
+            registrado_por TEXT
+        )""")
+        con.execute("""CREATE TABLE IF NOT EXISTS ia_legislacion_peru(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tema TEXT,
+            pregunta_clave TEXT,
+            respuesta TEXT,
+            base_legal TEXT,
+            detalle_legal TEXT,
+            palabras_clave TEXT,
+            activo INTEGER DEFAULT 1,
+            fecha_actualizacion TEXT
+        )""")
+        con.execute("""CREATE TABLE IF NOT EXISTS ia_hr_log(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rol TEXT,
+            modulo TEXT,
+            dni TEXT,
+            pregunta TEXT,
+            respuesta_tipo TEXT,
+            fecha TEXT,
+            usuario TEXT
+        )""")
+        # Índices útiles para evitar duplicados y acelerar búsqueda
+        try: con.execute('CREATE INDEX IF NOT EXISTS idx_ia_leg_activo ON ia_legislacion_peru(activo, tema)')
+        except Exception: pass
+        try: con.execute('CREATE INDEX IF NOT EXISTS idx_ia_base_activo ON ia_base_conocimiento_hr(activo, rol_destino, modulo)')
+        except Exception: pass
+        for modulo, rol, preg, resp, ruta, keys in ia_hr_semillas_sistema_plus():
+            existe = con.execute('SELECT id FROM ia_base_conocimiento_hr WHERE UPPER(pregunta_clave)=UPPER(?) AND rol_destino=? LIMIT 1', (preg, rol)).fetchone()
+            if not existe:
+                con.execute("""INSERT INTO ia_base_conocimiento_hr(modulo,rol_destino,pregunta_clave,respuesta,ruta,palabras_clave,activo,fecha_registro,registrado_por)
+                               VALUES(?,?,?,?,?,?,1,?,?)""", (modulo,rol,preg,resp,ruta,keys,now_txt(),'SISTEMA'))
+        for tema, preg, resp, base, det, keys in ia_hr_semillas_legales_plus():
+            existe = con.execute('SELECT id FROM ia_legislacion_peru WHERE UPPER(pregunta_clave)=UPPER(?) LIMIT 1', (preg,)).fetchone()
+            if not existe:
+                con.execute("""INSERT INTO ia_legislacion_peru(tema,pregunta_clave,respuesta,base_legal,detalle_legal,palabras_clave,activo,fecha_actualizacion)
+                               VALUES(?,?,?,?,?,?,1,?)""", (tema,preg,resp,base,det,keys,now_txt()))
+            else:
+                # actualiza claves y respuesta base solo si mantiene activo, para mejorar coincidencias de versiones previas
+                con.execute("""UPDATE ia_legislacion_peru SET tema=?, respuesta=?, base_legal=?, detalle_legal=?, palabras_clave=?, fecha_actualizacion=? WHERE id=?""",
+                            (tema, resp, base, det, keys, now_txt(), existe['id']))
+        con.commit()
+
+
+def ia_buscar_base_conocimiento(pregunta, rol, modulo=''):
+    try:
+        with db() as con:
+            if rol == 'admin':
+                rows = con.execute("SELECT * FROM ia_base_conocimiento_hr WHERE activo=1").fetchall()
+            else:
+                rows = con.execute("""SELECT * FROM ia_base_conocimiento_hr
+                                      WHERE activo=1 AND rol_destino IN ('ambos', ?)""", (rol,)).fetchall()
+        if not rows:
+            return None
+        ranked = sorted(rows, key=lambda r: ia_score(pregunta + ' ' + modulo, r), reverse=True)
+        top_score = ia_score(pregunta + ' ' + modulo, ranked[0]) if ranked else 0
+        if ranked and top_score >= 2:
+            r = ranked[0]
+            ruta = f"<p><b>Ruta sugerida:</b> <a href='{h(r['ruta'])}'>{h(r['ruta'])}</a></p>" if clean(r['ruta']) else ''
+            visible_rol = 'Administrador / Trabajador' if r['rol_destino']=='ambos' else r['rol_destino'].capitalize()
+            return f"<div class='ia-result ok'><h3>{h(r['pregunta_clave'])}</h3><p>{h(r['respuesta'])}</p>{ruta}<small>Base sistema · Visible para: {h(visible_rol)}</small></div>"
+    except Exception as e:
+        return f"<div class='ia-result bad'><h3>Error base IA</h3><p>{h(e)}</p></div>"
+    return None
+
+
+def ia_buscar_legal(pregunta):
+    try:
+        with db() as con:
+            rows = con.execute('SELECT * FROM ia_legislacion_peru WHERE activo=1').fetchall()
+        if not rows:
+            return None
+        ranked = sorted(rows, key=lambda r: ia_score(pregunta, r), reverse=True)
+        top_score = ia_score(pregunta, ranked[0]) if ranked else 0
+        # Umbral bajo, pero con boost de frases y tokens evita fallback genérico.
+        if ranked and top_score >= 1:
+            r = ranked[0]
+            return f"""
+            <div class='ia-result legal'>
+              <h3>{h(r['pregunta_clave'])}</h3>
+              <p>{h(r['respuesta'])}</p>
+              <p><b>Base legal referencial:</b> {h(r['base_legal'])}</p>
+              <p class='muted'>{h(r['detalle_legal'])}</p>
+              <small>Respuesta informativa. RR.HH. debe validar régimen, jornada, fecha, documentos y caso concreto antes de aplicar.</small>
+            </div>"""
+    except Exception as e:
+        return f"<div class='ia-result bad'><h3>Error legal IA</h3><p>{h(e)}</p></div>"
+    return None
+
+
+def ia_resumen_documental(rol, dni=''):
+    with db() as con:
+        if rol == 'admin':
+            total = ia_sql_count(con, 'SELECT COUNT(*) FROM documentos')
+            pendientes = ia_sql_count(con, "SELECT COUNT(*) FROM documentos WHERE COALESCE(estado,'Pendiente') IN ('Pendiente','Aceptado','Firmado')")
+            rechazados = ia_sql_count(con, "SELECT COUNT(*) FROM documentos WHERE estado='Rechazado'")
+            leidos = ia_sql_count(con, "SELECT COUNT(*) FROM documentos WHERE COALESCE(fecha_lectura,'')<>' '")
+            rows = ia_sql_rows(con, 'SELECT tipo, COUNT(*) c FROM documentos GROUP BY tipo ORDER BY c DESC LIMIT 6')
+            detalle = ''.join([f"<li>{h(r['tipo'])}: <b>{r['c']}</b></li>" for r in rows]) or '<li>Sin documentos cargados.</li>'
+            return f"<div class='ia-result ok'><h3>Resumen documental administrador</h3><p>Total: <b>{total}</b> · Pendientes: <b>{pendientes}</b> · Leídos: <b>{leidos}</b> · Rechazados: <b>{rechazados}</b></p><ul>{detalle}</ul><p>Ruta: Gestión Documental > Subir / gestionar documentos.</p></div>"
+        dni = normalizar_dni(dni)
+        total = ia_sql_count(con, 'SELECT COUNT(*) FROM documentos WHERE dni=?', (dni,))
+        leidos = ia_sql_count(con, "SELECT COUNT(*) FROM documentos WHERE dni=? AND COALESCE(fecha_lectura,'')<>''", (dni,))
+        rows = ia_sql_rows(con, 'SELECT tipo, periodo, estado, fecha_subida FROM documentos WHERE dni=? ORDER BY id DESC LIMIT 6', (dni,))
+        detalle = ''.join([f"<li>{h(r['tipo'])} · {h(r['periodo'])} · {h(r['estado'] or 'Pendiente')}</li>" for r in rows]) or '<li>Aún no tienes documentos cargados para tu DNI.</li>'
+        return f"<div class='ia-result ok'><h3>Mis documentos</h3><p>Tienes <b>{total}</b> documento(s) cargado(s). Leídos: <b>{leidos}</b>.</p><ul>{detalle}</ul><p>Ruta: Gestión Documental > Documentos de pago / empresa / personales.</p></div>"
+
+
+def ia_hr_es_pregunta_conceptual(q):
+    return ia_keywords_hit(q, ['que es','qué es','que son','qué son','concepto','definicion','definición','explicame','explícame','cuantos tipos','cuántos tipos','cuando gano','cuándo gano','cuantos dias','cuántos días','cual es','cuál es'])
+
+
+def ia_hr_responder(pregunta, modulo='', rol=None, dni=None):
+    pregunta = clean(pregunta)
+    rol = rol or ('admin' if session.get('admin_id') else 'trabajador')
+    dni = normalizar_dni(dni or session.get('dni') or '')
+    q = ia_norm(pregunta)
+    if not pregunta:
+        return "<div class='ia-result warn'><h3>IA HR</h3><p>Escribe una pregunta. Ejemplo: ¿qué es CTS?, ¿dónde veo mis boletas?, ¿cuánto saldo tengo?</p></div>", 'vacio'
+
+    # Trabajador: bloquear consultas administrativas. Admin: acceso total.
+    admin_terms = ['cargar base','cargar trabajadores','subir saldos','cargar saldos','subir boletas masiva','sincronizar pdf','crear carpetas','reporte general','todos los trabajadores','eliminar trabajador','base trabajadores']
+    if rol != 'admin' and any(t in q for t in admin_terms):
+        return "<div class='ia-result bad'><h3>Acceso limitado</h3><p>Esa consulta corresponde a opciones administrativas. Desde tu portal puedes consultar tus boletas, documentos, saldo vacacional, solicitudes y conceptos laborales.</p></div>", 'bloqueo_rol'
+
+    # 1) Conceptos legales primero para preguntas tipo "qué es...". Evita que "qué es boletas utilidades" caiga en resumen documental.
+    if ia_hr_es_pregunta_conceptual(q):
+        r = ia_buscar_legal(pregunta)
+        if r:
+            return r, 'legal_peru'
+
+    # 2) Sistema/manual: dónde cargo, dónde veo, cómo hago.
+    r = ia_buscar_base_conocimiento(pregunta, rol, modulo)
+    if r:
+        return r, 'base_conocimiento'
+
+    # 3) Legal general aunque no pregunte "qué es".
+    legal_terms = ['cts','gratificacion','gratificaciones','utilidad','utilidades','vacacion','vacaciones','liquidacion','boleta','paternidad','maternidad','luto','fallecimiento','lactancia','subsidio','afp','onp','vida ley','sctr','jornada','horas extras','feriado','contrato','agrario','beta','mype','cas','practicante','sst','iperc','hostigamiento','teletrabajo','asignacion familiar']
+    if ia_keywords_hit(q, legal_terms):
+        r = ia_buscar_legal(pregunta)
+        if r:
+            return r, 'legal_peru'
+
+    # 4) Datos reales del sistema.
+    if any(x in q for x in ['mis boletas','mis documentos','documentos','boletas cargadas','documentos pendientes','documentos rechazados','resumen documental']) and any(x in q for x in ['tengo','ver','donde','mis','cargadas','aparece','pendiente','resumen','cuantos','cuántos']):
+        return ia_resumen_documental(rol, dni), 'datos_documental'
+    if any(x in q for x in ['vacacion','saldo','solicitud','aprobacion','dias']) and any(x in q for x in ['tengo','mis','estado','pendiente','resumen','cuanto','cuantos','cuánto','cuántos']):
+        return ia_resumen_vacacional(rol, dni), 'datos_vacacional'
+
+    # 5) Fallback por módulo.
+    if 'vac' in ia_norm(modulo):
+        return ia_resumen_vacacional(rol, dni), 'fallback_vacacional'
+    if 'doc' in ia_norm(modulo) or 'panel' in ia_norm(modulo):
+        return ia_resumen_documental(rol, dni), 'fallback_documental'
+    if rol == 'admin':
+        return "<div class='ia-result ok'><h3>IA HR Administrador</h3><p>Tienes acceso a preguntas de administrador, trabajador, datos reales y conceptos legales. Prueba: ¿qué es boleta de utilidades?, ¿dónde cargo saldos?, ¿qué es licencia por paternidad?, ¿cuántos documentos están pendientes?</p></div>", 'fallback'
+    return "<div class='ia-result ok'><h3>IA HR Trabajador</h3><p>Puedo ayudarte a revisar tus boletas, documentos, vacaciones, solicitudes y conceptos laborales. Prueba: ¿qué es CTS?, ¿cuánto saldo tengo?, ¿dónde veo mi boleta?</p></div>", 'fallback'
+
+# Inicialización PRO PLUS después de redefinir funciones.
+try:
+    asegurar_ia_hr_pro()
+except Exception as e:
+    print('No se pudo inicializar IA HR PRO PLUS:', e)
+
+
 @app.route('/ia_hr/api', methods=['POST'])
+@app.route('/ia_hr_ask', methods=['POST'])
+@app.route('/api/ia_hr', methods=['POST'])
 @portal_required
 def ia_hr_api():
-    data = request.get_json(silent=True) or request.form
+    try:
+        asegurar_ia_hr_pro()
+    except Exception:
+        pass
+    data = request.get_json(silent=True) or request.form or {}
     pregunta = clean(data.get('pregunta'))
     modulo = clean(data.get('modulo'))
     rol = 'admin' if session.get('admin_id') else 'trabajador'
     dni = session.get('dni') or clean(data.get('dni'))
-    html_resp, tipo = ia_hr_responder(pregunta, modulo, rol, dni)
+    try:
+        html_resp, tipo = ia_hr_responder(pregunta, modulo, rol, dni)
+    except Exception as e:
+        html_resp = f"<div class='ia-result bad'><h3>Error IA HR</h3><p>No se pudo procesar la consulta.</p><small>{h(e)}</small></div>"
+        tipo = 'error'
     ia_registrar_log(rol, modulo, normalizar_dni(dni), pregunta, tipo)
     return jsonify({'ok': True, 'html': html_resp, 'tipo': tipo, 'rol': rol})
 
@@ -2820,7 +3152,7 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
 
 /* === IA HR PRO - Widget global === */
 .iahr-fab{position:fixed;right:22px;bottom:22px;z-index:9998;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border-radius:999px;padding:13px 17px;box-shadow:0 18px 40px rgba(0,0,0,.35);display:flex;align-items:center;gap:8px;font-weight:900;cursor:pointer;border:1px solid rgba(255,255,255,.22)}
-.iahr-fab i{font-size:18px}.iahr-panel{position:fixed;right:22px;bottom:82px;width:min(430px,calc(100vw - 28px));max-height:70vh;z-index:9999;background:#111827;border:1px solid rgba(148,163,184,.35);border-radius:20px;box-shadow:0 25px 70px rgba(0,0,0,.48);display:none;overflow:hidden}.iahr-panel.open{display:block}.iahr-head{display:flex;justify-content:space-between;align-items:center;padding:15px 16px;background:linear-gradient(135deg,#064e3b,#111827);border-bottom:1px solid rgba(255,255,255,.08)}.iahr-head b{display:block;color:#fff}.iahr-head small{display:block;color:#bbf7d0;font-size:11px;margin-top:3px}.iahr-head button{background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:10px;width:32px;height:32px;font-size:20px;cursor:pointer}.iahr-body{padding:14px}.iahr-ex{font-size:12px;color:#cbd5e1;background:#0f172a;border:1px solid rgba(148,163,184,.25);border-radius:12px;padding:10px;margin-bottom:10px}.iahr-body textarea{width:100%;height:92px;border-radius:14px;border:1px solid #334155;background:#f8fafc;color:#0f172a;padding:12px;font-weight:700;resize:vertical}.iahr-send{width:100%;margin-top:10px;justify-content:center}.iahr-respuesta{margin-top:12px;max-height:310px;overflow:auto}.ia-result{border-radius:14px;padding:13px;border:1px solid rgba(148,163,184,.25);background:#0f172a;color:#e5e7eb}.ia-result h3{margin:0 0 8px;color:#fff}.ia-result h4{margin:10px 0 6px}.ia-result p{margin:7px 0;line-height:1.45}.ia-result ul{margin:8px 0 0 18px;padding:0}.ia-result.ok{border-color:rgba(34,197,94,.45);background:linear-gradient(135deg,rgba(6,78,59,.75),#0f172a)}.ia-result.warn{border-color:rgba(245,158,11,.5);background:linear-gradient(135deg,rgba(120,53,15,.58),#0f172a)}.ia-result.bad{border-color:rgba(239,68,68,.55);background:linear-gradient(135deg,rgba(127,29,29,.62),#0f172a)}.ia-result.legal{border-color:rgba(59,130,246,.55);background:linear-gradient(135deg,rgba(30,64,175,.58),#0f172a)}.ia-result a{color:#86efac;font-weight:900}.ia-result small,.ia-result .muted{color:#cbd5e1}.ia-admin-form{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px}.ia-admin-form textarea{grid-column:1/-1;min-height:110px}.ia-admin-form .full{grid-column:1/-1}.ia-table td{vertical-align:top}@media(max-width:700px){.iahr-fab{right:14px;bottom:14px}.iahr-panel{right:14px;bottom:72px}}
+.iahr-fab i{font-size:18px}.iahr-panel{position:fixed;right:22px;bottom:82px;width:min(430px,calc(100vw - 28px));max-height:70vh;z-index:9999;background:#111827;border:1px solid rgba(148,163,184,.35);border-radius:20px;box-shadow:0 25px 70px rgba(0,0,0,.48);display:none;overflow:hidden}.iahr-panel.open{display:block}.iahr-head{display:flex;justify-content:space-between;align-items:center;padding:15px 16px;background:linear-gradient(135deg,#064e3b,#111827);border-bottom:1px solid rgba(255,255,255,.08)}.iahr-head b{display:block;color:#fff}.iahr-head small{display:block;color:#bbf7d0;font-size:11px;margin-top:3px}.iahr-head button{background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:10px;width:32px;height:32px;font-size:20px;cursor:pointer}.iahr-body{padding:14px}.iahr-ex{font-size:12px;color:#cbd5e1;background:#0f172a;border:1px solid rgba(148,163,184,.25);border-radius:12px;padding:10px;margin-bottom:10px}.iahr-body textarea{width:100%;height:92px;border-radius:14px;border:1px solid #334155;background:#f8fafc;color:#0f172a;padding:12px;font-weight:700;resize:vertical}.iahr-send{width:100%;margin-top:10px;justify-content:center}.iahr-respuesta{margin-top:12px;max-height:310px;overflow:auto}.ia-result{border-radius:14px;padding:13px;border:1px solid rgba(148,163,184,.25);background:#0f172a;color:#e5e7eb}.ia-result h3{margin:0 0 8px;color:#fff}.ia-result h4{margin:10px 0 6px}.ia-result p{margin:7px 0;line-height:1.45}.ia-result ul{margin:8px 0 0 18px;padding:0}.ia-result.ok{border-color:rgba(34,197,94,.45);background:linear-gradient(135deg,rgba(6,78,59,.75),#0f172a)}.ia-result.warn{border-color:rgba(245,158,11,.5);background:linear-gradient(135deg,rgba(120,53,15,.58),#0f172a)}.ia-result.bad{border-color:rgba(239,68,68,.55);background:linear-gradient(135deg,rgba(127,29,29,.62),#0f172a)}.ia-result.legal{border-color:rgba(59,130,246,.55);background:linear-gradient(135deg,rgba(30,64,175,.58),#0f172a)}.ia-result a{color:#86efac;font-weight:900}.ia-result small,.ia-result .muted{color:#d1d5db}.iahr-respuesta,.iahr-respuesta *{color:#e5e7eb}.ia-result p,.ia-result li{color:#f1f5f9}.ia-result.legal{background:linear-gradient(135deg,rgba(30,64,175,.72),#0b1220)}.ia-admin-form{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px}.ia-admin-form textarea{grid-column:1/-1;min-height:110px}.ia-admin-form .full{grid-column:1/-1}.ia-table td{vertical-align:top}@media(max-width:700px){.iahr-fab{right:14px;bottom:14px}.iahr-panel{right:14px;bottom:72px}}
 
 </style>
 <script>
@@ -2836,18 +3168,31 @@ window.addEventListener('DOMContentLoaded',()=>{initSide(); if(location.hash){do
 
 
 function iahrToggle(){const p=document.getElementById('iahrPanel'); if(p)p.classList.toggle('open')}
-async function iahrAsk(){
-  const q=document.getElementById('iahrPregunta')?.value||'';
+async function iahrAsk(ev){
+  if(ev && ev.preventDefault) ev.preventDefault();
+  const q=(document.getElementById('iahrPregunta')?.value||'').trim();
   const modulo=document.getElementById('iahrModulo')?.value||'';
   const box=document.getElementById('iahrRespuesta');
-  if(!box)return;
+  if(!box)return false;
+  if(!q){box.innerHTML='<div class="ia-result warn"><h3>IA HR</h3><p>Escribe una pregunta para poder ayudarte.</p></div>';return false;}
   box.innerHTML='<div class="ia-result warn"><p>Analizando...</p></div>';
   try{
-    const r=await fetch('/ia_hr/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pregunta:q,modulo:modulo})});
-    const data=await r.json();
+    const r=await fetch('/ia_hr/api',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({pregunta:q,modulo:modulo})});
+    const txt=await r.text();
+    let data={};
+    try{data=JSON.parse(txt)}catch(parseErr){throw new Error('Respuesta no válida del servidor: '+txt.slice(0,180));}
+    if(!r.ok || data.ok===false){throw new Error(data.error || ('HTTP '+r.status));}
     box.innerHTML=data.html||'<div class="ia-result bad">No se obtuvo respuesta.</div>';
-  }catch(e){box.innerHTML='<div class="ia-result bad"><h3>Error IA</h3><p>No se pudo consultar la IA. Revisa conexión o sesión.</p></div>'}
+  }catch(e){box.innerHTML='<div class="ia-result bad"><h3>Error IA</h3><p>No se pudo consultar la IA.</p><small>'+String(e.message||e)+'</small></div>'; console.error('IA HR error:',e);}
+  return false;
 }
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('.iahr-send').forEach(function(btn){
+    btn.addEventListener('click',iahrAsk);
+  });
+  const txt=document.getElementById('iahrPregunta');
+  if(txt){txt.addEventListener('keydown',function(e){if(e.key==='Enter' && !e.shiftKey){e.preventDefault(); iahrAsk(e);}});}
+});
 
 document.addEventListener('click',function(e){
   document.querySelectorAll('.admin-dropdown.open').forEach(function(d){
