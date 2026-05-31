@@ -712,8 +712,13 @@ def ia_registrar_log(rol, modulo, dni, pregunta, tipo):
 def ia_buscar_base_conocimiento(pregunta, rol, modulo=''):
     try:
         with db() as con:
-            rows = con.execute("""SELECT * FROM ia_base_conocimiento_hr
-                                  WHERE activo=1 AND rol_destino IN ('ambos', ?)""", (rol,)).fetchall()
+            if rol == 'admin':
+                # Administrador: acceso total a respuestas de admin, trabajador y ambos roles.
+                rows = con.execute("""SELECT * FROM ia_base_conocimiento_hr
+                                      WHERE activo=1""").fetchall()
+            else:
+                rows = con.execute("""SELECT * FROM ia_base_conocimiento_hr
+                                      WHERE activo=1 AND rol_destino IN ('ambos', ?)""", (rol,)).fetchall()
         if not rows:
             return None
         ranked = sorted(rows, key=lambda r: ia_score(pregunta + ' ' + modulo, r), reverse=True)
@@ -3154,6 +3159,133 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
 .iahr-fab{position:fixed;right:22px;bottom:22px;z-index:9998;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border-radius:999px;padding:13px 17px;box-shadow:0 18px 40px rgba(0,0,0,.35);display:flex;align-items:center;gap:8px;font-weight:900;cursor:pointer;border:1px solid rgba(255,255,255,.22)}
 .iahr-fab i{font-size:18px}.iahr-panel{position:fixed;right:22px;bottom:82px;width:min(430px,calc(100vw - 28px));max-height:70vh;z-index:9999;background:#111827;border:1px solid rgba(148,163,184,.35);border-radius:20px;box-shadow:0 25px 70px rgba(0,0,0,.48);display:none;overflow:hidden}.iahr-panel.open{display:block}.iahr-head{display:flex;justify-content:space-between;align-items:center;padding:15px 16px;background:linear-gradient(135deg,#064e3b,#111827);border-bottom:1px solid rgba(255,255,255,.08)}.iahr-head b{display:block;color:#fff}.iahr-head small{display:block;color:#bbf7d0;font-size:11px;margin-top:3px}.iahr-head button{background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:10px;width:32px;height:32px;font-size:20px;cursor:pointer}.iahr-body{padding:14px}.iahr-ex{font-size:12px;color:#cbd5e1;background:#0f172a;border:1px solid rgba(148,163,184,.25);border-radius:12px;padding:10px;margin-bottom:10px}.iahr-body textarea{width:100%;height:92px;border-radius:14px;border:1px solid #334155;background:#f8fafc;color:#0f172a;padding:12px;font-weight:700;resize:vertical}.iahr-send{width:100%;margin-top:10px;justify-content:center}.iahr-respuesta{margin-top:12px;max-height:310px;overflow:auto}.ia-result{border-radius:14px;padding:13px;border:1px solid rgba(148,163,184,.25);background:#0f172a;color:#e5e7eb}.ia-result h3{margin:0 0 8px;color:#fff}.ia-result h4{margin:10px 0 6px}.ia-result p{margin:7px 0;line-height:1.45}.ia-result ul{margin:8px 0 0 18px;padding:0}.ia-result.ok{border-color:rgba(34,197,94,.45);background:linear-gradient(135deg,rgba(6,78,59,.75),#0f172a)}.ia-result.warn{border-color:rgba(245,158,11,.5);background:linear-gradient(135deg,rgba(120,53,15,.58),#0f172a)}.ia-result.bad{border-color:rgba(239,68,68,.55);background:linear-gradient(135deg,rgba(127,29,29,.62),#0f172a)}.ia-result.legal{border-color:rgba(59,130,246,.55);background:linear-gradient(135deg,rgba(30,64,175,.58),#0f172a)}.ia-result a{color:#86efac;font-weight:900}.ia-result small,.ia-result .muted{color:#d1d5db}.iahr-respuesta,.iahr-respuesta *{color:#e5e7eb}.ia-result p,.ia-result li{color:#f1f5f9}.ia-result.legal{background:linear-gradient(135deg,rgba(30,64,175,.72),#0b1220)}.ia-admin-form{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px}.ia-admin-form textarea{grid-column:1/-1;min-height:110px}.ia-admin-form .full{grid-column:1/-1}.ia-table td{vertical-align:top}@media(max-width:700px){.iahr-fab{right:14px;bottom:14px}.iahr-panel{right:14px;bottom:72px}}
 
+
+/* === AJUSTE PRO: IA HR en verde/blanco con lectura clara === */
+.iahr-panel{
+  background:#ffffff!important;
+  border:1px solid #d6efe3!important;
+  box-shadow:0 26px 80px rgba(15,118,80,.24)!important;
+}
+.iahr-head{
+  background:linear-gradient(135deg,#0f8f5a,#16a34a)!important;
+  border-bottom:0!important;
+}
+.iahr-head b,.iahr-head small{color:#ffffff!important;}
+.iahr-head button{background:rgba(255,255,255,.22)!important;color:#ffffff!important;}
+.iahr-body{background:#ffffff!important;}
+.iahr-ex{
+  color:#0f5132!important;
+  background:#ecfdf5!important;
+  border:1px solid #bbf7d0!important;
+}
+.iahr-body textarea{
+  background:#ffffff!important;
+  color:#0f172a!important;
+  border:2px solid #bbf7d0!important;
+  box-shadow:0 0 0 4px rgba(34,197,94,.08)!important;
+}
+.iahr-body textarea:focus{
+  outline:none!important;
+  border-color:#16a34a!important;
+  box-shadow:0 0 0 4px rgba(22,163,74,.16)!important;
+}
+.iahr-respuesta{background:#ffffff!important;}
+.ia-result,.ia-result.ok,.ia-result.warn,.ia-result.bad,.ia-result.legal{
+  background:#ffffff!important;
+  color:#0f172a!important;
+  border:1.5px solid #bbf7d0!important;
+  box-shadow:0 12px 30px rgba(15,118,80,.10)!important;
+}
+.ia-result h3,.ia-result h4{
+  color:#064e3b!important;
+}
+.ia-result p,.ia-result li,.ia-result small,.ia-result .muted,.iahr-respuesta,.iahr-respuesta *{
+  color:#1f2937!important;
+}
+.ia-result b,.ia-result strong{
+  color:#065f46!important;
+}
+.ia-result.legal{
+  border-left:7px solid #16a34a!important;
+}
+.ia-result.ok{
+  border-left:7px solid #22c55e!important;
+}
+.ia-result.warn{
+  border-left:7px solid #f59e0b!important;
+}
+.ia-result.bad{
+  border-left:7px solid #ef4444!important;
+}
+.ia-result a{
+  color:#047857!important;
+  font-weight:900!important;
+}
+.iahr-send,.iahr-body .btn-green{
+  background:linear-gradient(135deg,#16a34a,#0f9f61)!important;
+  color:#ffffff!important;
+  border:0!important;
+  box-shadow:0 14px 34px rgba(16,185,129,.22)!important;
+}
+.iahr-send:hover{filter:brightness(.97)!important;transform:translateY(-1px);}
+.iahr-fab{
+  background:linear-gradient(135deg,#16a34a,#0f9f61)!important;
+  color:#ffffff!important;
+  box-shadow:0 18px 42px rgba(16,185,129,.35)!important;
+}
+
+
+/* === AJUSTE PRO: entradas separadas trabajador / administrador === */
+.login-links{
+  display:flex!important;
+  justify-content:center!important;
+  align-items:center!important;
+  margin-top:18px!important;
+}
+.login-links a.login-switch{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:8px!important;
+  padding:12px 18px!important;
+  border-radius:18px!important;
+  font-weight:900!important;
+  text-decoration:none!important;
+  font-size:16px!important;
+  transition:.18s ease!important;
+}
+.login-links a.login-switch.admin{
+  background:#ecfdf5!important;
+  color:#047857!important;
+  border:1px solid #bbf7d0!important;
+}
+.login-links a.login-switch.worker{
+  background:#eff6ff!important;
+  color:#1d4ed8!important;
+  border:1px solid #bfdbfe!important;
+}
+.login-links a.login-switch:hover{
+  transform:translateY(-1px)!important;
+  box-shadow:0 12px 28px rgba(15,118,80,.15)!important;
+}
+.login-mode-pill{
+  width:100%!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:9px!important;
+  padding:12px 16px!important;
+  margin:-2px 0 10px!important;
+  border-radius:18px!important;
+  font-weight:900!important;
+  letter-spacing:.2px!important;
+}
+.login-mode-pill.admin-pill{
+  background:linear-gradient(135deg,#ecfdf5,#ffffff)!important;
+  color:#047857!important;
+  border:1px solid #bbf7d0!important;
+}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -3411,12 +3543,14 @@ def empresas_disponibles_login():
 
 def login_template(admin=False, error=""):
     action = url_for('admin_login') if admin else url_for('login')
-    title = "PRIZE PRO"
-    sub = "Actualización de datos de trabajadores" if admin else "Actualización de datos de trabajadores"
+    title = "PORTAL HR ADMIN" if admin else "PORTAL HR"
+    sub = "Panel de administración" if admin else "Actualización de datos de trabajadores"
     if admin:
-        opts = ''.join([f"<option value='{e}'>{e}</option>" for e in empresas_disponibles_login()])
+        # Entrada Administrador: solo credenciales de administrador.
+        # La empresa se guarda como valor interno para mantener compatibilidad con session['empresa_login'].
         fields = f"""
-          <div class='field'><label>Empresa</label><div class='login-input'><i class='bi bi-building'></i><select name='empresa' required><option value=''>Seleccione empresa</option>{opts}</select></div></div>
+          <input type='hidden' name='empresa' value='PORTAL HR PRO'>
+          <div class='login-mode-pill admin-pill'><i class='bi bi-shield-lock'></i> Entrada administrador</div>
           <div class='field'><label>Usuario</label><div class='login-input'><i class='bi bi-person'></i><input name='usuario' placeholder='admin' required></div></div>
           <div class='field'><label>Clave</label><div class='login-input'><i class='bi bi-lock'></i><input name='clave' type='password' placeholder='••••••••' required></div></div>
         """
@@ -3431,7 +3565,7 @@ def login_template(admin=False, error=""):
     <div class='login-body'><form class='login-card' method='post' action='{action}'><div class='login-inner'>
       <div class='login-logo'><div class='login-avatar-svg' aria-label='Portal HR Pro'></div></div><div class='login-title'><h1>{title}</h1><b>{sub}</b></div>
       {f"<div class='flash err'>{error}</div>" if error else ""}{fields}<button class='btn-green'>Ingresar</button>
-    </div><div class='login-links'>{'<a href="/">Entrada trabajador</a>' if admin else '<a href="/admin/login">Entrada administrador</a>'}</div></form></div>"""
+    </div><div class='login-links'>{'<a class="login-switch worker" href="/"><i class="bi bi-person"></i> Entrada trabajador</a>' if admin else '<a class="login-switch admin" href="/admin/login"><i class="bi bi-shield-lock"></i> Entrada administrador</a>'}</div></form></div>"""
     return render_template_string(BASE, body=body, title=title)
 
 
