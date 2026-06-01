@@ -3544,6 +3544,101 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
 @media(max-width:900px){.capacitacion-page .mini-grid{grid-template-columns:repeat(2,minmax(120px,1fr))!important}.capacitacion-page .dash-metric{min-height:82px!important}}
 @media(max-width:560px){.capacitacion-page .mini-grid{grid-template-columns:1fr!important}.capacitacion-page .grid-2{grid-template-columns:1fr!important}}
 
+
+/* === AJUSTE FINAL PRO: dashboards blanco/verde + cards compactos === */
+.admin-shell .dashboards-admin{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(360px,1fr))!important;
+  gap:18px!important;
+  margin-top:18px!important;
+}
+.admin-shell .dashboard-panel,
+.admin-shell .dashboard-panel.green,
+.admin-shell .dashboard-panel.purple{
+  background:#ffffff!important;
+  border:1px solid #d1fae5!important;
+  border-radius:22px!important;
+  box-shadow:0 16px 38px rgba(15,23,42,.07)!important;
+  padding:22px!important;
+  color:#0f172a!important;
+}
+.admin-shell .dashboard-panel h2{
+  color:#052e24!important;
+  font-size:18px!important;
+  font-weight:1000!important;
+  margin:0 0 16px!important;
+}
+.admin-shell .dashboard-panel .mini-grid{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(140px,1fr))!important;
+  gap:12px!important;
+}
+.admin-shell .dashboard-panel .dash-metric{
+  background:#ffffff!important;
+  border:1px solid #bbf7d0!important;
+  border-left:6px solid #16a34a!important;
+  border-radius:18px!important;
+  min-height:72px!important;
+  padding:13px 58px 13px 14px!important;
+  box-shadow:0 8px 22px rgba(22,163,74,.08)!important;
+  color:#0f172a!important;
+  position:relative!important;
+  display:block!important;
+}
+.admin-shell .dashboard-panel .dash-metric span{
+  display:block!important;
+  color:#475569!important;
+  font-size:12px!important;
+  font-weight:900!important;
+  margin-bottom:7px!important;
+}
+.admin-shell .dashboard-panel .dash-metric b{
+  color:#059669!important;
+  font-size:24px!important;
+  line-height:1!important;
+  font-weight:1000!important;
+}
+.admin-shell .dashboard-panel .dash-metric .mi{
+  position:absolute!important;
+  right:12px!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  width:42px!important;
+  height:42px!important;
+  border-radius:13px!important;
+  display:grid!important;
+  place-items:center!important;
+  background:#dcfce7!important;
+  border:1px solid #86efac!important;
+  color:#047857!important;
+  box-shadow:0 10px 20px rgba(16,185,129,.12)!important;
+}
+.admin-shell .dashboard-panel .full-link,
+.admin-shell .dashboard-panel.green .full-link,
+.admin-shell .dashboard-panel.purple .full-link{
+  background:#ecfdf5!important;
+  color:#047857!important;
+  border:1px solid #86efac!important;
+  box-shadow:none!important;
+  border-radius:16px!important;
+  padding:13px 16px!important;
+  margin-top:14px!important;
+  font-weight:1000!important;
+}
+.admin-shell .dashboard-panel .full-link:hover{
+  background:#16a34a!important;
+  color:#ffffff!important;
+}
+@media(max-width:1100px){
+  .admin-shell .dashboards-admin{grid-template-columns:1fr!important}
+}
+@media(max-width:640px){
+  .admin-shell .dashboard-panel .mini-grid{grid-template-columns:1fr!important}
+  .admin-shell .dashboard-panel{padding:16px!important}
+}
+
+/* Capacitación debe visualizarse justo debajo de Gestión Vacacional en menú admin */
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -3732,6 +3827,7 @@ def sidebar(active):
                 <a class='menu-item' onclick='saveSideScroll()' href='/admin/plantilla_gestion/vacacional'><i class='bi bi-file-earmark-arrow-down'></i><span class='label'>Plantilla Vacacional</span></a>
               </div>
             </div>
+            <a class='{cls_cap}' onclick='saveSideScroll()' href='/admin/capacitacion'><i class='bi bi-mortarboard'></i><span class='label'>3. Capacitación / Cursos</span></a>
             <div id='grp_trabajadores_admin' data-group='trabajadores_admin' class='menu-group nested {'force-open' if active in ['Trabajadores','Usuarios'] or active_sub == 'anuncios' else ''}'>
               <button type='button' class='menu-title {'active' if active in ['Trabajadores','Usuarios'] or active_sub == 'anuncios' else ''}' onclick="toggleGroup('grp_trabajadores_admin')"><i class='bi bi-people'></i><span class='label'>Trabajadores / Usuarios y claves</span><span class='chev'>∨</span></button>
               <div class='submenu'>
@@ -3739,7 +3835,6 @@ def sidebar(active):
                 <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><i class='bi bi-lock'></i><span class='label'>Usuarios y claves</span></a>
               </div>
             </div>
-            <a class='{cls_cap}' onclick='saveSideScroll()' href='/admin/capacitacion'><i class='bi bi-mortarboard'></i><span class='label'>3. Capacitación / Cursos</span></a>
             <a class='menu-item {'active' if active == 'IA HR' else ''}' onclick='saveSideScroll()' href='/admin/ia_hr'><i class='bi bi-robot'></i><span class='label'>Base IA HR</span></a>
             <a class='{cls_test}' onclick='saveSideScroll()' href='/admin/modo_prueba'><i class='bi bi-magic'></i><span class='label'>Modo prueba y limpieza</span></a>
           </div>
