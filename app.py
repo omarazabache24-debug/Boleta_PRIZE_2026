@@ -7821,7 +7821,7 @@ def admin_capacitacion_curso(curso_id):
 
 
 @app.route('/capacitacion')
-@login_required
+@worker_required
 def mi_capacitacion():
     asegurar_capacitacion_db()
     dni = normalizar_dni(session.get('dni'))
@@ -7865,7 +7865,7 @@ def mi_capacitacion():
 
 
 @app.route('/capacitacion/asignacion/<int:asignacion_id>/iniciar', methods=['POST'])
-@login_required
+@worker_required
 def capacitacion_iniciar(asignacion_id):
     asegurar_capacitacion_db()
     dni = normalizar_dni(session.get('dni'))
@@ -7884,7 +7884,7 @@ def capacitacion_iniciar(asignacion_id):
 
 
 @app.route('/capacitacion/asignacion/<int:asignacion_id>/completar', methods=['POST'])
-@login_required
+@worker_required
 def capacitacion_completar(asignacion_id):
     asegurar_capacitacion_db()
     dni = normalizar_dni(session.get('dni'))
