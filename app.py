@@ -3504,6 +3504,26 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
 .login-links a.admin,.login-links a.worker{display:inline-flex!important;align-items:center!important;gap:8px!important;justify-content:center!important;color:#667085!important;font-weight:800!important;text-decoration:none!important;padding:8px 10px!important;border-radius:12px!important}
 .login-links a.admin:hover,.login-links a.worker:hover{color:#0f8f55!important;background:#ecfdf5!important}
 .login-mode-pill{display:inline-flex!important;align-items:center!important;gap:8px!important;background:#ecfdf5!important;color:#0f8f55!important;border:1px solid #bbf7d0!important;border-radius:999px!important;padding:8px 12px!important;font-weight:900!important;margin:0 0 16px!important}
+
+/* === Módulo Capacitación / Cursos === */
+.capacitacion-page .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:18px 0}
+.capacitacion-page .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.capacitacion-page .form-grid label{display:flex;flex-direction:column;gap:7px;font-weight:800;color:#0f172a}
+.capacitacion-page .form-grid input,.capacitacion-page .form-grid select,.capacitacion-page .form-grid textarea{border:1px solid #d7e4ef;border-radius:16px;padding:14px 16px;font-weight:700;background:#fff;color:#111827}
+.capacitacion-page .form-grid textarea{min-height:94px;resize:vertical}
+.capacitacion-page .span-2{grid-column:1/-1}
+.course-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:14px}
+.course-card{background:#ffffff;border:1px solid #dbeafe;border-radius:22px;padding:18px;box-shadow:0 10px 25px rgba(15,23,42,.06);border-left:7px solid #16a34a}
+.course-card h3{margin:10px 0 8px;color:#052e24;font-size:20px}
+.course-card p{color:#334155;line-height:1.5;margin:0 0 12px}
+.course-top,.course-actions,.course-meta,.row-actions,.section-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.course-top,.section-head{justify-content:space-between}
+.course-badge{background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:999px;padding:7px 12px;font-weight:900;font-size:12px;text-transform:uppercase}
+.course-meta{font-size:13px;color:#475569;font-weight:800}
+.progress-line{height:12px;border-radius:999px;background:#e5e7eb;overflow:hidden;margin:10px 0}
+.progress-line span{display:block;height:100%;border-radius:999px;background:#16a34a}
+.note-soft{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:18px;padding:14px;color:#064e3b;margin-top:15px}
+@media(max-width:900px){.capacitacion-page .grid-2,.capacitacion-page .form-grid{grid-template-columns:1fr}.capacitacion-page .span-2{grid-column:auto}}
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -3631,7 +3651,7 @@ def sidebar(active):
     per_cls = gclass([k for k,_,_ in TIPOS_PERSONALES])
     admin = ""
     if session.get('admin_id'):
-        admin_keys = ['Admin','Trabajadores','Usuarios','Modulo documentos','Subir documentos','Gestion Vacacional','Modo prueba'] + [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES]
+        admin_keys = ['Admin','Trabajadores','Usuarios','Modulo documentos','Subir documentos','Gestion Vacacional','Capacitacion','Modo prueba'] + [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES]
         admin_cls = 'menu-group force-open' if active_type in admin_keys else 'menu-group'
         cls_dash = 'menu-item active' if active == 'Admin' else 'menu-item'
         cls_trab = 'menu-item active' if active == 'Trabajadores' else 'menu-item'
@@ -3640,6 +3660,7 @@ def sidebar(active):
         cls_moddocs = 'menu-item active' if active == 'Modulo documentos' else 'menu-item'
         cls_vac = 'menu-item active' if active == 'Gestion Vacacional' else 'menu-item'
         cls_con = 'menu-item active' if active == 'Gestion Contratacion' else 'menu-item'
+        cls_cap = 'menu-item active' if active == 'Capacitacion' else 'menu-item'
         cls_test = 'menu-item active' if active == 'Modo prueba' else 'menu-item'
         docs_mod_keys = [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES] + ['Modulo documentos','Subir documentos']
         docs_mod_cls = 'menu-group nested force-open' if active_type in docs_mod_keys else 'menu-group nested'
@@ -3698,6 +3719,7 @@ def sidebar(active):
                 <a class='{cls_users}' onclick='saveSideScroll()' href='/admin/usuarios'><i class='bi bi-lock'></i><span class='label'>Usuarios y claves</span></a>
               </div>
             </div>
+            <a class='{cls_cap}' onclick='saveSideScroll()' href='/admin/capacitacion'><i class='bi bi-mortarboard'></i><span class='label'>3. Capacitación / Cursos</span></a>
             <a class='menu-item {'active' if active == 'IA HR' else ''}' onclick='saveSideScroll()' href='/admin/ia_hr'><i class='bi bi-robot'></i><span class='label'>Base IA HR</span></a>
             <a class='{cls_test}' onclick='saveSideScroll()' href='/admin/modo_prueba'><i class='bi bi-magic'></i><span class='label'>Modo prueba y limpieza</span></a>
           </div>
@@ -3733,6 +3755,11 @@ def sidebar(active):
       {documentos_generales}
       {user_gestiones}
       {admin}
+      {'' if session.get('admin_id') else f'''
+      <div id='grp_user_capacitacion' data-group='user_capacitacion' class='menu-group {'force-open' if active == 'Capacitacion' else ''}'>
+        <button type='button' class='menu-title {'active' if active == 'Capacitacion' else ''}' onclick="toggleGroup('grp_user_capacitacion')"><i class='bi bi-mortarboard'></i><span class='label'>Capacitación / Cursos</span><span class='chev'>∨</span></button>
+        <div class='submenu'><a class='menu-item {'active' if active == 'Capacitacion' else ''}' onclick='saveSideScroll()' href='/capacitacion'><i class='bi bi-journal-check'></i><span class='label'>Mis capacitaciones</span></a></div>
+      </div>'''}
       <div id='grp_cuenta' data-group='cuenta' class='menu-group {'force-open' if active == 'Inicio' else ''}'>
         <button type='button' class='menu-title {'active' if active == 'Inicio' else ''}' onclick="toggleGroup('grp_cuenta')"><i class='bi bi-person-circle'></i><span class='label'>Mi cuenta</span><span class='chev'>∨</span></button>
         <div class='submenu'><a class='menu-item {'active' if active == 'Inicio' else ''}' onclick='saveSideScroll()' href='/panel'><i class='bi bi-house'></i><span class='label'>Inicio</span></a><a class='menu-item' href='/logout'><i class='bi bi-box-arrow-right'></i><span class='label'>Salir</span></a></div>
@@ -4216,6 +4243,10 @@ def admin():
         <div class='card gestion-card green'>
           <div class='gestion-icon'>☂️</div>
           <div><h2>Gestión Vacacional</h2><p class='muted'>Administre saldos y solicitudes de vacaciones de los trabajadores.</p><a class='btn-green' href='/admin/vacaciones'>Ir al Dashboard <span>→</span></a></div>
+        </div>
+        <div class='card gestion-card green'>
+          <div class='gestion-icon'>🎓</div>
+          <div><h2>Capacitación / Cursos</h2><p class='muted'>Gestione inducciones, cursos, asignaciones y avance de aprendizaje.</p><a class='btn-green' href='/admin/capacitacion'>Ir al Dashboard <span>→</span></a></div>
         </div>
       </div>
 
@@ -7246,6 +7277,672 @@ def parche_portal_hr_movil_compacto(response):
     except Exception:
         pass
     return response
+
+
+
+# ============================================================
+# IA HR PRO - CLASIFICADOR INTELIGENTE POR INTENCIÓN Y TEMA
+# Mejora: evita que el módulo actual domine la respuesta.
+# ============================================================
+def ia_hr_tokens(q):
+    qn = ia_norm(q)
+    stop = {
+        'que','qué','es','son','el','la','los','las','un','una','de','del','por','para','con','como','cómo',
+        'donde','dónde','cuando','cuándo','cuanto','cuánto','cuantos','cuántos','me','mi','mis','tengo',
+        'en','al','y','o','se','lo','esto','eso','trabajo'
+    }
+    return [t for t in qn.split() if len(t) > 2 and t not in stop]
+
+
+def ia_hr_topic(q):
+    qn = ia_norm(q)
+    temas = [
+        ('jornada', ['jornada','horario','sobretiempo','horas extra','horas extras','trabajo nocturno','turno','turnos','feriado','descanso semanal']),
+        ('vacaciones', ['vacacion','vacaciones','vacacional','record vacacional','récord vacacional','ordinarias','truncas','vencidas','adelanto','fraccionamiento']),
+        ('cts', ['cts','compensacion tiempo servicios','compensación tiempo servicios']),
+        ('gratificacion', ['gratificacion','gratificaciones','fiestas patrias','navidad']),
+        ('utilidades', ['utilidad','utilidades','participacion utilidades','boleta utilidades']),
+        ('boleta', ['boleta','boletas','pago','recibo haberes']),
+        ('licencias', ['licencia','paternidad','maternidad','luto','fallecimiento','lactancia','adopcion','adopción']),
+        ('subsidios', ['subsidio','essalud','incapacidad temporal','descanso medico','descanso médico']),
+        ('contratos', ['contrato','contratos','modalidad','indeterminado','intermitente','periodo prueba','período prueba','tiempo parcial']),
+        ('regimenes', ['regimen','régimen','agrario','mype','microempresa','pequena empresa','pequeña empresa','cas','practicante','practicas']),
+        ('planillas', ['planilla','t registro','plame','afp','onp','asignacion familiar','asignación familiar','remuneracion','remuneración','sueldo']),
+        ('sst', ['sst','seguridad salud','iperc','accidente','incidente','comite sst','comité sst','sctr','vida ley']),
+        ('hostigamiento', ['hostigamiento','acoso sexual','hostigamiento sexual']),
+        ('teletrabajo', ['teletrabajo','remoto','home office','desconexion digital','desconexión digital']),
+        ('documental_sistema', ['documento','documentos','boletas cargadas','pendientes firma','lectura documento']),
+        ('rrhh', ['induccion','inducción','clima laboral','desempeno','desempeño','bienestar','capacitacion','capacitación'])
+    ]
+    for tema, kws in temas:
+        if ia_keywords_hit(qn, kws):
+            return tema
+    return ''
+
+
+def ia_hr_intent(q):
+    qn = ia_norm(q)
+    if ia_keywords_hit(qn, ['cuanto tengo','cuánto tengo','mis vacaciones','mi saldo','estado de mi solicitud','mis solicitudes','mis boletas','mis documentos','tengo boletas','documentos pendientes','documentos rechazados','resumen documental','resumen vacacional']):
+        return 'datos'
+    if ia_keywords_hit(qn, ['donde cargo','dónde cargo','donde subo','dónde subo','donde importo','dónde importo','donde descargo','dónde descargo','donde veo','dónde veo','como cargo','cómo cargo','como subo','cómo subo','como solicito','cómo solicito','ruta','modulo','módulo','pantalla','opcion','opción']):
+        return 'sistema'
+    if ia_keywords_hit(qn, ['que es','qué es','que son','qué son','concepto','definicion','definición','explicame','explícame','cual es','cuál es','cuantos tipos','cuántos tipos','cuantos dias','cuántos días','cuando gano','cuándo gano','diferencia']):
+        return 'legal'
+    if ia_hr_topic(qn):
+        return 'legal'
+    return 'general'
+
+
+def ia_html_sugerencias(q, rol):
+    tema = ia_hr_topic(q)
+    if tema:
+        return f"""<div class='ia-result warn'>
+          <h3>Necesito precisar tu consulta</h3>
+          <p>Encontré el tema <b>{h(tema.title())}</b>, pero la pregunta es muy corta. Puedes preguntar, por ejemplo:</p>
+          <ul>
+            <li>¿Qué es {h(tema)}?</li>
+            <li>¿Cuál es la base legal de {h(tema)}?</li>
+            <li>¿Cómo se aplica {h(tema)} en el régimen privado?</li>
+          </ul>
+        </div>"""
+    return "<div class='ia-result warn'><h3>No encontré una respuesta precisa</h3><p>Prueba indicando el tema: CTS, gratificación, utilidades, jornada, vacaciones, licencias, contratos, régimen agrario, planillas o SST.</p></div>"
+
+
+def ia_buscar_legal_inteligente(pregunta):
+    """Búsqueda legal con prioridad por tema y coincidencias exactas; evita respuestas cruzadas."""
+    try:
+        qn = ia_norm(pregunta)
+        tema_detectado = ia_hr_topic(qn)
+        with db() as con:
+            rows = con.execute('SELECT * FROM ia_legislacion_peru WHERE activo=1').fetchall()
+        if not rows:
+            return None
+
+        exactos = {
+            'jornada trabajo': ['jornada', 'jornada máxima'],
+            'jornada de trabajo': ['jornada', 'jornada máxima'],
+            'horas extras': ['horas extras'],
+            'vacaciones ordinarias': ['vacaciones ordinarias'],
+            'vacaciones truncas': ['vacaciones truncas'],
+            'vacaciones vencidas': ['vacaciones vencidas'],
+            'boleta de pago': ['boleta de pago'],
+            'boletas utilidades': ['boleta de utilidades', 'utilidades'],
+            'boleta utilidades': ['boleta de utilidades', 'utilidades'],
+        }
+        for frase, claves in exactos.items():
+            if frase in qn:
+                filtradas = []
+                for r in rows:
+                    base = ia_norm((r['pregunta_clave'] or '') + ' ' + (r['tema'] or '') + ' ' + (r['palabras_clave'] or ''))
+                    if any(c in base for c in claves):
+                        filtradas.append(r)
+                if filtradas:
+                    rows = filtradas
+                    break
+
+        if tema_detectado:
+            filtradas = []
+            for r in rows:
+                base = ia_norm((r['tema'] or '') + ' ' + (r['pregunta_clave'] or '') + ' ' + (r['palabras_clave'] or ''))
+                if tema_detectado in base or any(k in base for k in ia_hr_tokens(qn)):
+                    filtradas.append(r)
+            if filtradas:
+                rows = filtradas
+
+        ranked = sorted(rows, key=lambda r: ia_score(pregunta, r), reverse=True)
+        top = ranked[0] if ranked else None
+        score = ia_score(pregunta, top) if top else 0
+        # Para preguntas cortas exigimos tema o score mayor.
+        if top and (score >= 2 or tema_detectado):
+            return f"""
+            <div class='ia-result legal'>
+              <h3>{h(top['pregunta_clave'])}</h3>
+              <p>{h(top['respuesta'])}</p>
+              <p><b>Base legal referencial:</b> {h(top['base_legal'])}</p>
+              <p class='muted'>{h(top['detalle_legal'])}</p>
+              <small>Respuesta informativa. RR.HH. debe validar régimen, jornada, fecha, documentos y caso concreto antes de aplicar.</small>
+            </div>"""
+    except Exception as e:
+        return f"<div class='ia-result bad'><h3>Error legal IA</h3><p>{h(e)}</p></div>"
+    return None
+
+
+def ia_hr_responder(pregunta, modulo='', rol=None, dni=None):
+    """Respuesta IA HR con clasificación por intención y tema."""
+    pregunta = clean(pregunta)
+    rol = rol or ('admin' if session.get('admin_id') else 'trabajador')
+    dni = normalizar_dni(dni or session.get('dni') or '')
+    q = ia_norm(pregunta)
+    if not pregunta:
+        return "<div class='ia-result warn'><h3>IA HR</h3><p>Escribe una pregunta. Ejemplo: ¿qué es CTS?, ¿dónde veo mis boletas?, ¿cuánto saldo tengo?</p></div>", 'vacio'
+
+    admin_terms = ['cargar base','cargar trabajadores','subir saldos','cargar saldos','subir boletas masiva','sincronizar pdf','crear carpetas','reporte general','todos los trabajadores','eliminar trabajador','base trabajadores']
+    if rol != 'admin' and any(t in q for t in admin_terms):
+        return "<div class='ia-result bad'><h3>Acceso limitado</h3><p>Esa consulta corresponde a opciones administrativas. Desde tu portal puedes consultar tus boletas, documentos, saldo vacacional, solicitudes y conceptos laborales.</p></div>", 'bloqueo_rol'
+
+    intent = ia_hr_intent(q)
+    tema = ia_hr_topic(q)
+
+    # 1) Datos reales del sistema.
+    if intent == 'datos':
+        if ia_keywords_hit(q, ['vacacion','saldo','solicitud','aprobacion','dias','vacacional']):
+            return ia_resumen_vacacional(rol, dni), 'datos_vacacional'
+        if ia_keywords_hit(q, ['boleta','documento','documentos','cts','gratificacion','utilidad','liquidacion','pendiente','rechazado']):
+            return ia_resumen_documental(rol, dni), 'datos_documental'
+
+    # 2) Preguntas legales o de RR.HH. SIEMPRE antes que rutas del módulo, salvo intención clara de sistema.
+    if intent == 'legal' or (tema and intent != 'sistema'):
+        r = ia_buscar_legal_inteligente(pregunta)
+        if r:
+            return r, 'legal_peru'
+
+    # 3) Rutas/manual del sistema solo si la intención es operativa.
+    if intent == 'sistema':
+        r = ia_buscar_base_conocimiento(pregunta, rol, modulo)
+        if r:
+            return r, 'base_conocimiento'
+        # Si no encontró ruta, intenta legal por si preguntó "dónde está regulado..."
+        r = ia_buscar_legal_inteligente(pregunta)
+        if r:
+            return r, 'legal_peru'
+
+    # 4) Legal general por tema detectado o keywords amplias.
+    if tema:
+        r = ia_buscar_legal_inteligente(pregunta)
+        if r:
+            return r, 'legal_peru'
+
+    # 5) Base de conocimiento como apoyo, sin dejar que el módulo actual fuerce boletas.
+    r = ia_buscar_base_conocimiento(pregunta, rol, '')
+    if r and not tema:
+        return r, 'base_conocimiento'
+
+    # 6) Si es muy corto o ambiguo, sugerir precisión en vez de responder algo incorrecto.
+    return ia_html_sugerencias(pregunta, rol), 'requiere_precision'
+
+# Reforzar base inicial de respuestas específicas al cargar.
+try:
+    asegurar_ia_hr_pro()
+    ia_hr_actualizar_base_plus('Clasificador inteligente')
+except Exception as e:
+    print('No se pudo reforzar IA HR clasificada:', e)
+
+
+# =============================
+# GESTIÓN DE CAPACITACIÓN / CURSOS
+# =============================
+def capacitacion_upload_dir():
+    d = UPLOAD_DIR / "capacitacion"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def asegurar_capacitacion_db():
+    """Tablas del módulo de Capacitación/Cursos. No afecta la lógica existente."""
+    with db() as con:
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS capacitacion_cursos(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titulo TEXT,
+            descripcion TEXT,
+            categoria TEXT,
+            modalidad TEXT,
+            duracion TEXT,
+            obligatorio INTEGER DEFAULT 1,
+            estado TEXT DEFAULT 'Activo',
+            archivo_nombre TEXT,
+            ruta_archivo TEXT,
+            fecha_creacion TEXT,
+            creado_por TEXT
+        )""")
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS capacitacion_asignaciones(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            curso_id INTEGER,
+            dni TEXT,
+            trabajador TEXT,
+            empresa TEXT,
+            area TEXT,
+            cargo TEXT,
+            estado TEXT DEFAULT 'Pendiente',
+            progreso INTEGER DEFAULT 0,
+            fecha_asignacion TEXT,
+            fecha_inicio TEXT,
+            fecha_fin TEXT,
+            fecha_completado TEXT,
+            nota REAL DEFAULT 0,
+            observacion TEXT,
+            asignado_por TEXT,
+            UNIQUE(curso_id, dni)
+        )""")
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS capacitacion_eventos(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            asignacion_id INTEGER,
+            curso_id INTEGER,
+            dni TEXT,
+            evento TEXT,
+            detalle TEXT,
+            fecha TEXT
+        )""")
+        # Curso base para que el módulo no aparezca vacío.
+        existe = con.execute("SELECT id FROM capacitacion_cursos LIMIT 1").fetchone()
+        if not existe:
+            con.execute("""INSERT INTO capacitacion_cursos
+                (titulo,descripcion,categoria,modalidad,duracion,obligatorio,estado,fecha_creacion,creado_por)
+                VALUES(?,?,?,?,?,?,?,?,?)""", (
+                'Inducción General RR.HH.',
+                'Curso base de bienvenida: políticas internas, documentos, vacaciones, SST y uso del Portal HR.',
+                'Inducción',
+                'Virtual',
+                '30 min',
+                1,
+                'Activo',
+                now_txt(),
+                'SISTEMA'
+            ))
+        con.commit()
+
+
+def capacitacion_estado_class(estado):
+    e = clean(estado).lower()
+    if 'complet' in e or 'aprob' in e:
+        return 'st-aprobado'
+    if 'proceso' in e or 'inicio' in e:
+        return 'st-pendiente'
+    if 'rechaz' in e or 'venc' in e:
+        return 'st-rechazado'
+    return 'st-pendiente'
+
+
+def capacitacion_evento(asignacion_id, curso_id, dni, evento, detalle=''):
+    try:
+        with db() as con:
+            con.execute("""INSERT INTO capacitacion_eventos
+                (asignacion_id,curso_id,dni,evento,detalle,fecha)
+                VALUES(?,?,?,?,?,?)""", (asignacion_id, curso_id, normalizar_dni(dni), evento, detalle, now_txt()))
+            con.commit()
+    except Exception:
+        pass
+
+
+def capacitacion_asignar_curso(con, curso_id, trabajador_row, asignado_por='ADMIN'):
+    dni = normalizar_dni(trabajador_row['dni'] if 'dni' in trabajador_row.keys() else '')
+    if not dni:
+        return 0
+    con.execute("""INSERT OR IGNORE INTO capacitacion_asignaciones
+        (curso_id,dni,trabajador,empresa,area,cargo,estado,progreso,fecha_asignacion,asignado_por)
+        VALUES(?,?,?,?,?,?,?,?,?,?)""", (
+        curso_id,
+        dni,
+        clean(trabajador_row['nombre'] if 'nombre' in trabajador_row.keys() else ''),
+        clean(trabajador_row['empresa'] if 'empresa' in trabajador_row.keys() else ''),
+        clean(trabajador_row['area'] if 'area' in trabajador_row.keys() else ''),
+        clean(trabajador_row['cargo'] if 'cargo' in trabajador_row.keys() else ''),
+        'Pendiente',
+        0,
+        now_txt(),
+        asignado_por
+    ))
+    return con.total_changes
+
+
+@app.route('/admin/capacitacion', methods=['GET', 'POST'])
+@admin_required
+def admin_capacitacion():
+    asegurar_capacitacion_db()
+    if request.method == 'POST':
+        accion = clean(request.form.get('accion'))
+        if accion == 'crear_curso':
+            titulo = clean(request.form.get('titulo'))
+            if not titulo:
+                flash('Ingresa el título del curso.', 'bad')
+                return redirect(url_for('admin_capacitacion'))
+            categoria = clean(request.form.get('categoria')) or 'General'
+            modalidad = clean(request.form.get('modalidad')) or 'Virtual'
+            duracion = clean(request.form.get('duracion')) or 'Sin duración'
+            descripcion = clean(request.form.get('descripcion'))
+            obligatorio = 1 if request.form.get('obligatorio') == '1' else 0
+            archivo_nombre = ''
+            ruta_archivo = ''
+            f = request.files.get('archivo')
+            if f and f.filename:
+                filename = secure_filename(f.filename)
+                ext = Path(filename).suffix.lower()
+                if ext not in EXT_ALLOWED:
+                    flash('Archivo no permitido. Usa PDF, Word, Excel o imagen.', 'bad')
+                    return redirect(url_for('admin_capacitacion'))
+                safe_name = f"{now_file()}_{filename}"
+                path = capacitacion_upload_dir() / safe_name
+                f.save(path)
+                archivo_nombre = filename
+                ruta_archivo = str(path)
+            with db() as con:
+                con.execute("""INSERT INTO capacitacion_cursos
+                    (titulo,descripcion,categoria,modalidad,duracion,obligatorio,estado,archivo_nombre,ruta_archivo,fecha_creacion,creado_por)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?)""", (
+                    titulo, descripcion, categoria, modalidad, duracion, obligatorio, 'Activo',
+                    archivo_nombre, ruta_archivo, now_txt(), session.get('admin_nombre') or 'ADMIN'
+                ))
+                con.commit()
+            flash('Curso registrado correctamente.', 'ok')
+            return redirect(url_for('admin_capacitacion'))
+
+        if accion == 'asignar':
+            curso_id = int(request.form.get('curso_id') or 0)
+            alcance = clean(request.form.get('alcance')) or 'todos'
+            valor = clean(request.form.get('valor'))
+            if not curso_id:
+                flash('Selecciona un curso.', 'bad')
+                return redirect(url_for('admin_capacitacion'))
+            with db() as con:
+                if alcance == 'dni':
+                    rows = con.execute("SELECT * FROM trabajadores WHERE activo=1 AND dni=?", (normalizar_dni(valor),)).fetchall()
+                elif alcance == 'empresa':
+                    rows = con.execute("SELECT * FROM trabajadores WHERE activo=1 AND UPPER(COALESCE(empresa,'')) LIKE ?", (f"%{valor.upper()}%",)).fetchall()
+                elif alcance == 'area':
+                    rows = con.execute("SELECT * FROM trabajadores WHERE activo=1 AND UPPER(COALESCE(area,'')) LIKE ?", (f"%{valor.upper()}%",)).fetchall()
+                else:
+                    rows = con.execute("SELECT * FROM trabajadores WHERE activo=1").fetchall()
+                before = con.total_changes
+                for r in rows:
+                    capacitacion_asignar_curso(con, curso_id, r, session.get('admin_nombre') or 'ADMIN')
+                con.commit()
+                nuevos = max(0, con.total_changes - before)
+            flash(f'Asignación procesada. Nuevos registros: {nuevos}.', 'ok')
+            return redirect(url_for('admin_capacitacion'))
+
+    q = clean(request.args.get('q'))
+    with db() as con:
+        cursos = con.execute("""SELECT c.*,
+            (SELECT COUNT(*) FROM capacitacion_asignaciones a WHERE a.curso_id=c.id) asignados,
+            (SELECT COUNT(*) FROM capacitacion_asignaciones a WHERE a.curso_id=c.id AND a.estado='Completado') completados
+            FROM capacitacion_cursos c
+            WHERE (?='' OR UPPER(c.titulo||' '||c.categoria||' '||c.descripcion) LIKE ?)
+            ORDER BY c.id DESC""", (q, f"%{q.upper()}%")).fetchall()
+        asignaciones = con.execute("""SELECT a.*, c.titulo, c.categoria
+            FROM capacitacion_asignaciones a
+            LEFT JOIN capacitacion_cursos c ON c.id=a.curso_id
+            ORDER BY a.id DESC LIMIT 80""").fetchall()
+        total_cursos = con.execute("SELECT COUNT(*) FROM capacitacion_cursos").fetchone()[0]
+        total_asig = con.execute("SELECT COUNT(*) FROM capacitacion_asignaciones").fetchone()[0]
+        pendientes = con.execute("SELECT COUNT(*) FROM capacitacion_asignaciones WHERE estado='Pendiente'").fetchone()[0]
+        completos = con.execute("SELECT COUNT(*) FROM capacitacion_asignaciones WHERE estado='Completado'").fetchone()[0]
+        empresas = con.execute("SELECT DISTINCT empresa FROM trabajadores WHERE activo=1 AND COALESCE(empresa,'')<>'' ORDER BY empresa").fetchall()
+        areas = con.execute("SELECT DISTINCT area FROM trabajadores WHERE activo=1 AND COALESCE(area,'')<>'' ORDER BY area").fetchall()
+
+    cursos_opts = ''.join([f"<option value='{c['id']}'>{h(c['titulo'])}</option>" for c in cursos])
+    empresas_opts = ''.join([f"<option value='{h(e['empresa'])}'>{h(e['empresa'])}</option>" for e in empresas])
+    areas_opts = ''.join([f"<option value='{h(a['area'])}'>{h(a['area'])}</option>" for a in areas])
+    cursos_html = ''.join([f"""
+      <div class='course-card'>
+        <div class='course-top'><span class='course-badge'>{h(c['categoria'])}</span><span class='status-pill'>{h(c['estado'])}</span></div>
+        <h3>{h(c['titulo'])}</h3>
+        <p>{h(c['descripcion'] or 'Sin descripción')}</p>
+        <div class='course-meta'><span>🧭 {h(c['modalidad'])}</span><span>⏱ {h(c['duracion'])}</span><span>👥 {c['asignados']}</span><span>✅ {c['completados']}</span></div>
+        <div class='course-actions'>
+          {f"<a class='btn-blue mini-btn' target='_blank' href='/capacitacion/curso/{c['id']}/archivo'>Ver material</a>" if clean(c['ruta_archivo']) else "<span class='muted'>Sin archivo</span>"}
+          <a class='btn-green mini-btn' href='/admin/capacitacion/curso/{c['id']}'>Detalle</a>
+        </div>
+      </div>
+    """ for c in cursos]) or "<div class='empty-note'>Aún no hay cursos registrados.</div>"
+
+    asig_html = ''.join([f"""
+      <tr>
+        <td>{h(a['dni'])}</td>
+        <td>{h(a['trabajador'])}</td>
+        <td>{h(a['titulo'] or '')}</td>
+        <td>{h(a['empresa'])}</td>
+        <td>{h(a['area'])}</td>
+        <td><span class='status-pill {capacitacion_estado_class(a['estado'])}'>{h(a['estado'])}</span></td>
+        <td>{int(a['progreso'] or 0)}%</td>
+        <td>{h(a['fecha_asignacion'])}</td>
+      </tr>
+    """ for a in asignaciones]) or "<tr><td colspan='8'>Sin asignaciones.</td></tr>"
+
+    content = f"""
+    <div class='admin-shell capacitacion-page'>
+      <div class='admin-header'>
+        <div class='admin-title-row'>
+          <button class='hambox' onclick='toggleSide()'>☰</button>
+          <div class='admin-title'>
+            <h1>Capacitación / Cursos</h1>
+            <div class='role'>Administrador</div>
+            <p>Gestione inducciones, cursos, material de capacitación, asignaciones y avance de trabajadores.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class='mini-grid'>
+        <div class='dash-metric'><span>Cursos</span><b>{total_cursos}</b><em class='mi'>🎓</em></div>
+        <div class='dash-metric'><span>Asignaciones</span><b>{total_asig}</b><em class='mi'>👥</em></div>
+        <div class='dash-metric'><span>Pendientes</span><b>{pendientes}</b><em class='mi'>⏱️</em></div>
+        <div class='dash-metric'><span>Completados</span><b>{completos}</b><em class='mi'>✅</em></div>
+      </div>
+
+      <div class='grid-2'>
+        <div class='card'>
+          <h2>➕ Crear curso / inducción</h2>
+          <form method='post' enctype='multipart/form-data' class='form-grid'>
+            <input type='hidden' name='accion' value='crear_curso'>
+            <label>Título<input name='titulo' required placeholder='Ej. Inducción SST'></label>
+            <label>Categoría<select name='categoria'><option>Inducción</option><option>SST</option><option>RR.HH.</option><option>Operaciones</option><option>Calidad</option><option>Compliance</option><option>Bienestar</option></select></label>
+            <label>Modalidad<select name='modalidad'><option>Virtual</option><option>Presencial</option><option>Mixta</option></select></label>
+            <label>Duración<input name='duracion' placeholder='Ej. 45 min'></label>
+            <label class='span-2'>Descripción<textarea name='descripcion' placeholder='Objetivo, contenido y recomendaciones del curso'></textarea></label>
+            <label>Obligatorio<select name='obligatorio'><option value='1'>Sí</option><option value='0'>No</option></select></label>
+            <label>Material<input type='file' name='archivo'></label>
+            <button class='btn-green span-2'>Guardar curso</button>
+          </form>
+        </div>
+        <div class='card'>
+          <h2>📌 Asignar curso</h2>
+          <form method='post' class='form-grid'>
+            <input type='hidden' name='accion' value='asignar'>
+            <label class='span-2'>Curso<select name='curso_id' required>{cursos_opts}</select></label>
+            <label>Alcance<select name='alcance' id='alcanceCap' onchange='capToggleValor()'><option value='todos'>Todos los trabajadores activos</option><option value='empresa'>Por empresa</option><option value='area'>Por área</option><option value='dni'>Por DNI</option></select></label>
+            <label id='valorCapWrap'>Valor<input name='valor' id='valorCap' list='capValores' placeholder='Empresa, área o DNI'></label>
+            <datalist id='capValores'>{empresas_opts}{areas_opts}</datalist>
+            <button class='btn-green span-2'>Asignar</button>
+          </form>
+          <div class='note-soft'><b>Recomendación:</b> para inducción inicial asigna por empresa o a todos los trabajadores activos. Para cursos específicos, usa área o DNI.</div>
+        </div>
+      </div>
+
+      <div class='card'>
+        <div class='section-head'><h2>📚 Cursos registrados</h2><form method='get'><input name='q' value='{h(q)}' placeholder='Buscar curso...'><button class='btn-blue mini-btn'>Buscar</button></form></div>
+        <div class='course-grid'>{cursos_html}</div>
+      </div>
+
+      <div class='card'>
+        <h2>📋 Últimas asignaciones</h2>
+        <div class='table-wrap'><table><thead><tr><th>DNI</th><th>Trabajador</th><th>Curso</th><th>Empresa</th><th>Área</th><th>Estado</th><th>Avance</th><th>Asignado</th></tr></thead><tbody>{asig_html}</tbody></table></div>
+      </div>
+    </div>
+    <script>
+      function capToggleValor(){{
+        const a=document.getElementById('alcanceCap'), w=document.getElementById('valorCapWrap'), v=document.getElementById('valorCap');
+        if(!a||!w||!v) return;
+        if(a.value==='todos'){{w.style.display='none'; v.value='';}}
+        else {{w.style.display='block'; v.placeholder=a.value==='dni'?'Ingrese DNI':(a.value==='empresa'?'Ingrese empresa':'Ingrese área');}}
+      }}
+      capToggleValor();
+    </script>
+    """
+    return render_page(content, active='Capacitacion')
+
+
+@app.route('/admin/capacitacion/curso/<int:curso_id>', methods=['GET', 'POST'])
+@admin_required
+def admin_capacitacion_curso(curso_id):
+    asegurar_capacitacion_db()
+    if request.method == 'POST':
+        accion = clean(request.form.get('accion'))
+        with db() as con:
+            if accion == 'estado':
+                estado = clean(request.form.get('estado')) or 'Activo'
+                con.execute("UPDATE capacitacion_cursos SET estado=? WHERE id=?", (estado, curso_id))
+                con.commit()
+                flash('Estado actualizado.', 'ok')
+            elif accion == 'eliminar_asignacion':
+                aid = int(request.form.get('asignacion_id') or 0)
+                con.execute("DELETE FROM capacitacion_asignaciones WHERE id=?", (aid,))
+                con.commit()
+                flash('Asignación eliminada.', 'ok')
+        return redirect(url_for('admin_capacitacion_curso', curso_id=curso_id))
+
+    with db() as con:
+        curso = con.execute("SELECT * FROM capacitacion_cursos WHERE id=?", (curso_id,)).fetchone()
+        if not curso:
+            abort(404)
+        rows = con.execute("""SELECT * FROM capacitacion_asignaciones WHERE curso_id=? ORDER BY estado, trabajador""", (curso_id,)).fetchall()
+    rows_html = ''.join([f"""
+      <tr><td>{h(r['dni'])}</td><td>{h(r['trabajador'])}</td><td>{h(r['empresa'])}</td><td>{h(r['area'])}</td>
+      <td><span class='status-pill {capacitacion_estado_class(r['estado'])}'>{h(r['estado'])}</span></td><td>{int(r['progreso'] or 0)}%</td><td>{h(r['fecha_completado'])}</td>
+      <td><form method='post' onsubmit="return confirm('¿Eliminar asignación?')"><input type='hidden' name='accion' value='eliminar_asignacion'><input type='hidden' name='asignacion_id' value='{r['id']}'><button class='btn-danger mini-btn'>Eliminar</button></form></td></tr>
+    """ for r in rows]) or "<tr><td colspan='8'>Sin trabajadores asignados.</td></tr>"
+    content = f"""
+    <div class='admin-shell'>
+      <div class='admin-header'><div class='admin-title-row'><button class='hambox' onclick='toggleSide()'>☰</button><div class='admin-title'><h1>{h(curso['titulo'])}</h1><div class='role'>Detalle de curso</div><p>{h(curso['descripcion'])}</p></div></div><a class='btn-green' href='/admin/capacitacion'>Volver</a></div>
+      <div class='mini-grid'>
+        <div class='dash-metric'><span>Categoría</span><b>{h(curso['categoria'])}</b><em class='mi'>🎓</em></div>
+        <div class='dash-metric'><span>Modalidad</span><b>{h(curso['modalidad'])}</b><em class='mi'>🧭</em></div>
+        <div class='dash-metric'><span>Duración</span><b>{h(curso['duracion'])}</b><em class='mi'>⏱️</em></div>
+        <div class='dash-metric'><span>Estado</span><b>{h(curso['estado'])}</b><em class='mi'>✅</em></div>
+      </div>
+      <div class='card'><h2>Acciones</h2><div class='row-actions'>
+        {f"<a class='btn-blue' target='_blank' href='/capacitacion/curso/{curso_id}/archivo'>Ver material</a>" if clean(curso['ruta_archivo']) else "<span class='muted'>Curso sin material cargado.</span>"}
+        <form method='post'><input type='hidden' name='accion' value='estado'><select name='estado'><option>Activo</option><option>Inactivo</option><option>Archivado</option></select><button class='btn-green mini-btn'>Actualizar estado</button></form>
+      </div></div>
+      <div class='card'><h2>Trabajadores asignados</h2><div class='table-wrap'><table><thead><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>Estado</th><th>Avance</th><th>Completado</th><th>Acción</th></tr></thead><tbody>{rows_html}</tbody></table></div></div>
+    </div>
+    """
+    return render_page(content, active='Capacitacion')
+
+
+@app.route('/capacitacion')
+@login_required
+def mi_capacitacion():
+    asegurar_capacitacion_db()
+    dni = normalizar_dni(session.get('dni'))
+    with db() as con:
+        rows = con.execute("""SELECT a.*, c.titulo, c.descripcion, c.categoria, c.modalidad, c.duracion, c.ruta_archivo
+            FROM capacitacion_asignaciones a
+            LEFT JOIN capacitacion_cursos c ON c.id=a.curso_id
+            WHERE a.dni=?
+            ORDER BY CASE a.estado WHEN 'Pendiente' THEN 1 WHEN 'En proceso' THEN 2 WHEN 'Completado' THEN 3 ELSE 4 END, a.id DESC""", (dni,)).fetchall()
+        total = len(rows)
+        pendientes = sum(1 for r in rows if r['estado'] == 'Pendiente')
+        proceso = sum(1 for r in rows if r['estado'] == 'En proceso')
+        completos = sum(1 for r in rows if r['estado'] == 'Completado')
+    cards = ''.join([f"""
+      <div class='course-card'>
+        <div class='course-top'><span class='course-badge'>{h(r['categoria'])}</span><span class='status-pill {capacitacion_estado_class(r['estado'])}'>{h(r['estado'])}</span></div>
+        <h3>{h(r['titulo'] or 'Curso')}</h3>
+        <p>{h(r['descripcion'] or 'Sin descripción')}</p>
+        <div class='progress-line'><span style='width:{int(r['progreso'] or 0)}%'></span></div>
+        <div class='course-meta'><span>🧭 {h(r['modalidad'])}</span><span>⏱ {h(r['duracion'])}</span><span>📈 {int(r['progreso'] or 0)}%</span></div>
+        <div class='course-actions'>
+          {f"<a class='btn-blue mini-btn' target='_blank' href='/capacitacion/curso/{r['curso_id']}/archivo'>Ver material</a>" if clean(r['ruta_archivo']) else ""}
+          <form method='post' action='/capacitacion/asignacion/{r['id']}/iniciar'><button class='btn-warn mini-btn' {'disabled' if r['estado']=='Completado' else ''}>Iniciar</button></form>
+          <form method='post' action='/capacitacion/asignacion/{r['id']}/completar'><button class='btn-green mini-btn' {'disabled' if r['estado']=='Completado' else ''}>Marcar completado</button></form>
+        </div>
+      </div>
+    """ for r in rows]) or "<div class='empty-note'>Aún no tienes cursos asignados.</div>"
+    content = f"""
+    <div class='admin-shell capacitacion-page'>
+      <div class='admin-header'><div class='admin-title-row'><button class='hambox' onclick='toggleSide()'>☰</button><div class='admin-title'><h1>Mis capacitaciones</h1><div class='role'>Trabajador</div><p>Revisa tus cursos, inducciones y avance de capacitación.</p></div></div></div>
+      <div class='mini-grid'>
+        <div class='dash-metric'><span>Total</span><b>{total}</b><em class='mi'>🎓</em></div>
+        <div class='dash-metric'><span>Pendientes</span><b>{pendientes}</b><em class='mi'>⏱️</em></div>
+        <div class='dash-metric'><span>En proceso</span><b>{proceso}</b><em class='mi'>📘</em></div>
+        <div class='dash-metric'><span>Completados</span><b>{completos}</b><em class='mi'>✅</em></div>
+      </div>
+      <div class='card'><h2>📚 Cursos asignados</h2><div class='course-grid'>{cards}</div></div>
+    </div>
+    """
+    return render_page(content, active='Capacitacion')
+
+
+@app.route('/capacitacion/asignacion/<int:asignacion_id>/iniciar', methods=['POST'])
+@login_required
+def capacitacion_iniciar(asignacion_id):
+    asegurar_capacitacion_db()
+    dni = normalizar_dni(session.get('dni'))
+    with db() as con:
+        row = con.execute("SELECT * FROM capacitacion_asignaciones WHERE id=? AND dni=?", (asignacion_id, dni)).fetchone()
+        if not row:
+            abort(404)
+        if row['estado'] != 'Completado':
+            con.execute("""UPDATE capacitacion_asignaciones
+                SET estado='En proceso', progreso=MAX(COALESCE(progreso,0), 25), fecha_inicio=COALESCE(NULLIF(fecha_inicio,''), ?)
+                WHERE id=?""", (now_txt(), asignacion_id))
+            con.commit()
+            capacitacion_evento(asignacion_id, row['curso_id'], dni, 'Inicio', 'El trabajador inició el curso.')
+    flash('Curso iniciado.', 'ok')
+    return redirect(url_for('mi_capacitacion'))
+
+
+@app.route('/capacitacion/asignacion/<int:asignacion_id>/completar', methods=['POST'])
+@login_required
+def capacitacion_completar(asignacion_id):
+    asegurar_capacitacion_db()
+    dni = normalizar_dni(session.get('dni'))
+    with db() as con:
+        row = con.execute("SELECT * FROM capacitacion_asignaciones WHERE id=? AND dni=?", (asignacion_id, dni)).fetchone()
+        if not row:
+            abort(404)
+        con.execute("""UPDATE capacitacion_asignaciones
+            SET estado='Completado', progreso=100, fecha_completado=?, fecha_fin=?
+            WHERE id=?""", (now_txt(), now_txt(), asignacion_id))
+        con.commit()
+        capacitacion_evento(asignacion_id, row['curso_id'], dni, 'Completado', 'El trabajador marcó el curso como completado.')
+    flash('Curso marcado como completado.', 'ok')
+    return redirect(url_for('mi_capacitacion'))
+
+
+@app.route('/capacitacion/curso/<int:curso_id>/archivo')
+def capacitacion_archivo(curso_id):
+    if not (session.get('admin_id') or session.get('dni')):
+        return redirect(url_for('login'))
+    asegurar_capacitacion_db()
+    with db() as con:
+        curso = con.execute("SELECT * FROM capacitacion_cursos WHERE id=?", (curso_id,)).fetchone()
+    if not curso or not clean(curso['ruta_archivo']) or not Path(curso['ruta_archivo']).exists():
+        abort(404)
+    return send_file(curso['ruta_archivo'], as_attachment=False, download_name=curso['archivo_nombre'] or Path(curso['ruta_archivo']).name)
+
+
+@app.route('/admin/capacitacion/exportar')
+@admin_required
+def admin_capacitacion_exportar():
+    asegurar_capacitacion_db()
+    path = EXCEL_LOCAL_DIR / f"CAPACITACION_REPORTE_{now_file()}.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "CAPACITACION"
+    headers = ['DNI','TRABAJADOR','EMPRESA','AREA','CARGO','CURSO','CATEGORIA','ESTADO','PROGRESO','FECHA ASIGNACION','FECHA INICIO','FECHA COMPLETADO']
+    ws.append(headers)
+    with db() as con:
+        rows = con.execute("""SELECT a.*, c.titulo, c.categoria FROM capacitacion_asignaciones a
+            LEFT JOIN capacitacion_cursos c ON c.id=a.curso_id ORDER BY a.trabajador""").fetchall()
+    for r in rows:
+        ws.append([r['dni'], r['trabajador'], r['empresa'], r['area'], r['cargo'], r['titulo'], r['categoria'], r['estado'], r['progreso'], r['fecha_asignacion'], r['fecha_inicio'], r['fecha_completado']])
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='16A34A')
+        cell.alignment = Alignment(horizontal='center')
+    ws.freeze_panes = 'A2'
+    wb.save(path)
+    return send_file(path, as_attachment=True, download_name=path.name)
+
+
+try:
+    asegurar_capacitacion_db()
+except Exception as e:
+    print('No se pudo inicializar capacitación:', e)
+
+
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', '5000'))
