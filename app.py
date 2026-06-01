@@ -114,6 +114,8 @@ ALL_TIPOS = {k: (label, icon, "pago") for k, label, icon in TIPOS_PAGO}
 ALL_TIPOS.update({k: (label, icon, "empresa") for k, label, icon in TIPOS_EMPRESA})
 ALL_TIPOS.update({k: (label, icon, "personal") for k, label, icon in TIPOS_PERSONALES})
 EXT_ALLOWED = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx", ".xls", ".xlsx"}
+VIDEO_ALLOWED = {".mp4", ".webm", ".mov", ".m4v"}
+CAPACITACION_ALLOWED = EXT_ALLOWED | VIDEO_ALLOWED
 
 
 # =============================
@@ -1334,6 +1336,8 @@ def init_db():
             activo INTEGER DEFAULT 1,
             archivo_nombre TEXT,
             ruta_archivo TEXT,
+            material_tipo TEXT DEFAULT 'Archivo',
+            video_url TEXT,
             fecha_creacion TEXT,
             fecha_actualizacion TEXT,
             creado_por TEXT
@@ -3524,6 +3528,22 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
 .progress-line span{display:block;height:100%;border-radius:999px;background:#16a34a}
 .note-soft{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:18px;padding:14px;color:#064e3b;margin-top:15px}
 @media(max-width:900px){.capacitacion-page .grid-2,.capacitacion-page .form-grid{grid-template-columns:1fr}.capacitacion-page .span-2{grid-column:auto}}
+
+/* === Capacitación PRO verde/blanco + compacto + videos === */
+.capacitacion-page .mini-grid{display:grid!important;grid-template-columns:repeat(4,minmax(140px,1fr))!important;gap:14px!important;margin:16px 0 18px!important}
+.capacitacion-page .dash-metric{background:#ffffff!important;color:#052e2b!important;border:1px solid #bbf7d0!important;border-radius:20px!important;min-height:92px!important;padding:16px 18px!important;box-shadow:0 14px 30px rgba(16,185,129,.08)!important}
+.capacitacion-page .dash-metric span{color:#065f46!important;font-weight:900!important}
+.capacitacion-page .dash-metric b{color:#059669!important;font-size:30px!important}
+.capacitacion-page .dash-metric .mi,.capacitacion-page .dash-metric em{background:#16a34a!important;color:white!important;border-radius:16px!important;width:50px!important;height:50px!important;display:flex!important;align-items:center!important;justify-content:center!important}
+.capacitacion-page .card{background:#ffffff!important;border:1px solid #d1fae5!important;border-radius:24px!important;box-shadow:0 18px 40px rgba(15,23,42,.06)!important}
+.capacitacion-page .course-card{background:#ffffff!important;border:1px solid #bbf7d0!important;border-radius:20px!important;color:#0f172a!important;box-shadow:0 10px 26px rgba(16,185,129,.08)!important}
+.capacitacion-page .course-card h3{color:#064e3b!important}
+.capacitacion-page .course-card p{color:#334155!important}
+.capacitacion-page .course-meta span{background:#f0fdf4!important;color:#065f46!important;border:1px solid #bbf7d0!important;border-radius:999px!important;padding:6px 10px!important;font-weight:800!important}
+.capacitacion-page .cap-video{width:100%;max-height:220px;border-radius:16px;border:1px solid #bbf7d0;background:#000;margin-top:10px}
+@media(max-width:900px){.capacitacion-page .mini-grid{grid-template-columns:repeat(2,minmax(120px,1fr))!important}.capacitacion-page .dash-metric{min-height:82px!important}}
+@media(max-width:560px){.capacitacion-page .mini-grid{grid-template-columns:1fr!important}.capacitacion-page .grid-2{grid-template-columns:1fr!important}}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
@@ -7525,12 +7545,21 @@ def asegurar_capacitacion_db():
             detalle TEXT,
             fecha TEXT
         )""")
+        # Compatibilidad: agrega columnas nuevas si la base ya existía en Render/local.
+        try:
+            cols = [r['name'] for r in con.execute("PRAGMA table_info(capacitacion_cursos)").fetchall()]
+            if 'material_tipo' not in cols:
+                con.execute("ALTER TABLE capacitacion_cursos ADD COLUMN material_tipo TEXT DEFAULT 'Archivo'")
+            if 'video_url' not in cols:
+                con.execute("ALTER TABLE capacitacion_cursos ADD COLUMN video_url TEXT")
+        except Exception as e:
+            print('No se pudo actualizar columnas de capacitación:', e)
         # Curso base para que el módulo no aparezca vacío.
         existe = con.execute("SELECT id FROM capacitacion_cursos LIMIT 1").fetchone()
         if not existe:
             con.execute("""INSERT INTO capacitacion_cursos
-                (titulo,descripcion,categoria,modalidad,duracion,obligatorio,estado,fecha_creacion,creado_por)
-                VALUES(?,?,?,?,?,?,?,?,?)""", (
+                (titulo,descripcion,categoria,modalidad,duracion,obligatorio,estado,material_tipo,fecha_creacion,creado_por)
+                VALUES(?,?,?,?,?,?,?,?,?,?)""", (
                 'Inducción General RR.HH.',
                 'Curso base de bienvenida: políticas internas, documentos, vacaciones, SST y uso del Portal HR.',
                 'Inducción',
@@ -7538,6 +7567,7 @@ def asegurar_capacitacion_db():
                 '30 min',
                 1,
                 'Activo',
+                'Archivo',
                 now_txt(),
                 'SISTEMA'
             ))
@@ -7564,6 +7594,36 @@ def capacitacion_evento(asignacion_id, curso_id, dni, evento, detalle=''):
             con.commit()
     except Exception:
         pass
+
+
+def capacitacion_material_html(curso, small=False):
+    """Renderiza material del curso: archivo, video subido o enlace externo."""
+    try:
+        cid = curso['id'] if 'id' in curso.keys() else curso['curso_id']
+        ruta = clean(curso['ruta_archivo'] if 'ruta_archivo' in curso.keys() else '')
+        nombre = clean(curso['archivo_nombre'] if 'archivo_nombre' in curso.keys() else '')
+        tipo = clean(curso['material_tipo'] if 'material_tipo' in curso.keys() else 'Archivo')
+        video_url = clean(curso['video_url'] if 'video_url' in curso.keys() else '')
+    except Exception:
+        return "<span class='muted'>Sin material</span>"
+
+    parts = []
+    if video_url:
+        safe = h(video_url)
+        if 'youtube.com' in video_url or 'youtu.be' in video_url or 'vimeo.com' in video_url:
+            parts.append(f"<a class='btn-green mini-btn' target='_blank' href='{safe}'>Ver video</a>")
+        else:
+            parts.append(f"<a class='btn-blue mini-btn' target='_blank' href='{safe}'>Abrir enlace</a>")
+    if ruta:
+        ext = Path(ruta).suffix.lower()
+        if ext in VIDEO_ALLOWED:
+            parts.append(f"<video class='cap-video' controls preload='metadata' src='/capacitacion/curso/{cid}/archivo'></video>")
+        else:
+            parts.append(f"<a class='btn-blue mini-btn' target='_blank' href='/capacitacion/curso/{cid}/archivo'>Ver material</a>")
+    if not parts:
+        return "<span class='muted'>Sin material</span>"
+    return ''.join(parts)
+
 
 
 def capacitacion_asignar_curso(con, curso_id, trabajador_row, asignado_por='ADMIN'):
@@ -7603,26 +7663,32 @@ def admin_capacitacion():
             duracion = clean(request.form.get('duracion')) or 'Sin duración'
             descripcion = clean(request.form.get('descripcion'))
             obligatorio = 1 if request.form.get('obligatorio') == '1' else 0
+            material_tipo = clean(request.form.get('material_tipo')) or 'Archivo'
+            video_url = clean(request.form.get('video_url'))
             archivo_nombre = ''
             ruta_archivo = ''
             f = request.files.get('archivo')
             if f and f.filename:
                 filename = secure_filename(f.filename)
                 ext = Path(filename).suffix.lower()
-                if ext not in EXT_ALLOWED:
-                    flash('Archivo no permitido. Usa PDF, Word, Excel o imagen.', 'bad')
+                if ext not in CAPACITACION_ALLOWED:
+                    flash('Archivo no permitido. Usa PDF, Word, Excel, imagen o video MP4/WEBM/MOV.', 'bad')
                     return redirect(url_for('admin_capacitacion'))
+                if ext in VIDEO_ALLOWED:
+                    material_tipo = 'Video'
                 safe_name = f"{now_file()}_{filename}"
                 path = capacitacion_upload_dir() / safe_name
                 f.save(path)
                 archivo_nombre = filename
                 ruta_archivo = str(path)
+            if video_url:
+                material_tipo = 'Link'
             with db() as con:
                 con.execute("""INSERT INTO capacitacion_cursos
-                    (titulo,descripcion,categoria,modalidad,duracion,obligatorio,estado,archivo_nombre,ruta_archivo,fecha_creacion,creado_por)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?)""", (
+                    (titulo,descripcion,categoria,modalidad,duracion,obligatorio,estado,archivo_nombre,ruta_archivo,material_tipo,video_url,fecha_creacion,creado_por)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
                     titulo, descripcion, categoria, modalidad, duracion, obligatorio, 'Activo',
-                    archivo_nombre, ruta_archivo, now_txt(), session.get('admin_nombre') or 'ADMIN'
+                    archivo_nombre, ruta_archivo, material_tipo, video_url, now_txt(), session.get('admin_nombre') or 'ADMIN'
                 ))
                 con.commit()
             flash('Curso registrado correctamente.', 'ok')
@@ -7681,7 +7747,7 @@ def admin_capacitacion():
         <p>{h(c['descripcion'] or 'Sin descripción')}</p>
         <div class='course-meta'><span>🧭 {h(c['modalidad'])}</span><span>⏱ {h(c['duracion'])}</span><span>👥 {c['asignados']}</span><span>✅ {c['completados']}</span></div>
         <div class='course-actions'>
-          {f"<a class='btn-blue mini-btn' target='_blank' href='/capacitacion/curso/{c['id']}/archivo'>Ver material</a>" if clean(c['ruta_archivo']) else "<span class='muted'>Sin archivo</span>"}
+          {capacitacion_material_html(c, small=True)}
           <a class='btn-green mini-btn' href='/admin/capacitacion/curso/{c['id']}'>Detalle</a>
         </div>
       </div>
@@ -7731,7 +7797,10 @@ def admin_capacitacion():
             <label>Duración<input name='duracion' placeholder='Ej. 45 min'></label>
             <label class='span-2'>Descripción<textarea name='descripcion' placeholder='Objetivo, contenido y recomendaciones del curso'></textarea></label>
             <label>Obligatorio<select name='obligatorio'><option value='1'>Sí</option><option value='0'>No</option></select></label>
-            <label>Material<input type='file' name='archivo'></label>
+            <label>Tipo de material<select name='material_tipo'><option>Archivo</option><option>Video</option><option>Link</option></select></label>
+            <label>Archivo / video<input type='file' name='archivo' accept='.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov,.m4v'></label>
+            <label>URL de video o enlace<input name='video_url' placeholder='YouTube, Vimeo, Drive o enlace interno'></label>
+            <div class='note-soft span-2'><b>Videos:</b> puedes subir MP4/WEBM/MOV o pegar un enlace. Para Render, se recomienda usar enlaces externos si el video es pesado.</div>
             <button class='btn-green span-2'>Guardar curso</button>
           </form>
         </div>
@@ -7826,7 +7895,7 @@ def mi_capacitacion():
     asegurar_capacitacion_db()
     dni = normalizar_dni(session.get('dni'))
     with db() as con:
-        rows = con.execute("""SELECT a.*, c.titulo, c.descripcion, c.categoria, c.modalidad, c.duracion, c.ruta_archivo
+        rows = con.execute("""SELECT a.*, c.titulo, c.descripcion, c.categoria, c.modalidad, c.duracion, c.ruta_archivo, c.archivo_nombre, c.material_tipo, c.video_url
             FROM capacitacion_asignaciones a
             LEFT JOIN capacitacion_cursos c ON c.id=a.curso_id
             WHERE a.dni=?
@@ -7843,7 +7912,7 @@ def mi_capacitacion():
         <div class='progress-line'><span style='width:{int(r['progreso'] or 0)}%'></span></div>
         <div class='course-meta'><span>🧭 {h(r['modalidad'])}</span><span>⏱ {h(r['duracion'])}</span><span>📈 {int(r['progreso'] or 0)}%</span></div>
         <div class='course-actions'>
-          {f"<a class='btn-blue mini-btn' target='_blank' href='/capacitacion/curso/{r['curso_id']}/archivo'>Ver material</a>" if clean(r['ruta_archivo']) else ""}
+          {capacitacion_material_html(r, small=True)}
           <form method='post' action='/capacitacion/asignacion/{r['id']}/iniciar'><button class='btn-warn mini-btn' {'disabled' if r['estado']=='Completado' else ''}>Iniciar</button></form>
           <form method='post' action='/capacitacion/asignacion/{r['id']}/completar'><button class='btn-green mini-btn' {'disabled' if r['estado']=='Completado' else ''}>Marcar completado</button></form>
         </div>
