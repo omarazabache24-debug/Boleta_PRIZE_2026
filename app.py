@@ -8226,67 +8226,166 @@ def admin_capacitacion():
           </div><div class='panel'><h2>Configuraciones registradas</h2><table class='pro-table'><tbody>{config_rows}</tbody></table></div></div>
         """
 
+    sub_title_map = {
+        'dashboard': ('📊', 'Dashboard de Capacitaciones / Cursos', 'Vista general del módulo con indicadores, accesos rápidos y estado de avance.'),
+        'capacitaciones': ('📅', 'Capacitaciones', 'Plan anual, capacitaciones obligatorias, participantes, asistencia, evidencias y certificados.'),
+        'cursos': ('🎥', 'Cursos Virtuales', 'Escuela virtual con videos, biblioteca digital, materiales, exámenes, avance y certificados.'),
+        'seguimiento': ('👥', 'Seguimiento / Alumnos', 'Control por trabajador, empresa, área, curso, avance, nota y estado.'),
+        'evaluaciones': ('📝', 'Evaluaciones / Exámenes', 'Banco de preguntas, alternativas, nota mínima, intentos y resultados.'),
+        'certificados': ('📜', 'Certificados', 'Constancias y certificados con logo, QR, curso, trabajador, fecha, nota y estado.'),
+        'configuracion': ('⚙️', 'Configuración', 'Categorías, modalidades, capacitadores, parámetros, plantillas, notas e intentos.')
+    }
+    icon_actual, titulo_actual, desc_actual = sub_title_map.get(mod, sub_title_map['dashboard'])
+
+    def top_nav_item(key, icon, title):
+        active = 'active' if mod == key else ''
+        return f"<a class='sub-card {active}' href='{url_for('admin_capacitacion', mod=key)}'><span>{icon}</span><b>{title}</b></a>"
+
+    sub_nav = ''.join([
+        top_nav_item('dashboard','📊','Dashboard'),
+        top_nav_item('capacitaciones','📅','Capacitaciones'),
+        top_nav_item('cursos','🎥','Cursos Virtuales'),
+        top_nav_item('seguimiento','👥','Seguimiento / Alumnos'),
+        top_nav_item('evaluaciones','📝','Evaluaciones'),
+        top_nav_item('certificados','📜','Certificados'),
+        top_nav_item('configuracion','⚙️','Configuración')
+    ])
+
+    # La vista ahora usa el mismo estilo visual del portal documental/vacacional:
+    # fondo claro, cards blancos, bordes suaves verdes, botones verdes y tipografía limpia.
     html_page = f"""
 <!doctype html><html lang='es'><head>
 <meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
-<title>Capacitación y Desarrollo</title>
+<title>{h(titulo_actual)} · Capacitación y Desarrollo</title>
 <link href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css' rel='stylesheet'>
 <style>
-:root{{--green:#0f9f55;--dark:#073b2b;--soft:#eafff4;--line:#baf3d2;--text:#0f172a;}}
-*{{box-sizing:border-box}} body{{margin:0;background:#f4faf7;color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}}
-.cap-layout{{display:grid;grid-template-columns:285px 1fr;min-height:100vh}}
-.cap-side{{background:linear-gradient(180deg,#053828,#075b3e);padding:18px;position:sticky;top:0;height:100vh;overflow:auto;color:white}}
-.cap-brand{{display:flex;gap:12px;align-items:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:15px;margin-bottom:18px}}
-.cap-brand b{{display:block;font-size:18px}} .cap-brand span{{font-size:12px;opacity:.8}}
-.cap-nav{{display:block;text-decoration:none;color:white;padding:15px;border-radius:18px;margin:10px 0;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.12)}}
-.cap-nav b{{display:block;font-size:15px}} .cap-nav span{{display:block;font-size:12px;opacity:.8;margin-top:5px;line-height:1.3}}
-.cap-nav.active,.cap-nav:hover{{background:linear-gradient(135deg,#12b76a,#078b4d);box-shadow:0 12px 28px rgba(0,0,0,.22);transform:translateY(-1px)}}
-.cap-back{{display:block;color:#dfffee;text-decoration:none;margin-top:18px;font-weight:800}}
-.cap-main{{padding:26px 32px 60px;overflow:auto}}
-.hero{{display:flex;justify-content:space-between;gap:20px;align-items:center;background:white;border:1px solid var(--line);border-radius:28px;padding:28px;box-shadow:0 18px 50px rgba(15,159,85,.10);margin-bottom:20px}}
-h1,h2,h3{{margin:0 0 8px}} p{{line-height:1.45}} .hero p,.section-title p{{margin:0;color:#334155}}
-.hero-btn,.primary{{border:0;text-decoration:none;color:white;background:linear-gradient(135deg,#10a957,#067a3f);padding:14px 22px;border-radius:16px;font-weight:900;box-shadow:0 14px 25px rgba(16,169,87,.22);cursor:pointer}}
-.kpis{{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px}}
-.kpi{{background:linear-gradient(135deg,#07944e,#10a957);color:white;border-radius:22px;padding:20px;box-shadow:0 14px 28px rgba(16,169,87,.20)}}
-.kpi span{{font-size:24px}} .kpi b{{display:block;font-size:32px;margin-top:10px}} .kpi p{{margin:0;font-weight:800;color:#f0fff7}}
-.module-grid,.cards-grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}}
-.big-module,.course-card{{text-decoration:none;color:inherit;background:white;border:1px solid var(--line);border-radius:26px;padding:24px;box-shadow:0 18px 50px rgba(2,58,38,.08)}}
-.big-module{{background:linear-gradient(135deg,#078b4d,#12b76a);color:white;min-height:190px}} .big-module span{{font-size:42px}} .big-module p{{color:#f0fff7}}
-.section-title{{background:white;border:1px solid var(--line);border-radius:26px;padding:22px;margin-bottom:18px;box-shadow:0 12px 35px rgba(2,58,38,.06)}}
-.split{{display:grid;grid-template-columns:1fr 1fr;gap:18px}} .panel{{background:white;border:1px solid var(--line);border-radius:26px;padding:22px;box-shadow:0 16px 40px rgba(2,58,38,.07);overflow:hidden}}
-.form-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}} label{{display:block;font-weight:800;margin:10px 0;color:#0f2f24}}
-input,select,textarea{{width:100%;border:1px solid #cfe6db;border-radius:14px;padding:13px 14px;font:inherit;background:white}} textarea{{min-height:88px;resize:vertical}}
-.pro-form.compact{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;align-items:end}} .pro-form.compact .primary{{grid-column:1/-1}}
-.course-card{{min-height:240px;display:flex;flex-direction:column;justify-content:space-between}} .course-top{{display:flex;justify-content:space-between;align-items:center}}
-.course-top span{{font-size:32px;background:#e9fff3;border-radius:16px;padding:10px}} .course-top small{{background:#dcfce7;color:#067a3f;border-radius:999px;padding:7px 10px;font-weight:900}}
-.course-meta{{display:flex;gap:8px;flex-wrap:wrap}} .course-meta b,.status{{background:#eafff4;color:#067a3f;border-radius:999px;padding:7px 10px;font-size:12px}}
-.course-actions{{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}} .mini-btn{{text-decoration:none;border:0;border-radius:12px;padding:10px 13px;font-weight:900;display:inline-block}}
-.btn-green{{background:#0f9f55;color:white}} .btn-blue{{background:#e0f2fe;color:#075985}}
+:root{{--green:#11a85b;--green2:#058546;--soft:#eefbf5;--soft2:#f6fffa;--line:#d8efe4;--line2:#baf3d2;--text:#07152f;--muted:#64748b;--shadow:0 18px 45px rgba(15,23,42,.08);}}
+*{{box-sizing:border-box}}
+body{{margin:0;background:linear-gradient(90deg,#f2f8f6 0%,#f8fcfb 50%,#f3faf7 100%);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;font-weight:500}}
+.page{{padding:28px 32px 70px;max-width:1540px;margin:auto}}
+.top-hero{{background:white;border:1px solid var(--line);border-radius:26px;padding:28px 30px;display:flex;align-items:center;justify-content:space-between;gap:20px;box-shadow:var(--shadow);margin-bottom:24px}}
+.title-wrap{{display:flex;align-items:center;gap:16px}}
+.title-icon{{font-size:34px;width:56px;height:56px;border-radius:18px;background:#e8fff3;color:var(--green2);display:grid;place-items:center}}
+h1{{font-size:36px;line-height:1.05;margin:0 0 8px;font-weight:900;letter-spacing:-.8px;color:#07152f}}
+h2{{font-size:26px;margin:0 0 16px;font-weight:900;color:#07152f}}
+h3{{margin:0 0 8px;font-size:20px;font-weight:900;color:#07152f}}
+p{{margin:0;color:#475569;line-height:1.45}}
+.btn-main,.primary,.hero-btn{{border:0;text-decoration:none;color:white;background:linear-gradient(135deg,var(--green),var(--green2));padding:14px 24px;border-radius:15px;font-weight:900;box-shadow:0 14px 25px rgba(16,169,87,.22);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}}
+.btn-main:hover,.primary:hover{{filter:brightness(.98);transform:translateY(-1px)}}
+.subnav{{display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:12px;margin-bottom:24px}}
+.sub-card{{background:white;border:1px solid var(--line);border-radius:20px;padding:15px 13px;text-decoration:none;color:#0f172a;box-shadow:0 12px 30px rgba(15,23,42,.05);display:flex;align-items:center;gap:10px;min-height:70px}}
+.sub-card span{{width:38px;height:38px;border-radius:13px;background:#e8fff3;display:grid;place-items:center;font-size:19px}}
+.sub-card b{{font-size:14px;line-height:1.2}}
+.sub-card.active,.sub-card:hover{{background:linear-gradient(135deg,var(--green),var(--green2));color:white;border-color:transparent;box-shadow:0 16px 30px rgba(17,168,91,.25)}}
+.sub-card.active span,.sub-card:hover span{{background:rgba(255,255,255,.18)}}
+.kpis{{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:24px}}
+.kpi{{background:white;border:1px solid var(--line);border-radius:24px;padding:28px 28px;display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:130px;box-shadow:var(--shadow)}}
+.kpi b{{display:block;font-size:34px;line-height:1;color:var(--green2);font-weight:950;margin-top:8px}}
+.kpi label{{display:block;color:#07152f;font-weight:800;font-size:17px;margin:0}}
+.kpi .ico{{width:70px;height:70px;border-radius:18px;background:linear-gradient(135deg,var(--green),var(--green2));display:grid;place-items:center;color:white;font-size:28px;box-shadow:0 18px 30px rgba(17,168,91,.22)}}
+.filter-panel,.detail-panel,.list-panel,.content-panel{{background:white;border:1px solid var(--line);border-radius:26px;padding:28px;box-shadow:var(--shadow);margin-bottom:24px}}
+.filter-panel{{display:flex;align-items:end;gap:18px;flex-wrap:wrap}}
+.filter-panel label,.pro-form label{{display:block;font-weight:800;color:#07152f;margin:0;font-size:15px}}
+input,select,textarea{{width:100%;border:1px solid #d8e5df;border-radius:15px;padding:15px 16px;font:inherit;background:white;color:#07152f;outline:none;font-weight:700}}
+input:focus,select:focus,textarea:focus{{border-color:#7be3aa;box-shadow:0 0 0 4px rgba(17,168,91,.08)}}
+textarea{{min-height:90px;resize:vertical}}
+.filter-panel select,.filter-panel input{{min-width:230px;margin-top:8px}}
+.info-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:18px}}
+.info-box{{border:1px solid var(--line);border-radius:20px;padding:20px;background:#fff}}
+.info-box span{{display:block;color:#64748b;font-weight:700;margin-bottom:8px}}
+.info-box b{{font-size:17px;color:#07152f}}
+.desc-box{{grid-column:1/-1}}
+.split{{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}}
+.panel{{background:white;border:1px solid var(--line);border-radius:26px;padding:28px;box-shadow:var(--shadow);overflow:hidden}}
+.form-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}}
+.pro-form label{{margin-bottom:14px}}
+.pro-form label input,.pro-form label select,.pro-form label textarea{{margin-top:8px}}
+.pro-form.compact{{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:end}}
+.pro-form.compact .primary{{grid-column:1/-1}}
+.cards-grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:10px}}
+.course-card{{background:white;border:1px solid var(--line);border-radius:24px;padding:24px;box-shadow:0 14px 35px rgba(15,23,42,.06);min-height:245px;display:flex;flex-direction:column;justify-content:space-between}}
+.course-top{{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}}
+.course-top span{{font-size:30px;width:54px;height:54px;border-radius:16px;background:#e8fff3;display:grid;place-items:center}}
+.course-top small{{background:#e8fff3;color:var(--green2);border-radius:999px;padding:8px 12px;font-weight:900}}
+.course-card p{{margin-bottom:14px}}
+.course-meta{{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}}
+.course-meta b,.status{{background:#e8fff3;color:var(--green2);border-radius:999px;padding:8px 11px;font-size:12px;font-weight:900}}
+.course-actions{{display:flex;gap:8px;flex-wrap:wrap}}
+.mini-btn{{text-decoration:none;border:0;border-radius:12px;padding:11px 13px;font-weight:900;display:inline-block}}
+.btn-green{{background:var(--green);color:white}} .btn-blue{{background:#e0f2fe;color:#075985}}
 .cap-video{{width:100%;max-height:170px;border-radius:16px;background:#000}}
-.pro-table{{width:100%;border-collapse:separate;border-spacing:0 9px;margin-top:16px}} th{{text-align:left;color:#064e3b;font-size:13px}} td,th{{padding:12px;background:white}} tbody tr{{box-shadow:0 8px 25px rgba(2,58,38,.06)}} td:first-child,th:first-child{{border-radius:14px 0 0 14px}} td:last-child,th:last-child{{border-radius:0 14px 14px 0}}
-.bar{{height:9px;background:#dcfce7;border-radius:999px;overflow:hidden}} .bar i{{display:block;height:100%;background:#0f9f55}} .mt{{margin-top:24px}} .empty{{background:white;border:1px dashed var(--line);border-radius:20px;padding:22px;color:#64748b}}
-.cert-preview{{height:260px;border-radius:28px;border:8px solid #0f9f55;background:white;display:flex;align-items:center;justify-content:space-between;padding:40px;margin-bottom:18px}}
-.cert-preview b{{width:100px;height:100px;border:3px dashed #0f9f55;border-radius:16px;display:grid;place-items:center;color:#0f9f55}}
-@media(max-width:1000px){{.cap-layout{{grid-template-columns:1fr}}.cap-side{{position:relative;height:auto}}.kpis,.module-grid,.cards-grid,.split{{grid-template-columns:1fr}}.pro-form.compact,.form-grid{{grid-template-columns:1fr}}}}
-</style></head><body>
-<div class='cap-layout'>
-  <aside class='cap-side'>
-    <div class='cap-brand'><div style='font-size:28px'>🎓</div><div><b>Capacitación y Desarrollo</b><span>Administrador · Control total</span></div></div>
-    {nav_item('dashboard','📊','Dashboard','Vista general e indicadores')}
-    {nav_item('capacitaciones','📅','Capacitaciones','Plan anual, asistencia y evidencias')}
-    {nav_item('cursos','🎥','Cursos Virtuales','Videos, biblioteca y materiales')}
-    {nav_item('seguimiento','👥','Seguimiento / Alumnos','Avance por trabajador')}
-    {nav_item('evaluaciones','📝','Evaluaciones','Banco de preguntas y exámenes')}
-    {nav_item('certificados','📜','Certificados','PDF, QR y constancias')}
-    {nav_item('configuracion','⚙️','Configuración','Categorías, notas e intentos')}
-    <a class='cap-back' href='/admin'>← Volver al portal</a>
-  </aside>
-  <main class='cap-main'>{content}</main>
+.pro-table{{width:100%;border-collapse:separate;border-spacing:0 10px;margin-top:10px}}
+.pro-table th{{text-align:left;color:#475569;font-size:13px;padding:10px 16px;font-weight:900}}
+.pro-table td{{padding:17px 16px;background:white;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-weight:700}}
+.pro-table td:first-child{{border-left:1px solid var(--line);border-radius:16px 0 0 16px}}
+.pro-table td:last-child{{border-right:1px solid var(--line);border-radius:0 16px 16px 0}}
+.bar{{height:9px;background:#dcfce7;border-radius:999px;overflow:hidden;margin-bottom:5px}}
+.bar i{{display:block;height:100%;background:var(--green)}}
+.empty{{background:white;border:1px dashed var(--line2);border-radius:20px;padding:22px;color:#64748b;font-weight:700}}
+.cert-preview{{height:230px;border-radius:28px;border:7px solid var(--green);background:white;display:flex;align-items:center;justify-content:space-between;padding:38px;margin-bottom:18px;box-shadow:var(--shadow)}}
+.cert-preview b{{width:96px;height:96px;border:3px dashed var(--green);border-radius:16px;display:grid;place-items:center;color:var(--green);font-weight:900}}
+.fab-ia{{position:fixed;right:28px;bottom:28px;border-radius:999px;background:linear-gradient(135deg,var(--green),var(--green2));color:white;text-decoration:none;padding:16px 25px;font-weight:950;box-shadow:0 18px 35px rgba(17,168,91,.30);z-index:20}}
+.mt{{margin-top:28px}}
+@media(max-width:1200px){{.subnav{{grid-template-columns:repeat(3,1fr)}}.kpis{{grid-template-columns:repeat(2,1fr)}}.split,.cards-grid,.info-grid{{grid-template-columns:1fr}}}}
+@media(max-width:700px){{.page{{padding:16px}}.top-hero{{align-items:flex-start;flex-direction:column}}h1{{font-size:28px}}.subnav,.kpis{{grid-template-columns:1fr}}.form-grid,.pro-form.compact{{grid-template-columns:1fr}}}}
+</style></head>
+<body>
+<div class='page'>
+  <section class='top-hero'>
+    <div class='title-wrap'>
+      <div class='title-icon'>{icon_actual}</div>
+      <div>
+        <h1>{h(titulo_actual)}</h1>
+        <p>{h(desc_actual)}</p>
+      </div>
+    </div>
+    <a class='btn-main' href='/admin'>Volver</a>
+  </section>
+
+  <nav class='subnav'>{sub_nav}</nav>
+
+  <section class='kpis'>
+    <div class='kpi'><div><label>Capacitaciones</label><b>{len(cap_anuales)}</b></div><div class='ico'>📅</div></div>
+    <div class='kpi'><div><label>Cursos virtuales</label><b>{len(cursos_virtuales)}</b></div><div class='ico'>🎥</div></div>
+    <div class='kpi'><div><label>Asignaciones</label><b>{total_asig}</b></div><div class='ico'>👥</div></div>
+    <div class='kpi'><div><label>Completados</label><b>{completados}</b></div><div class='ico'>✅</div></div>
+  </section>
+
+  <section class='filter-panel'>
+    <label>Elegir submódulo
+      <select onchange="if(this.value) location.href=this.value">
+        <option value="{url_for('admin_capacitacion', mod=mod)}">{h(titulo_actual)}</option>
+        <option value="{url_for('admin_capacitacion', mod='dashboard')}">Dashboard</option>
+        <option value="{url_for('admin_capacitacion', mod='capacitaciones')}">Capacitaciones</option>
+        <option value="{url_for('admin_capacitacion', mod='cursos')}">Cursos Virtuales</option>
+        <option value="{url_for('admin_capacitacion', mod='seguimiento')}">Seguimiento / Alumnos</option>
+        <option value="{url_for('admin_capacitacion', mod='evaluaciones')}">Evaluaciones</option>
+        <option value="{url_for('admin_capacitacion', mod='certificados')}">Certificados</option>
+        <option value="{url_for('admin_capacitacion', mod='configuracion')}">Configuración</option>
+      </select>
+    </label>
+    <label>Filtro visual
+      <input value="{h(titulo_actual)}" readonly>
+    </label>
+    <a class='btn-main' href='{url_for('admin_capacitacion', mod='dashboard')}'>Limpiar</a>
+  </section>
+
+  <section class='detail-panel'>
+    <h2>Detalle de {h(titulo_actual)}</h2>
+    <div class='info-grid'>
+      <div class='info-box'><span>Tipo</span><b>{icon_actual} {h(titulo_actual)}</b></div>
+      <div class='info-box'><span>Estado</span><b>Activo</b></div>
+      <div class='info-box'><span>Control</span><b>Administrador</b></div>
+      <div class='info-box desc-box'><span>Descripción</span><b>{h(desc_actual)}</b></div>
+    </div>
+  </section>
+
+  <main>{content}</main>
 </div>
+<a class='fab-ia' href='/admin/ia_hr'>🤖 IA HR</a>
 </body></html>
 """
     return render_template_string(html_page)
-
 
 @app.route('/admin/capacitacion/curso/<int:curso_id>', methods=['GET', 'POST'])
 @admin_required
