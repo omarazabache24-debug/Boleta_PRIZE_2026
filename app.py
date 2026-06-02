@@ -3867,9 +3867,19 @@ def sidebar(active):
         docs_mod_keys = [k for k,_,_ in TIPOS_PAGO] + [k for k,_,_ in TIPOS_EMPRESA] + [k for k,_,_ in TIPOS_PERSONALES] + ['Modulo documentos','Subir documentos']
         docs_mod_cls = 'menu-group nested force-open' if active_type in docs_mod_keys else 'menu-group nested'
         vac_cls = 'menu-group nested force-open' if active == 'Gestion Vacacional' else 'menu-group nested'
+        cap_cls = 'menu-group nested force-open' if active == 'Capacitacion' else 'menu-group nested'
         con_cls = 'menu-group nested force-open' if active_type == 'Gestion Contratacion' else 'menu-group nested'
         docs_head = 'menu-title' + (' active' if active_type in docs_mod_keys else '')
         vac_head = 'menu-title' + (' active' if active == 'Gestion Vacacional' else '')
+        cap_head = 'menu-title' + (' active' if active == 'Capacitacion' else '')
+        cap_mod = request.args.get('mod','dashboard') if active == 'Capacitacion' else ''
+        cap_dash_cls = 'menu-item active' if cap_mod == 'dashboard' else 'menu-item'
+        cap_cap_cls = 'menu-item active' if cap_mod == 'capacitaciones' else 'menu-item'
+        cap_cursos_cls = 'menu-item active' if cap_mod == 'cursos' else 'menu-item'
+        cap_seg_cls = 'menu-item active' if cap_mod == 'seguimiento' else 'menu-item'
+        cap_eval_cls = 'menu-item active' if cap_mod == 'evaluaciones' else 'menu-item'
+        cap_cert_cls = 'menu-item active' if cap_mod == 'certificados' else 'menu-item'
+        cap_conf_cls = 'menu-item active' if cap_mod == 'configuracion' else 'menu-item'
         con_head = 'menu-title' + (' active' if active_type == 'Gestion Contratacion' else '')
         docs_count_con = 0
         try:
@@ -3914,7 +3924,18 @@ def sidebar(active):
                 <a class='menu-item' onclick='saveSideScroll()' href='/admin/plantilla_gestion/vacacional'><i class='bi bi-file-earmark-arrow-down'></i><span class='label'>Plantilla Vacacional</span></a>
               </div>
             </div>
-            <a class='{cls_cap}' onclick='saveSideScroll()' href='/admin/capacitacion'><i class='bi bi-mortarboard'></i><span class='label'>3. Capacitación / Cursos</span></a>
+            <div id='grp_capacitacion_admin' data-group='capacitacion_admin' class='{cap_cls}'>
+              <button type='button' class='{cap_head}' onclick="toggleGroup('grp_capacitacion_admin')"><i class='bi bi-mortarboard'></i><span class='label'>3. Capacitaciones / Cursos</span><span class='chev'>∨</span></button>
+              <div class='submenu'>
+                <a class='{cap_dash_cls}' onclick='saveSideScroll()' href='/admin/capacitacion?mod=dashboard'><i class='bi bi-bar-chart-line'></i><span class='label'>Dashboard</span></a>
+                <a class='{cap_cap_cls}' onclick='saveSideScroll()' href='/admin/capacitacion?mod=capacitaciones'><i class='bi bi-calendar2-check'></i><span class='label'>Capacitaciones</span></a>
+                <a class='{cap_cursos_cls}' onclick='saveSideScroll()' href='/admin/capacitacion?mod=cursos'><i class='bi bi-play-btn'></i><span class='label'>Cursos Virtuales</span></a>
+                <a class='{cap_seg_cls}' onclick='saveSideScroll()' href='/admin/capacitacion?mod=seguimiento'><i class='bi bi-people'></i><span class='label'>Seguimiento / Alumnos</span></a>
+                <a class='{cap_eval_cls}' onclick='saveSideScroll()' href='/admin/capacitacion?mod=evaluaciones'><i class='bi bi-file-earmark-check'></i><span class='label'>Evaluaciones</span></a>
+                <a class='{cap_cert_cls}' onclick='saveSideScroll()' href='/admin/capacitacion?mod=certificados'><i class='bi bi-award'></i><span class='label'>Certificados</span></a>
+                <a class='{cap_conf_cls}' onclick='saveSideScroll()' href='/admin/capacitacion?mod=configuracion'><i class='bi bi-gear'></i><span class='label'>Configuración</span></a>
+              </div>
+            </div>
             <div id='grp_trabajadores_admin' data-group='trabajadores_admin' class='menu-group nested {'force-open' if active in ['Trabajadores','Usuarios'] or active_sub == 'anuncios' else ''}'>
               <button type='button' class='menu-title {'active' if active in ['Trabajadores','Usuarios'] or active_sub == 'anuncios' else ''}' onclick="toggleGroup('grp_trabajadores_admin')"><i class='bi bi-people'></i><span class='label'>Trabajadores / Usuarios y claves</span><span class='chev'>∨</span></button>
               <div class='submenu'>
