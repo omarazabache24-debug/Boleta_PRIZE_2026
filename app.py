@@ -7866,227 +7866,405 @@ def capacitacion_asignar_curso(con, curso_id, trabajador_row, asignado_por='ADMI
     return con.total_changes
 
 
+
 @app.route('/admin/capacitacion', methods=['GET', 'POST'])
 @admin_required
 def admin_capacitacion():
+    """Centro PRO de Capacitación y Desarrollo.
+    Estructura separada: Dashboard / Capacitaciones / Cursos Virtuales / Configuración.
+    """
     asegurar_capacitacion_db()
+    with db() as con:
+        # Tablas extra para configuración y biblioteca sin romper tablas existentes.
+        con.execute("""CREATE TABLE IF NOT EXISTS capacitacion_configuracion(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT,
+            nombre TEXT,
+            descripcion TEXT,
+            estado TEXT DEFAULT 'Activo',
+            fecha TEXT
+        )""")
+        con.execute("""CREATE TABLE IF NOT EXISTS capacitacion_materiales(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            curso_id INTEGER,
+            titulo TEXT,
+            tipo TEXT,
+            archivo_nombre TEXT,
+            ruta_archivo TEXT,
+            enlace TEXT,
+            fecha TEXT,
+            usuario TEXT
+        )""")
+        con.commit()
+
     if request.method == 'POST':
         accion = clean(request.form.get('accion'))
-        if accion == 'crear_curso':
-            titulo = clean(request.form.get('titulo'))
-            if not titulo:
-                flash('Ingresa el título del curso.', 'bad')
-                return redirect(url_for('admin_capacitacion'))
-            categoria = clean(request.form.get('categoria')) or 'General'
-            modalidad = clean(request.form.get('modalidad')) or 'Virtual'
-            duracion = clean(request.form.get('duracion')) or 'Sin duración'
-            descripcion = clean(request.form.get('descripcion'))
-            obligatorio = 1 if request.form.get('obligatorio') == '1' else 0
-            submodulo = clean(request.form.get('submodulo')) or 'Curso Virtual'
-            fecha_programada = clean(request.form.get('fecha_programada'))
-            fecha_cierre = clean(request.form.get('fecha_cierre'))
-            requiere_examen = 1 if request.form.get('requiere_examen') == '1' else 0
-            try:
-                puntaje_minimo = float(request.form.get('puntaje_minimo') or 80)
-            except Exception:
-                puntaje_minimo = 80
-            material_recomendado = clean(request.form.get('material_recomendado'))
-            material_tipo = clean(request.form.get('material_tipo')) or 'Archivo'
-            video_url = clean(request.form.get('video_url'))
-            archivo_nombre = ''
-            ruta_archivo = ''
-            f = request.files.get('archivo')
-            if f and f.filename:
-                filename = secure_filename(f.filename)
-                ext = Path(filename).suffix.lower()
-                if ext not in CAPACITACION_ALLOWED:
-                    flash('Archivo no permitido. Usa PDF, Word, Excel, imagen o video MP4/WEBM/MOV.', 'bad')
-                    return redirect(url_for('admin_capacitacion'))
-                if ext in VIDEO_ALLOWED:
-                    material_tipo = 'Video'
-                safe_name = f"{now_file()}_{filename}"
-                path = capacitacion_upload_dir() / safe_name
-                f.save(path)
-                archivo_nombre = filename
-                ruta_archivo = str(path)
-            if video_url:
-                material_tipo = 'Link'
-            with db() as con:
+        with db() as con:
+            if accion == 'crear_curso':
+                titulo = clean(request.form.get('titulo'))
+                if not titulo:
+                    flash('Ingresa el título.', 'bad')
+                    return redirect(url_for('admin_capacitacion', mod=request.form.get('mod','capacitaciones')))
+                submodulo = clean(request.form.get('submodulo')) or 'Capacitación Anual'
+                categoria = clean(request.form.get('categoria')) or 'General'
+                modalidad = clean(request.form.get('modalidad')) or 'Virtual'
+                duracion = clean(request.form.get('duracion')) or 'Sin duración'
+                descripcion = clean(request.form.get('descripcion'))
+                fecha_programada = clean(request.form.get('fecha_programada'))
+                fecha_cierre = clean(request.form.get('fecha_cierre'))
+                requiere_examen = 1 if request.form.get('requiere_examen') == '1' else 0
+                try:
+                    puntaje_minimo = float(request.form.get('puntaje_minimo') or 80)
+                except Exception:
+                    puntaje_minimo = 80
+                f = request.files.get('archivo')
+                archivo_nombre = ''
+                ruta_archivo = ''
+                if f and f.filename:
+                    ext = Path(f.filename).suffix.lower()
+                    if ext in CAPACITACION_ALLOWED:
+                        fname = secure_filename(f"capacitacion_{now_file()}_{f.filename}")
+                        folder = UPLOAD_DIR / 'capacitacion'
+                        folder.mkdir(parents=True, exist_ok=True)
+                        path = folder / fname
+                        f.save(path)
+                        archivo_nombre = f.filename
+                        ruta_archivo = str(path)
                 con.execute("""INSERT INTO capacitacion_cursos
-                    (titulo,descripcion,categoria,modalidad,duracion,obligatorio,estado,archivo_nombre,ruta_archivo,material_tipo,video_url,submodulo,fecha_programada,fecha_cierre,requiere_examen,puntaje_minimo,material_recomendado,fecha_creacion,creado_por)
+                    (titulo,descripcion,categoria,modalidad,duracion,obligatorio,estado,archivo_nombre,ruta_archivo,
+                     material_tipo,video_url,submodulo,fecha_programada,fecha_cierre,requiere_examen,puntaje_minimo,material_recomendado,fecha_creacion,creado_por)
                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
-                    titulo, descripcion, categoria, modalidad, duracion, obligatorio, 'Activo',
-                    archivo_nombre, ruta_archivo, material_tipo, video_url, submodulo, fecha_programada, fecha_cierre,
-                    requiere_examen, puntaje_minimo, material_recomendado, now_txt(), session.get('admin_nombre') or 'ADMIN'
+                    titulo, descripcion, categoria, modalidad, duracion, 1, 'Activo', archivo_nombre, ruta_archivo,
+                    clean(request.form.get('material_tipo')) or 'Archivo',
+                    clean(request.form.get('video_url')),
+                    submodulo, fecha_programada, fecha_cierre, requiere_examen, puntaje_minimo,
+                    clean(request.form.get('material_recomendado')),
+                    now_txt(), 'ADMIN'
                 ))
                 con.commit()
-            flash('Curso registrado correctamente.', 'ok')
-            return redirect(url_for('admin_capacitacion'))
+                flash('Registro creado correctamente.', 'ok')
+                return redirect(url_for('admin_capacitacion', mod='cursos' if 'Curso' in submodulo else 'capacitaciones'))
 
-        if accion == 'asignar':
-            curso_id = int(request.form.get('curso_id') or 0)
-            alcance = clean(request.form.get('alcance')) or 'todos'
-            valor = clean(request.form.get('valor'))
-            if not curso_id:
-                flash('Selecciona un curso.', 'bad')
-                return redirect(url_for('admin_capacitacion'))
-            with db() as con:
-                if alcance == 'dni':
-                    rows = con.execute("SELECT * FROM trabajadores WHERE activo=1 AND dni=?", (normalizar_dni(valor),)).fetchall()
-                elif alcance == 'empresa':
-                    rows = con.execute("SELECT * FROM trabajadores WHERE activo=1 AND UPPER(COALESCE(empresa,'')) LIKE ?", (f"%{valor.upper()}%",)).fetchall()
+            if accion == 'subir_material':
+                curso_id = int(request.form.get('curso_id') or 0)
+                titulo = clean(request.form.get('titulo')) or 'Material de estudio'
+                tipo = clean(request.form.get('tipo')) or 'PDF'
+                enlace = clean(request.form.get('enlace'))
+                f = request.files.get('archivo')
+                archivo_nombre = ''
+                ruta_archivo = ''
+                if f and f.filename:
+                    ext = Path(f.filename).suffix.lower()
+                    if ext in CAPACITACION_ALLOWED:
+                        fname = secure_filename(f"material_{curso_id}_{now_file()}_{f.filename}")
+                        folder = UPLOAD_DIR / 'capacitacion_materiales'
+                        folder.mkdir(parents=True, exist_ok=True)
+                        path = folder / fname
+                        f.save(path)
+                        archivo_nombre = f.filename
+                        ruta_archivo = str(path)
+                con.execute("""INSERT INTO capacitacion_materiales(curso_id,titulo,tipo,archivo_nombre,ruta_archivo,enlace,fecha,usuario)
+                    VALUES(?,?,?,?,?,?,?,?)""", (curso_id,titulo,tipo,archivo_nombre,ruta_archivo,enlace,now_txt(),'ADMIN'))
+                con.commit()
+                flash('Material agregado.', 'ok')
+                return redirect(url_for('admin_capacitacion', mod='cursos'))
+
+            if accion == 'asignar':
+                curso_id = int(request.form.get('curso_id') or 0)
+                alcance = clean(request.form.get('alcance'))
+                valor = clean(request.form.get('valor'))
+                if alcance == 'empresa':
+                    rows = con.execute("SELECT * FROM trabajadores WHERE activo=1 AND UPPER(empresa)=UPPER(?)", (valor,)).fetchall()
                 elif alcance == 'area':
-                    rows = con.execute("SELECT * FROM trabajadores WHERE activo=1 AND UPPER(COALESCE(area,'')) LIKE ?", (f"%{valor.upper()}%",)).fetchall()
+                    rows = con.execute("SELECT * FROM trabajadores WHERE activo=1 AND UPPER(area)=UPPER(?)", (valor,)).fetchall()
+                elif alcance == 'dni':
+                    rows = con.execute("SELECT * FROM trabajadores WHERE normalizar_dni_sql(dni)=?", (normalizar_dni(valor),)).fetchall()
                 else:
                     rows = con.execute("SELECT * FROM trabajadores WHERE activo=1").fetchall()
-                before = con.total_changes
+                total = 0
                 for r in rows:
-                    capacitacion_asignar_curso(con, curso_id, r, session.get('admin_nombre') or 'ADMIN')
+                    antes = con.total_changes
+                    capacitacion_asignar_curso(con, curso_id, r, 'ADMIN')
+                    if con.total_changes > antes:
+                        total += 1
                 con.commit()
-                nuevos = max(0, con.total_changes - before)
-            flash(f'Asignación procesada. Nuevos registros: {nuevos}.', 'ok')
-            return redirect(url_for('admin_capacitacion'))
+                flash(f'Asignación realizada. Nuevos asignados: {total}.', 'ok')
+                return redirect(url_for('admin_capacitacion', mod='seguimiento'))
 
-    q = clean(request.args.get('q'))
-    sub = clean(request.args.get('sub'))
+            if accion == 'pregunta':
+                curso_id = int(request.form.get('curso_id') or 0)
+                pregunta = clean(request.form.get('pregunta'))
+                if pregunta:
+                    con.execute("""INSERT INTO capacitacion_preguntas
+                        (curso_id,pregunta,opcion_a,opcion_b,opcion_c,opcion_d,correcta,activo,fecha_registro)
+                        VALUES(?,?,?,?,?,?,?,?,?)""", (
+                        curso_id, pregunta,
+                        clean(request.form.get('opcion_a')), clean(request.form.get('opcion_b')),
+                        clean(request.form.get('opcion_c')), clean(request.form.get('opcion_d')),
+                        clean(request.form.get('correcta') or 'A'), 1, now_txt()
+                    ))
+                    con.commit()
+                    flash('Pregunta agregada al banco de evaluación.', 'ok')
+                return redirect(url_for('admin_capacitacion', mod='evaluaciones'))
+
+            if accion == 'config':
+                con.execute("""INSERT INTO capacitacion_configuracion(tipo,nombre,descripcion,estado,fecha)
+                    VALUES(?,?,?,?,?)""", (
+                    clean(request.form.get('tipo')) or 'Categoría',
+                    clean(request.form.get('nombre')),
+                    clean(request.form.get('descripcion')),
+                    clean(request.form.get('estado')) or 'Activo',
+                    now_txt()
+                ))
+                con.commit()
+                flash('Configuración guardada.', 'ok')
+                return redirect(url_for('admin_capacitacion', mod='configuracion'))
+
+    mod = clean(request.args.get('mod')) or 'dashboard'
     with db() as con:
-        cursos = con.execute("""SELECT c.*,
-            (SELECT COUNT(*) FROM capacitacion_asignaciones a WHERE a.curso_id=c.id) asignados,
-            (SELECT COUNT(*) FROM capacitacion_asignaciones a WHERE a.curso_id=c.id AND a.estado='Completado') completados
-            FROM capacitacion_cursos c
-            WHERE (?='' OR UPPER(c.titulo||' '||c.categoria||' '||c.descripcion||' '||COALESCE(c.submodulo,'')) LIKE ?)
-              AND (?='' OR COALESCE(c.submodulo,'Curso Virtual')=?)
-            ORDER BY c.id DESC""", (q, f"%{q.upper()}%", sub, sub)).fetchall()
-        asignaciones = con.execute("""SELECT a.*, c.titulo, c.categoria
-            FROM capacitacion_asignaciones a
-            LEFT JOIN capacitacion_cursos c ON c.id=a.curso_id
-            ORDER BY a.id DESC LIMIT 80""").fetchall()
-        total_cursos = con.execute("SELECT COUNT(*) FROM capacitacion_cursos").fetchone()[0]
-        total_anuales = con.execute("SELECT COUNT(*) FROM capacitacion_cursos WHERE COALESCE(submodulo,'Curso Virtual')='Capacitación Anual'").fetchone()[0]
-        total_virtuales = con.execute("SELECT COUNT(*) FROM capacitacion_cursos WHERE COALESCE(submodulo,'Curso Virtual')='Curso Virtual'").fetchone()[0]
-        total_examenes = con.execute("SELECT COUNT(*) FROM capacitacion_cursos WHERE COALESCE(requiere_examen,0)=1").fetchone()[0]
-        total_asig = con.execute("SELECT COUNT(*) FROM capacitacion_asignaciones").fetchone()[0]
-        pendientes = con.execute("SELECT COUNT(*) FROM capacitacion_asignaciones WHERE estado='Pendiente'").fetchone()[0]
-        completos = con.execute("SELECT COUNT(*) FROM capacitacion_asignaciones WHERE estado='Completado'").fetchone()[0]
-        empresas = con.execute("SELECT DISTINCT empresa FROM trabajadores WHERE activo=1 AND COALESCE(empresa,'')<>'' ORDER BY empresa").fetchall()
-        areas = con.execute("SELECT DISTINCT area FROM trabajadores WHERE activo=1 AND COALESCE(area,'')<>'' ORDER BY area").fetchall()
+        cursos = con.execute("SELECT * FROM capacitacion_cursos ORDER BY id DESC").fetchall()
+        cap_anuales = con.execute("SELECT * FROM capacitacion_cursos WHERE UPPER(COALESCE(submodulo,'')) LIKE '%CAPACIT%' ORDER BY id DESC").fetchall()
+        cursos_virtuales = con.execute("SELECT * FROM capacitacion_cursos WHERE UPPER(COALESCE(submodulo,'')) LIKE '%CURSO%' ORDER BY id DESC").fetchall()
+        asignaciones = con.execute("""SELECT a.*, c.titulo, c.submodulo, c.categoria, c.requiere_examen, c.puntaje_minimo
+            FROM capacitacion_asignaciones a LEFT JOIN capacitacion_cursos c ON c.id=a.curso_id
+            ORDER BY a.id DESC LIMIT 300""").fetchall()
+        preguntas = con.execute("""SELECT p.*, c.titulo FROM capacitacion_preguntas p
+            LEFT JOIN capacitacion_cursos c ON c.id=p.curso_id ORDER BY p.id DESC LIMIT 200""").fetchall()
+        materiales = con.execute("""SELECT m.*, c.titulo AS curso_titulo FROM capacitacion_materiales m
+            LEFT JOIN capacitacion_cursos c ON c.id=m.curso_id ORDER BY m.id DESC LIMIT 200""").fetchall()
+        configs = con.execute("SELECT * FROM capacitacion_configuracion ORDER BY id DESC").fetchall()
+        trabajadores = con.execute("SELECT dni,nombre,empresa,area,cargo FROM trabajadores WHERE activo=1 ORDER BY nombre LIMIT 300").fetchall()
+        empresas = [r[0] for r in con.execute("SELECT DISTINCT empresa FROM trabajadores WHERE clean(empresa)<>'' ORDER BY empresa").fetchall()] if False else []
+        empresas = [r['empresa'] for r in con.execute("SELECT DISTINCT empresa FROM trabajadores WHERE COALESCE(empresa,'')<>'' ORDER BY empresa").fetchall()]
+        areas = [r['area'] for r in con.execute("SELECT DISTINCT area FROM trabajadores WHERE COALESCE(area,'')<>'' ORDER BY area").fetchall()]
+        total_cursos = len(cursos)
+        total_asig = con.execute("SELECT COUNT(*) c FROM capacitacion_asignaciones").fetchone()['c']
+        completados = con.execute("SELECT COUNT(*) c FROM capacitacion_asignaciones WHERE estado IN ('Completado','Aprobado')").fetchone()['c']
+        pendientes = con.execute("SELECT COUNT(*) c FROM capacitacion_asignaciones WHERE estado NOT IN ('Completado','Aprobado')").fetchone()['c']
+        con_examen = con.execute("SELECT COUNT(*) c FROM capacitacion_cursos WHERE requiere_examen=1").fetchone()['c']
 
-    cursos_opts = ''.join([f"<option value='{c['id']}'>{h(c['titulo'])}</option>" for c in cursos])
-    empresas_opts = ''.join([f"<option value='{h(e['empresa'])}'>{h(e['empresa'])}</option>" for e in empresas])
-    areas_opts = ''.join([f"<option value='{h(a['area'])}'>{h(a['area'])}</option>" for a in areas])
-    cursos_html = ''.join([f"""
-      <div class='course-card'>
-        <div class='course-top'><span class='course-badge'>{h(c['submodulo'] if 'submodulo' in c.keys() else 'Curso Virtual')}</span><span class='status-pill'>{h(c['estado'])}</span></div>
-        <h3>{h(c['titulo'])}</h3>
-        <p>{h(c['descripcion'] or 'Sin descripción')}</p>
-        <div class='course-meta'><span>📂 {h(c['categoria'])}</span><span>🧭 {h(c['modalidad'])}</span><span>⏱ {h(c['duracion'])}</span><span>📝 {'Examen' if (c['requiere_examen'] if 'requiere_examen' in c.keys() else 0) else 'Sin examen'}</span><span>👥 {c['asignados']}</span><span>✅ {c['completados']}</span></div>
-        <div class='course-actions'>
-          {capacitacion_material_html(c, small=True)}
-          <a class='btn-green mini-btn' href='/admin/capacitacion/curso/{c['id']}'>Detalle</a>
-        </div>
+    def nav_item(key, icon, title, desc):
+        active = 'active' if mod == key else ''
+        return f"<a class='cap-nav {active}' href='{url_for('admin_capacitacion', mod=key)}'><b>{icon} {title}</b><span>{desc}</span></a>"
+
+    cursos_options = ''.join([f"<option value='{c['id']}'>{h(c['titulo'])}</option>" for c in cursos])
+    empresas_options = ''.join([f"<option value='{h(e)}'>{h(e)}</option>" for e in empresas]) or "<option value='AQUANQA'>AQUANQA</option>"
+    areas_options = ''.join([f"<option value='{h(a)}'>{h(a)}</option>" for a in areas])
+
+    def curso_cards(rows, tipo):
+        if not rows:
+            return "<div class='empty'>Sin registros todavía. Crea el primer registro desde el formulario.</div>"
+        out = []
+        for c in rows:
+            mat = capacitacion_material_html(c, True)
+            badge = 'Con examen' if int(c['requiere_examen'] or 0)==1 else 'Sin examen'
+            out.append(f"""
+            <div class='course-card'>
+              <div class='course-top'><span>{'📅' if tipo=='cap' else '🎥'}</span><small>{h(c['categoria'])}</small></div>
+              <h3>{h(c['titulo'])}</h3>
+              <p>{h(c['descripcion'])}</p>
+              <div class='course-meta'><b>{h(c['modalidad'])}</b><b>{h(c['duracion'])}</b><b>{badge}</b></div>
+              <div class='course-actions'>{mat}<a class='mini-btn btn-green' href='/admin/capacitacion/curso/{c['id']}'>Gestionar</a></div>
+            </div>""")
+        return ''.join(out)
+
+    seguimiento_rows = ''.join([f"""
+        <tr>
+            <td>{h(a['dni'])}</td><td>{h(a['trabajador'])}</td><td>{h(a['empresa'])}</td><td>{h(a['area'])}</td>
+            <td>{h(a['titulo'])}</td><td><span class='status'>{h(a['estado'])}</span></td>
+            <td><div class='bar'><i style='width:{int(a['progreso'] or 0)}%'></i></div><small>{int(a['progreso'] or 0)}%</small></td>
+            <td>{h(a['nota'])}</td>
+        </tr>""" for a in asignaciones]) or "<tr><td colspan='8'>Sin asignaciones registradas.</td></tr>"
+
+    preguntas_rows = ''.join([f"<tr><td>{h(p['titulo'])}</td><td>{h(p['pregunta'])}</td><td>{h(p['correcta'])}</td></tr>" for p in preguntas]) or "<tr><td colspan='3'>Sin preguntas.</td></tr>"
+    materiales_rows = ''.join([f"<tr><td>{h(m['curso_titulo'])}</td><td>{h(m['titulo'])}</td><td>{h(m['tipo'])}</td><td>{h(m['archivo_nombre'] or m['enlace'])}</td></tr>" for m in materiales]) or "<tr><td colspan='4'>Sin materiales.</td></tr>"
+    config_rows = ''.join([f"<tr><td>{h(c['tipo'])}</td><td>{h(c['nombre'])}</td><td>{h(c['estado'])}</td></tr>" for c in configs]) or "<tr><td colspan='3'>Sin configuración personalizada.</td></tr>"
+
+    dashboard_html = f"""
+      <div class='hero'>
+        <div><h1>🎓 Capacitación y Desarrollo</h1><p>Administración separada por submódulos: capacitaciones, cursos virtuales, seguimiento, evaluaciones y configuración.</p></div>
+        <a class='hero-btn' href='{url_for('admin_capacitacion_exportar')}'>⬇ Exportar reporte</a>
       </div>
-    """ for c in cursos]) or "<div class='empty-note'>Aún no hay cursos registrados.</div>"
-
-    asig_html = ''.join([f"""
-      <tr>
-        <td>{h(a['dni'])}</td>
-        <td>{h(a['trabajador'])}</td>
-        <td>{h(a['titulo'] or '')}</td>
-        <td>{h(a['empresa'])}</td>
-        <td>{h(a['area'])}</td>
-        <td><span class='status-pill {capacitacion_estado_class(a['estado'])}'>{h(a['estado'])}</span></td>
-        <td>{int(a['progreso'] or 0)}%</td>
-        <td>{h(a['fecha_asignacion'])}</td>
-      </tr>
-    """ for a in asignaciones]) or "<tr><td colspan='8'>Sin asignaciones.</td></tr>"
-
-    content = f"""
-    <div class='admin-shell capacitacion-page'>
-      <div class='admin-header'>
-        <div class='admin-title-row'>
-          <button class='hambox' onclick='toggleSide()'>☰</button>
-          <div class='admin-title'>
-            <h1>Capacitación y Escuela Virtual</h1>
-            <div class='role'>Administrador · Control total</div>
-            <p>Administra el Plan Anual de Capacitación y la Escuela Virtual con materiales, videos, evaluaciones y avance por trabajador.</p>
-          </div>
-        </div>
+      <div class='kpis'>
+        <div class='kpi'><span>📅</span><b>{len(cap_anuales)}</b><p>Capacitaciones</p></div>
+        <div class='kpi'><span>🎥</span><b>{len(cursos_virtuales)}</b><p>Cursos virtuales</p></div>
+        <div class='kpi'><span>👥</span><b>{total_asig}</b><p>Asignaciones</p></div>
+        <div class='kpi'><span>✅</span><b>{completados}</b><p>Completados</p></div>
+        <div class='kpi'><span>📝</span><b>{con_examen}</b><p>Con examen</p></div>
       </div>
-
-      <div class='mini-grid'>
-        <div class='dash-metric'><span>Plan anual</span><b>{total_anuales}</b><em class='mi'>📅</em></div>
-        <div class='dash-metric'><span>Cursos virtuales</span><b>{total_virtuales}</b><em class='mi'>🎥</em></div>
-        <div class='dash-metric'><span>Con examen</span><b>{total_examenes}</b><em class='mi'>📝</em></div>
-        <div class='dash-metric'><span>Completados</span><b>{completos}</b><em class='mi'>✅</em></div>
+      <div class='module-grid'>
+        <a class='big-module' href='{url_for('admin_capacitacion', mod='capacitaciones')}'><span>📅</span><h2>Capacitaciones</h2><p>Plan anual, programación, asistencia, evidencias, certificados e indicadores.</p></a>
+        <a class='big-module' href='{url_for('admin_capacitacion', mod='cursos')}'><span>🎥</span><h2>Cursos Virtuales</h2><p>Escuela virtual con videos, PDF, biblioteca, evaluaciones, avance y ranking.</p></a>
+        <a class='big-module' href='{url_for('admin_capacitacion', mod='configuracion')}'><span>⚙️</span><h2>Configuración</h2><p>Categorías, modalidades, capacitadores, nota mínima, intentos y certificado QR.</p></a>
       </div>
-
-      <div class='card cap-hero'>
-        <div class='cap-submods'>
-          <a class='cap-submod {'active' if sub=='' else ''}' href='/admin/capacitacion'><b>🌐 Todo</b><span>Vista general</span></a>
-          <a class='cap-submod {'active' if sub=='Capacitación Anual' else ''}' href='/admin/capacitacion?sub=Capacitaci%C3%B3n+Anual'><b>📅 Capacitaciones Anuales</b><span>Programadas, presenciales o mixtas, con control de asistencia.</span></a>
-          <a class='cap-submod {'active' if sub=='Curso Virtual' else ''}' href='/admin/capacitacion?sub=Curso+Virtual'><b>🎥 Cursos Virtuales</b><span>Videos, material de estudio, exámenes y certificados.</span></a>
-        </div>
-      </div>
-
-      <div class='grid-2'>
-        <div class='card'>
-          <h2>➕ Crear curso / inducción</h2>
-          <form method='post' enctype='multipart/form-data' class='form-grid'>
-            <input type='hidden' name='accion' value='crear_curso'>
-            <label>Submódulo<select name='submodulo'><option>Capacitación Anual</option><option>Curso Virtual</option></select></label>
-            <label>Título<input name='titulo' required placeholder='Ej. Inducción SST / Curso de Planillas'></label>
-            <label>Categoría<select name='categoria'><option>Inducción</option><option>SST</option><option>RR.HH.</option><option>Operaciones</option><option>Calidad</option><option>Compliance</option><option>Bienestar</option><option>Liderazgo</option><option>Planillas</option></select></label>
-            <label>Modalidad<select name='modalidad'><option>Virtual</option><option>Presencial</option><option>Mixta</option></select></label>
-            <label>Duración<input name='duracion' placeholder='Ej. 45 min'></label>
-            <label>Fecha programada<input type='date' name='fecha_programada'></label>
-            <label>Fecha cierre<input type='date' name='fecha_cierre'></label>
-            <label class='span-2'>Descripción<textarea name='descripcion' placeholder='Objetivo, contenido y recomendaciones del curso'></textarea></label>
-            <label class='span-2'>Material recomendado<textarea name='material_recomendado' placeholder='Ej. Video de 10 min + PDF resumen + examen de 10 preguntas'></textarea></label>
-            <label>Obligatorio<select name='obligatorio'><option value='1'>Sí</option><option value='0'>No</option></select></label>
-            <label>Requiere examen<select name='requiere_examen'><option value='0'>No</option><option value='1'>Sí</option></select></label>
-            <label>Puntaje mínimo (%)<input name='puntaje_minimo' value='80' placeholder='80'></label>
-            <label>Tipo de material<select name='material_tipo'><option>Archivo</option><option>Video</option><option>Link</option></select></label>
-            <label>Archivo / video<input type='file' name='archivo' accept='.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov,.m4v'></label>
-            <label>URL de video o enlace<input name='video_url' placeholder='YouTube, Vimeo, Drive o enlace interno'></label>
-            <div class='note-soft span-2'><b>Videos:</b> puedes subir MP4/WEBM/MOV o pegar un enlace. Para Render, se recomienda usar enlaces externos si el video es pesado.</div>
-            <button class='btn-green span-2'>Guardar curso</button>
-          </form>
-        </div>
-        <div class='card'>
-          <h2>📌 Asignar curso</h2>
-          <form method='post' class='form-grid'>
-            <input type='hidden' name='accion' value='asignar'>
-            <label class='span-2'>Curso<select name='curso_id' required>{cursos_opts}</select></label>
-            <label>Alcance<select name='alcance' id='alcanceCap' onchange='capToggleValor()'><option value='todos'>Todos los trabajadores activos</option><option value='empresa'>Por empresa</option><option value='area'>Por área</option><option value='dni'>Por DNI</option></select></label>
-            <label id='valorCapWrap'>Valor<input name='valor' id='valorCap' list='capValores' placeholder='Empresa, área o DNI'></label>
-            <datalist id='capValores'>{empresas_opts}{areas_opts}</datalist>
-            <button class='btn-green span-2'>Asignar</button>
-          </form>
-          <div class='note-soft'><b>Recomendación:</b> para inducción inicial asigna por empresa o a todos los trabajadores activos. Para cursos específicos, usa área o DNI.</div>
-        </div>
-      </div>
-
-      <div class='card'>
-        <div class='section-head'><h2>📚 Registros del módulo</h2><form method='get'><input type='hidden' name='sub' value='{h(sub)}'><input name='q' value='{h(q)}' placeholder='Buscar capacitación o curso...'><button class='btn-blue mini-btn'>Buscar</button></form></div>
-        <div class='course-grid'>{cursos_html}</div>
-      </div>
-
-      <div class='card'>
-        <h2>📋 Últimas asignaciones</h2>
-        <div class='table-wrap'><table><thead><tr><th>DNI</th><th>Trabajador</th><th>Curso</th><th>Empresa</th><th>Área</th><th>Estado</th><th>Avance</th><th>Asignado</th></tr></thead><tbody>{asig_html}</tbody></table></div>
-      </div>
-    </div>
-    <script>
-      function capToggleValor(){{
-        const a=document.getElementById('alcanceCap'), w=document.getElementById('valorCapWrap'), v=document.getElementById('valorCap');
-        if(!a||!w||!v) return;
-        if(a.value==='todos'){{w.style.display='none'; v.value='';}}
-        else {{w.style.display='block'; v.placeholder=a.value==='dni'?'Ingrese DNI':(a.value==='empresa'?'Ingrese empresa':'Ingrese área');}}
-      }}
-      capToggleValor();
-    </script>
     """
-    return render_page(content, active='Capacitacion')
+
+    form_crear = f"""
+      <form method='post' enctype='multipart/form-data' class='pro-form'>
+        <input type='hidden' name='accion' value='crear_curso'>
+        <input type='hidden' name='mod' value='{h(mod)}'>
+        <div class='form-grid'>
+          <label>Submódulo<select name='submodulo'><option>Capacitación Anual</option><option>Curso Virtual</option></select></label>
+          <label>Título<input name='titulo' placeholder='Ej. Inducción SST / Curso de liderazgo'></label>
+          <label>Categoría<select name='categoria'><option>Inducción</option><option>SST</option><option>Calidad</option><option>BPM</option><option>HACCP</option><option>RRHH</option><option>Producción</option><option>Liderazgo</option></select></label>
+          <label>Modalidad<select name='modalidad'><option>Presencial</option><option>Virtual</option><option>Mixta</option></select></label>
+          <label>Duración<input name='duracion' placeholder='Ej. 45 min'></label>
+          <label>Fecha programada<input type='date' name='fecha_programada'></label>
+          <label>Fecha cierre<input type='date' name='fecha_cierre'></label>
+          <label>Material principal<select name='material_tipo'><option>Video</option><option>PDF</option><option>Presentación</option><option>Mixto</option></select></label>
+          <label>Video URL<input name='video_url' placeholder='YouTube privado, Vimeo o enlace interno'></label>
+          <label>Archivo<input type='file' name='archivo' accept='.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp4,.webm,.mov,.m4v,.png,.jpg,.jpeg,.webp'></label>
+          <label>Requiere examen<select name='requiere_examen'><option value='0'>No</option><option value='1'>Sí</option></select></label>
+          <label>Nota mínima<input name='puntaje_minimo' value='80'></label>
+        </div>
+        <label>Descripción<textarea name='descripcion' placeholder='Objetivo, alcance y contenido del curso'></textarea></label>
+        <label>Material recomendado<textarea name='material_recomendado'>Video corto + PDF de estudio + examen automático + certificado.</textarea></label>
+        <button class='primary'>Guardar registro</button>
+      </form>
+    """
+
+    asignar_html = f"""
+      <form method='post' class='pro-form compact'>
+        <input type='hidden' name='accion' value='asignar'>
+        <label>Curso<select name='curso_id'>{cursos_options}</select></label>
+        <label>Alcance<select name='alcance' onchange="document.getElementById('valorLabel').innerText=this.value.toUpperCase()"><option value='todos'>Todos</option><option value='empresa'>Empresa</option><option value='area'>Área</option><option value='dni'>DNI</option></select></label>
+        <label><span id='valorLabel'>VALOR</span><input name='valor' list='valoresCap' placeholder='Empresa, área o DNI'></label>
+        <datalist id='valoresCap'>{empresas_options}{areas_options}</datalist>
+        <button class='primary'>Asignar</button>
+      </form>
+    """
+
+    if mod == 'dashboard':
+        content = dashboard_html
+    elif mod == 'capacitaciones':
+        content = f"""
+          <div class='section-title'><h1>📅 Módulo Capacitaciones</h1><p>Plan anual, capacitaciones obligatorias, participantes, asistencia, evidencias y certificados.</p></div>
+          <div class='split'><div class='panel'><h2>Crear capacitación anual</h2>{form_crear}</div><div class='panel'><h2>Asignar participantes</h2>{asignar_html}</div></div>
+          <h2 class='mt'>Plan anual registrado</h2><div class='cards-grid'>{curso_cards(cap_anuales,'cap')}</div>
+        """
+    elif mod == 'cursos':
+        content = f"""
+          <div class='section-title'><h1>🎥 Módulo Cursos Virtuales</h1><p>Escuela virtual tipo plataforma interna: videos, materiales, exámenes, avance, ranking y certificados.</p></div>
+          <div class='split'><div class='panel'><h2>Crear curso virtual</h2>{form_crear}</div>
+          <div class='panel'><h2>📚 Subir material complementario</h2>
+            <form method='post' enctype='multipart/form-data' class='pro-form compact'>
+              <input type='hidden' name='accion' value='subir_material'>
+              <label>Curso<select name='curso_id'>{cursos_options}</select></label>
+              <label>Título<input name='titulo' placeholder='Manual, presentación, video o guía'></label>
+              <label>Tipo<select name='tipo'><option>Video</option><option>PDF</option><option>Presentación</option><option>Manual</option><option>Procedimiento</option><option>Infografía</option></select></label>
+              <label>Enlace<input name='enlace' placeholder='YouTube privado / Vimeo / Drive'></label>
+              <label>Archivo<input type='file' name='archivo'></label>
+              <button class='primary'>Subir material</button>
+            </form>
+          </div></div>
+          <h2 class='mt'>Cursos virtuales</h2><div class='cards-grid'>{curso_cards(cursos_virtuales,'curso')}</div>
+          <h2 class='mt'>Biblioteca digital</h2><table class='pro-table'><thead><tr><th>Curso</th><th>Material</th><th>Tipo</th><th>Archivo/Enlace</th></tr></thead><tbody>{materiales_rows}</tbody></table>
+        """
+    elif mod == 'seguimiento':
+        content = f"""
+          <div class='section-title'><h1>👥 Seguimiento / Alumnos</h1><p>Control de trabajadores asignados, avance, asistencia, nota y estado.</p></div>
+          <div class='panel'>{asignar_html}</div>
+          <table class='pro-table'><thead><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>Curso</th><th>Estado</th><th>Avance</th><th>Nota</th></tr></thead><tbody>{seguimiento_rows}</tbody></table>
+        """
+    elif mod == 'evaluaciones':
+        content = f"""
+          <div class='section-title'><h1>📝 Evaluaciones / Exámenes</h1><p>Banco de preguntas, nota mínima, opciones y control de aprobado/desaprobado.</p></div>
+          <div class='panel'>
+            <form method='post' class='pro-form'>
+              <input type='hidden' name='accion' value='pregunta'>
+              <label>Curso<select name='curso_id'>{cursos_options}</select></label>
+              <label>Pregunta<input name='pregunta' placeholder='Escribe la pregunta'></label>
+              <div class='form-grid'>
+                <label>Opción A<input name='opcion_a'></label><label>Opción B<input name='opcion_b'></label>
+                <label>Opción C<input name='opcion_c'></label><label>Opción D<input name='opcion_d'></label>
+                <label>Correcta<select name='correcta'><option>A</option><option>B</option><option>C</option><option>D</option></select></label>
+              </div>
+              <button class='primary'>Agregar pregunta</button>
+            </form>
+          </div>
+          <table class='pro-table'><thead><tr><th>Curso</th><th>Pregunta</th><th>Correcta</th></tr></thead><tbody>{preguntas_rows}</tbody></table>
+        """
+    elif mod == 'certificados':
+        content = f"""
+          <div class='section-title'><h1>📜 Certificados</h1><p>Base para certificados PDF con logo, QR, trabajador, curso, fecha, nota y estado.</p></div>
+          <div class='cert-preview'><div><h2>Certificado PRIZE</h2><p>Se genera cuando el trabajador completa o aprueba el curso.</p></div><b>QR</b></div>
+          <table class='pro-table'><thead><tr><th>DNI</th><th>Trabajador</th><th>Curso</th><th>Estado</th><th>Nota</th></tr></thead><tbody>{seguimiento_rows}</tbody></table>
+        """
+    else:
+        content = f"""
+          <div class='section-title'><h1>⚙️ Configuración</h1><p>Categorías, modalidades, capacitadores, parámetros de examen, plantillas y QR.</p></div>
+          <div class='split'><div class='panel'>
+            <form method='post' class='pro-form compact'>
+              <input type='hidden' name='accion' value='config'>
+              <label>Tipo<select name='tipo'><option>Categoría</option><option>Modalidad</option><option>Capacitador</option><option>Parámetro de examen</option><option>Plantilla certificado</option><option>Configuración QR</option><option>Intentos permitidos</option></select></label>
+              <label>Nombre<input name='nombre' placeholder='Ej. SST / Virtual / Nota mínima 80'></label>
+              <label>Descripción<textarea name='descripcion'></textarea></label>
+              <label>Estado<select name='estado'><option>Activo</option><option>Inactivo</option></select></label>
+              <button class='primary'>Guardar configuración</button>
+            </form>
+          </div><div class='panel'><h2>Configuraciones registradas</h2><table class='pro-table'><tbody>{config_rows}</tbody></table></div></div>
+        """
+
+    html_page = f"""
+<!doctype html><html lang='es'><head>
+<meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>Capacitación y Desarrollo</title>
+<link href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css' rel='stylesheet'>
+<style>
+:root{{--green:#0f9f55;--dark:#073b2b;--soft:#eafff4;--line:#baf3d2;--text:#0f172a;}}
+*{{box-sizing:border-box}} body{{margin:0;background:#f4faf7;color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}}
+.cap-layout{{display:grid;grid-template-columns:285px 1fr;min-height:100vh}}
+.cap-side{{background:linear-gradient(180deg,#053828,#075b3e);padding:18px;position:sticky;top:0;height:100vh;overflow:auto;color:white}}
+.cap-brand{{display:flex;gap:12px;align-items:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:15px;margin-bottom:18px}}
+.cap-brand b{{display:block;font-size:18px}} .cap-brand span{{font-size:12px;opacity:.8}}
+.cap-nav{{display:block;text-decoration:none;color:white;padding:15px;border-radius:18px;margin:10px 0;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.12)}}
+.cap-nav b{{display:block;font-size:15px}} .cap-nav span{{display:block;font-size:12px;opacity:.8;margin-top:5px;line-height:1.3}}
+.cap-nav.active,.cap-nav:hover{{background:linear-gradient(135deg,#12b76a,#078b4d);box-shadow:0 12px 28px rgba(0,0,0,.22);transform:translateY(-1px)}}
+.cap-back{{display:block;color:#dfffee;text-decoration:none;margin-top:18px;font-weight:800}}
+.cap-main{{padding:26px 32px 60px;overflow:auto}}
+.hero{{display:flex;justify-content:space-between;gap:20px;align-items:center;background:white;border:1px solid var(--line);border-radius:28px;padding:28px;box-shadow:0 18px 50px rgba(15,159,85,.10);margin-bottom:20px}}
+h1,h2,h3{{margin:0 0 8px}} p{{line-height:1.45}} .hero p,.section-title p{{margin:0;color:#334155}}
+.hero-btn,.primary{{border:0;text-decoration:none;color:white;background:linear-gradient(135deg,#10a957,#067a3f);padding:14px 22px;border-radius:16px;font-weight:900;box-shadow:0 14px 25px rgba(16,169,87,.22);cursor:pointer}}
+.kpis{{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px}}
+.kpi{{background:linear-gradient(135deg,#07944e,#10a957);color:white;border-radius:22px;padding:20px;box-shadow:0 14px 28px rgba(16,169,87,.20)}}
+.kpi span{{font-size:24px}} .kpi b{{display:block;font-size:32px;margin-top:10px}} .kpi p{{margin:0;font-weight:800;color:#f0fff7}}
+.module-grid,.cards-grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}}
+.big-module,.course-card{{text-decoration:none;color:inherit;background:white;border:1px solid var(--line);border-radius:26px;padding:24px;box-shadow:0 18px 50px rgba(2,58,38,.08)}}
+.big-module{{background:linear-gradient(135deg,#078b4d,#12b76a);color:white;min-height:190px}} .big-module span{{font-size:42px}} .big-module p{{color:#f0fff7}}
+.section-title{{background:white;border:1px solid var(--line);border-radius:26px;padding:22px;margin-bottom:18px;box-shadow:0 12px 35px rgba(2,58,38,.06)}}
+.split{{display:grid;grid-template-columns:1fr 1fr;gap:18px}} .panel{{background:white;border:1px solid var(--line);border-radius:26px;padding:22px;box-shadow:0 16px 40px rgba(2,58,38,.07);overflow:hidden}}
+.form-grid{{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}} label{{display:block;font-weight:800;margin:10px 0;color:#0f2f24}}
+input,select,textarea{{width:100%;border:1px solid #cfe6db;border-radius:14px;padding:13px 14px;font:inherit;background:white}} textarea{{min-height:88px;resize:vertical}}
+.pro-form.compact{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;align-items:end}} .pro-form.compact .primary{{grid-column:1/-1}}
+.course-card{{min-height:240px;display:flex;flex-direction:column;justify-content:space-between}} .course-top{{display:flex;justify-content:space-between;align-items:center}}
+.course-top span{{font-size:32px;background:#e9fff3;border-radius:16px;padding:10px}} .course-top small{{background:#dcfce7;color:#067a3f;border-radius:999px;padding:7px 10px;font-weight:900}}
+.course-meta{{display:flex;gap:8px;flex-wrap:wrap}} .course-meta b,.status{{background:#eafff4;color:#067a3f;border-radius:999px;padding:7px 10px;font-size:12px}}
+.course-actions{{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}} .mini-btn{{text-decoration:none;border:0;border-radius:12px;padding:10px 13px;font-weight:900;display:inline-block}}
+.btn-green{{background:#0f9f55;color:white}} .btn-blue{{background:#e0f2fe;color:#075985}}
+.cap-video{{width:100%;max-height:170px;border-radius:16px;background:#000}}
+.pro-table{{width:100%;border-collapse:separate;border-spacing:0 9px;margin-top:16px}} th{{text-align:left;color:#064e3b;font-size:13px}} td,th{{padding:12px;background:white}} tbody tr{{box-shadow:0 8px 25px rgba(2,58,38,.06)}} td:first-child,th:first-child{{border-radius:14px 0 0 14px}} td:last-child,th:last-child{{border-radius:0 14px 14px 0}}
+.bar{{height:9px;background:#dcfce7;border-radius:999px;overflow:hidden}} .bar i{{display:block;height:100%;background:#0f9f55}} .mt{{margin-top:24px}} .empty{{background:white;border:1px dashed var(--line);border-radius:20px;padding:22px;color:#64748b}}
+.cert-preview{{height:260px;border-radius:28px;border:8px solid #0f9f55;background:white;display:flex;align-items:center;justify-content:space-between;padding:40px;margin-bottom:18px}}
+.cert-preview b{{width:100px;height:100px;border:3px dashed #0f9f55;border-radius:16px;display:grid;place-items:center;color:#0f9f55}}
+@media(max-width:1000px){{.cap-layout{{grid-template-columns:1fr}}.cap-side{{position:relative;height:auto}}.kpis,.module-grid,.cards-grid,.split{{grid-template-columns:1fr}}.pro-form.compact,.form-grid{{grid-template-columns:1fr}}}}
+</style></head><body>
+<div class='cap-layout'>
+  <aside class='cap-side'>
+    <div class='cap-brand'><div style='font-size:28px'>🎓</div><div><b>Capacitación y Desarrollo</b><span>Administrador · Control total</span></div></div>
+    {nav_item('dashboard','📊','Dashboard','Vista general e indicadores')}
+    {nav_item('capacitaciones','📅','Capacitaciones','Plan anual, asistencia y evidencias')}
+    {nav_item('cursos','🎥','Cursos Virtuales','Videos, biblioteca y materiales')}
+    {nav_item('seguimiento','👥','Seguimiento / Alumnos','Avance por trabajador')}
+    {nav_item('evaluaciones','📝','Evaluaciones','Banco de preguntas y exámenes')}
+    {nav_item('certificados','📜','Certificados','PDF, QR y constancias')}
+    {nav_item('configuracion','⚙️','Configuración','Categorías, notas e intentos')}
+    <a class='cap-back' href='/admin'>← Volver al portal</a>
+  </aside>
+  <main class='cap-main'>{content}</main>
+</div>
+</body></html>
+"""
+    return render_template_string(html_page)
 
 
 @app.route('/admin/capacitacion/curso/<int:curso_id>', methods=['GET', 'POST'])
@@ -8096,71 +8274,34 @@ def admin_capacitacion_curso(curso_id):
     if request.method == 'POST':
         accion = clean(request.form.get('accion'))
         with db() as con:
-            if accion == 'estado':
-                estado = clean(request.form.get('estado')) or 'Activo'
-                con.execute("UPDATE capacitacion_cursos SET estado=? WHERE id=?", (estado, curso_id))
-                con.commit()
-                flash('Estado actualizado.', 'ok')
-            elif accion == 'eliminar_asignacion':
-                aid = int(request.form.get('asignacion_id') or 0)
-                con.execute("DELETE FROM capacitacion_asignaciones WHERE id=?", (aid,))
-                con.commit()
-                flash('Asignación eliminada.', 'ok')
-            elif accion == 'crear_pregunta':
-                pregunta = clean(request.form.get('pregunta'))
-                correcta = clean(request.form.get('correcta')).upper() or 'A'
-                if pregunta:
-                    con.execute("""INSERT INTO capacitacion_preguntas
-                        (curso_id,pregunta,opcion_a,opcion_b,opcion_c,opcion_d,correcta,activo,fecha_registro)
-                        VALUES(?,?,?,?,?,?,?,?,?)""", (curso_id, pregunta, clean(request.form.get('opcion_a')), clean(request.form.get('opcion_b')), clean(request.form.get('opcion_c')), clean(request.form.get('opcion_d')), correcta, 1, now_txt()))
-                    con.execute("UPDATE capacitacion_cursos SET requiere_examen=1 WHERE id=?", (curso_id,))
-                    con.commit()
-                    flash('Pregunta agregada al examen.', 'ok')
-            elif accion == 'eliminar_pregunta':
-                pid = int(request.form.get('pregunta_id') or 0)
-                con.execute("DELETE FROM capacitacion_preguntas WHERE id=? AND curso_id=?", (pid, curso_id))
+            if accion == 'eliminar_pregunta':
+                con.execute("DELETE FROM capacitacion_preguntas WHERE id=?", (int(request.form.get('pregunta_id') or 0),))
                 con.commit()
                 flash('Pregunta eliminada.', 'ok')
         return redirect(url_for('admin_capacitacion_curso', curso_id=curso_id))
-
     with db() as con:
         curso = con.execute("SELECT * FROM capacitacion_cursos WHERE id=?", (curso_id,)).fetchone()
         if not curso:
             abort(404)
-        rows = con.execute("""SELECT * FROM capacitacion_asignaciones WHERE curso_id=? ORDER BY estado, trabajador""", (curso_id,)).fetchall()
+        asignaciones = con.execute("SELECT * FROM capacitacion_asignaciones WHERE curso_id=? ORDER BY trabajador", (curso_id,)).fetchall()
         preguntas = con.execute("SELECT * FROM capacitacion_preguntas WHERE curso_id=? ORDER BY id", (curso_id,)).fetchall()
-    rows_html = ''.join([f"""
-      <tr><td>{h(r['dni'])}</td><td>{h(r['trabajador'])}</td><td>{h(r['empresa'])}</td><td>{h(r['area'])}</td>
-      <td><span class='status-pill {capacitacion_estado_class(r['estado'])}'>{h(r['estado'])}</span></td><td>{int(r['progreso'] or 0)}%</td><td>{h(r['nota'] or 0)}</td><td>{h(r['fecha_completado'])}</td>
-      <td><form method='post' onsubmit="return confirm('¿Eliminar asignación?')"><input type='hidden' name='accion' value='eliminar_asignacion'><input type='hidden' name='asignacion_id' value='{r['id']}'><button class='btn-danger mini-btn'>Eliminar</button></form></td></tr>
-    """ for r in rows]) or "<tr><td colspan='9'>Sin trabajadores asignados.</td></tr>"
-    preguntas_html = ''.join([f"""
-      <div class='question-card'><b>{h(q['pregunta'])}</b><div class='muted'>A) {h(q['opcion_a'])} · B) {h(q['opcion_b'])} · C) {h(q['opcion_c'])} · D) {h(q['opcion_d'])} · Correcta: {h(q['correcta'])}</div>
-        <form method='post' onsubmit="return confirm('¿Eliminar pregunta?')"><input type='hidden' name='accion' value='eliminar_pregunta'><input type='hidden' name='pregunta_id' value='{q['id']}'><button class='btn-danger mini-btn'>Eliminar</button></form>
-      </div>
-    """ for q in preguntas]) or "<div class='empty-note'>Aún no hay preguntas registradas para este curso.</div>"
-    content = f"""
-    <div class='admin-shell'>
-      <div class='admin-header'><div class='admin-title-row'><button class='hambox' onclick='toggleSide()'>☰</button><div class='admin-title'><h1>{h(curso['titulo'])}</h1><div class='role'>Detalle de curso</div><p>{h(curso['descripcion'])}</p></div></div><a class='btn-green' href='/admin/capacitacion'>Volver</a></div>
-      <div class='mini-grid'>
-        <div class='dash-metric'><span>Submódulo</span><b>{h(curso['submodulo'] if 'submodulo' in curso.keys() else 'Curso Virtual')}</b><em class='mi'>🎓</em></div>
-        <div class='dash-metric'><span>Modalidad</span><b>{h(curso['modalidad'])}</b><em class='mi'>🧭</em></div>
-        <div class='dash-metric'><span>Duración</span><b>{h(curso['duracion'])}</b><em class='mi'>⏱️</em></div>
-        <div class='dash-metric'><span>Examen</span><b>{'Sí' if (curso['requiere_examen'] if 'requiere_examen' in curso.keys() else 0) else 'No'}</b><em class='mi'>📝</em></div>
-      </div>
-      <div class='card'><h2>Acciones</h2><div class='row-actions'>
-        {f"<a class='btn-blue' target='_blank' href='/capacitacion/curso/{curso_id}/archivo'>Ver material</a>" if clean(curso['ruta_archivo']) else "<span class='muted'>Curso sin material cargado.</span>"}
-        <form method='post'><input type='hidden' name='accion' value='estado'><select name='estado'><option>Activo</option><option>Inactivo</option><option>Archivado</option></select><button class='btn-green mini-btn'>Actualizar estado</button></form>
-      </div></div>
-      <div class='grid-2'>
-        <div class='card'><h2>📚 Material recomendado</h2><p>{h(curso['material_recomendado'] if 'material_recomendado' in curso.keys() else '') or 'Video corto + material PDF + evaluación final.'}</p><p class='muted'>Fecha programada: {h(curso['fecha_programada'] if 'fecha_programada' in curso.keys() else '')} · Cierre: {h(curso['fecha_cierre'] if 'fecha_cierre' in curso.keys() else '')}</p></div>
-        <div class='card'><h2>📝 Crear pregunta de examen</h2><form method='post' class='form-grid'><input type='hidden' name='accion' value='crear_pregunta'><label class='span-2'>Pregunta<input name='pregunta' required></label><label>A<input name='opcion_a' required></label><label>B<input name='opcion_b' required></label><label>C<input name='opcion_c'></label><label>D<input name='opcion_d'></label><label>Correcta<select name='correcta'><option>A</option><option>B</option><option>C</option><option>D</option></select></label><button class='btn-green'>Agregar</button></form></div>
-      </div>
-      <div class='card'><h2>Banco de preguntas</h2>{preguntas_html}</div>
-      <div class='card'><h2>Trabajadores asignados</h2><div class='table-wrap'><table><thead><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>Estado</th><th>Avance</th><th>Nota</th><th>Completado</th><th>Acción</th></tr></thead><tbody>{rows_html}</tbody></table></div></div>
-    </div>
-    """
-    return render_page(content, active='Capacitacion')
+        materiales = con.execute("SELECT * FROM capacitacion_materiales WHERE curso_id=? ORDER BY id DESC", (curso_id,)).fetchall()
+    rows = ''.join([f"<tr><td>{h(a['dni'])}</td><td>{h(a['trabajador'])}</td><td>{h(a['empresa'])}</td><td>{h(a['area'])}</td><td>{h(a['estado'])}</td><td>{h(a['progreso'])}%</td><td>{h(a['nota'])}</td></tr>" for a in asignaciones]) or "<tr><td colspan='7'>Sin participantes.</td></tr>"
+    pregs = ''.join([f"<tr><td>{h(p['pregunta'])}</td><td>{h(p['correcta'])}</td></tr>" for p in preguntas]) or "<tr><td colspan='2'>Sin preguntas.</td></tr>"
+    mats = ''.join([f"<tr><td>{h(m['titulo'])}</td><td>{h(m['tipo'])}</td><td>{h(m['archivo_nombre'] or m['enlace'])}</td></tr>" for m in materiales]) or "<tr><td colspan='3'>Sin materiales.</td></tr>"
+    return render_template_string(f"""
+    <html><head><title>{h(curso['titulo'])}</title><style>
+    body{{font-family:Segoe UI,Arial;background:#f4faf7;margin:0;padding:30px;color:#0f172a}} a{{color:#0f9f55;font-weight:900;text-decoration:none}}
+    .panel{{background:white;border:1px solid #baf3d2;border-radius:24px;padding:24px;margin:16px 0;box-shadow:0 16px 35px rgba(2,58,38,.08)}}
+    table{{width:100%;border-collapse:collapse}}td,th{{padding:12px;border-bottom:1px solid #e2e8f0;text-align:left}} .btn{{background:#0f9f55;color:white;padding:12px 16px;border-radius:12px;display:inline-block}}
+    </style></head><body>
+    <a href='/admin/capacitacion'>← Volver</a>
+    <div class='panel'><h1>🎓 {h(curso['titulo'])}</h1><p>{h(curso['descripcion'])}</p><p><b>Submódulo:</b> {h(curso['submodulo'])} · <b>Categoría:</b> {h(curso['categoria'])} · <b>Modalidad:</b> {h(curso['modalidad'])}</p>{capacitacion_material_html(curso)}</div>
+    <div class='panel'><h2>Participantes</h2><table><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>Estado</th><th>Avance</th><th>Nota</th></tr>{rows}</table></div>
+    <div class='panel'><h2>Materiales</h2><table><tr><th>Título</th><th>Tipo</th><th>Archivo/Enlace</th></tr>{mats}</table></div>
+    <div class='panel'><h2>Preguntas</h2><table><tr><th>Pregunta</th><th>Correcta</th></tr>{pregs}</table></div>
+    </body></html>
+    """)
 
 
 @app.route('/capacitacion')
@@ -8169,44 +8310,41 @@ def mi_capacitacion():
     asegurar_capacitacion_db()
     dni = normalizar_dni(session.get('dni'))
     with db() as con:
-        rows = con.execute("""SELECT a.*, c.titulo, c.descripcion, c.categoria, c.modalidad, c.duracion, c.ruta_archivo, c.archivo_nombre, c.material_tipo, c.video_url, c.submodulo, c.requiere_examen, c.puntaje_minimo, c.material_recomendado
+        rows = con.execute("""SELECT a.*, c.titulo, c.descripcion, c.categoria, c.modalidad, c.duracion, c.ruta_archivo, c.archivo_nombre,
+            c.material_tipo, c.video_url, c.submodulo, c.requiere_examen, c.puntaje_minimo
             FROM capacitacion_asignaciones a
             LEFT JOIN capacitacion_cursos c ON c.id=a.curso_id
-            WHERE a.dni=?
-            ORDER BY CASE a.estado WHEN 'Pendiente' THEN 1 WHEN 'En proceso' THEN 2 WHEN 'Completado' THEN 3 ELSE 4 END, a.id DESC""", (dni,)).fetchall()
-        total = len(rows)
-        pendientes = sum(1 for r in rows if r['estado'] == 'Pendiente')
-        proceso = sum(1 for r in rows if r['estado'] == 'En proceso')
-        completos = sum(1 for r in rows if r['estado'] == 'Completado')
-    cards = ''.join([f"""
-      <div class='course-card'>
-        <div class='course-top'><span class='course-badge'>{h(r['submodulo'] if 'submodulo' in r.keys() else r['categoria'])}</span><span class='status-pill {capacitacion_estado_class(r['estado'])}'>{h(r['estado'])}</span></div>
-        <h3>{h(r['titulo'] or 'Curso')}</h3>
-        <p>{h(r['descripcion'] or 'Sin descripción')}</p>
-        <div class='progress-line'><span style='width:{int(r['progreso'] or 0)}%'></span></div>
-        <div class='course-meta'><span>📂 {h(r['categoria'])}</span><span>🧭 {h(r['modalidad'])}</span><span>⏱ {h(r['duracion'])}</span><span>📈 {int(r['progreso'] or 0)}%</span><span>🏅 Nota {h(r['nota'] or 0)}</span></div>
-        <div class='exam-box'><b>Material sugerido:</b> {h(r['material_recomendado'] if 'material_recomendado' in r.keys() else '') or 'Revisa el video y el PDF antes de rendir la evaluación.'}</div>
-        <div class='course-actions'>
-          {capacitacion_material_html(r, small=True)}
-          <form method='post' action='/capacitacion/asignacion/{r['id']}/iniciar'><button class='btn-warn mini-btn' {'disabled' if r['estado']=='Completado' else ''}>Iniciar</button></form>
-          {f"<a class='btn-blue mini-btn' href='/capacitacion/asignacion/{r['id']}/examen'>Rendir examen</a>" if (r['requiere_examen'] if 'requiere_examen' in r.keys() else 0) else ""}
-          <form method='post' action='/capacitacion/asignacion/{r['id']}/completar'><button class='btn-green mini-btn' {'disabled' if r['estado']=='Completado' or (r['requiere_examen'] if 'requiere_examen' in r.keys() else 0) else ''}>Marcar completado</button></form>
-        </div>
-      </div>
-    """ for r in rows]) or "<div class='empty-note'>Aún no tienes cursos asignados.</div>"
-    content = f"""
-    <div class='admin-shell capacitacion-page'>
-      <div class='admin-header'><div class='admin-title-row'><button class='hambox' onclick='toggleSide()'>☰</button><div class='admin-title'><h1>Mi Capacitación y Cursos</h1><div class='role'>Trabajador · Acceso limitado</div><p>Visualiza solo tus capacitaciones asignadas, estudia el material y rinde tus evaluaciones.</p></div></div></div>
-      <div class='mini-grid'>
-        <div class='dash-metric'><span>Total</span><b>{total}</b><em class='mi'>🎓</em></div>
-        <div class='dash-metric'><span>Pendientes</span><b>{pendientes}</b><em class='mi'>⏱️</em></div>
-        <div class='dash-metric'><span>En proceso</span><b>{proceso}</b><em class='mi'>📘</em></div>
-        <div class='dash-metric'><span>Completados</span><b>{completos}</b><em class='mi'>✅</em></div>
-      </div>
-      <div class='card'><h2>📚 Cursos asignados</h2><div class='course-grid'>{cards}</div></div>
-    </div>
-    """
-    return render_page(content, active='Capacitacion')
+            WHERE normalizar_dni_sql(a.dni)=?
+            ORDER BY a.id DESC""", (dni,)).fetchall()
+        certs = [r for r in rows if clean(r['estado']) in ('Completado','Aprobado')]
+    cards = ''
+    for r in rows:
+        cards += f"""
+        <div class='course'>
+          <div><span>{'📅' if 'Capacitación' in clean(r['submodulo']) else '🎥'}</span><small>{h(r['submodulo'])}</small></div>
+          <h2>{h(r['titulo'])}</h2><p>{h(r['descripcion'])}</p>
+          <b>Estado: {h(r['estado'])}</b><div class='bar'><i style='width:{int(r['progreso'] or 0)}%'></i></div>
+          <div class='actions'>
+            {capacitacion_material_html(r)}
+            <form method='post' action='/capacitacion/asignacion/{r['id']}/iniciar'><button>Iniciar</button></form>
+            <form method='post' action='/capacitacion/asignacion/{r['id']}/completar'><button>Marcar completado</button></form>
+            <a href='/capacitacion/asignacion/{r['id']}/examen'>Rendir examen</a>
+          </div>
+        </div>"""
+    if not cards:
+        cards = "<div class='empty'>Aún no tienes capacitaciones o cursos asignados.</div>"
+    return render_template_string(f"""
+    <html><head><title>Mis capacitaciones</title><style>
+    body{{font-family:Segoe UI,Arial;background:#f4faf7;margin:0;padding:24px;color:#0f172a}} .top{{background:linear-gradient(135deg,#078b4d,#12b76a);color:white;border-radius:28px;padding:28px;margin-bottom:18px}}
+    .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}} .course,.empty{{background:white;border:1px solid #baf3d2;border-radius:24px;padding:22px;box-shadow:0 16px 35px rgba(2,58,38,.08)}}
+    .course span{{font-size:32px}} .course small{{float:right;background:#dcfce7;color:#067a3f;border-radius:999px;padding:7px 10px;font-weight:900}}
+    .bar{{height:10px;background:#dcfce7;border-radius:999px;overflow:hidden;margin:12px 0}} .bar i{{display:block;height:100%;background:#0f9f55}}
+    .actions{{display:flex;gap:8px;flex-wrap:wrap}} button,a{{border:0;background:#0f9f55;color:white;text-decoration:none;border-radius:12px;padding:10px 13px;font-weight:900;cursor:pointer}} .cap-video{{width:100%;max-height:180px;border-radius:16px;background:#000}}
+    </style></head><body>
+    <div class='top'><h1>🎓 Mis Capacitaciones y Cursos</h1><p>Accede a tus materiales, videos, exámenes, avance y certificados.</p></div>
+    <div class='grid'>{cards}</div>
+    </body></html>
+    """)
 
 
 @app.route('/capacitacion/asignacion/<int:asignacion_id>/iniciar', methods=['POST'])
@@ -8215,15 +8353,12 @@ def capacitacion_iniciar(asignacion_id):
     asegurar_capacitacion_db()
     dni = normalizar_dni(session.get('dni'))
     with db() as con:
-        row = con.execute("SELECT * FROM capacitacion_asignaciones WHERE id=? AND dni=?", (asignacion_id, dni)).fetchone()
+        row = con.execute("SELECT * FROM capacitacion_asignaciones WHERE id=? AND normalizar_dni_sql(dni)=?", (asignacion_id,dni)).fetchone()
         if not row:
-            abort(404)
-        if row['estado'] != 'Completado':
-            con.execute("""UPDATE capacitacion_asignaciones
-                SET estado='En proceso', progreso=MAX(COALESCE(progreso,0), 25), fecha_inicio=COALESCE(NULLIF(fecha_inicio,''), ?)
-                WHERE id=?""", (now_txt(), asignacion_id))
-            con.commit()
-            capacitacion_evento(asignacion_id, row['curso_id'], dni, 'Inicio', 'El trabajador inició el curso.')
+            abort(403)
+        con.execute("UPDATE capacitacion_asignaciones SET estado='En proceso', progreso=CASE WHEN progreso<10 THEN 10 ELSE progreso END, fecha_inicio=COALESCE(NULLIF(fecha_inicio,''),?) WHERE id=?", (now_txt(), asignacion_id))
+        con.commit()
+    capacitacion_evento(asignacion_id, row['curso_id'], dni, 'Inicio', 'El trabajador inició la capacitación.')
     flash('Curso iniciado.', 'ok')
     return redirect(url_for('mi_capacitacion'))
 
@@ -8234,17 +8369,14 @@ def capacitacion_completar(asignacion_id):
     asegurar_capacitacion_db()
     dni = normalizar_dni(session.get('dni'))
     with db() as con:
-        row = con.execute("SELECT * FROM capacitacion_asignaciones WHERE id=? AND dni=?", (asignacion_id, dni)).fetchone()
+        row = con.execute("SELECT * FROM capacitacion_asignaciones WHERE id=? AND normalizar_dni_sql(dni)=?", (asignacion_id,dni)).fetchone()
         if not row:
-            abort(404)
-        con.execute("""UPDATE capacitacion_asignaciones
-            SET estado='Completado', progreso=100, fecha_completado=?, fecha_fin=?
-            WHERE id=?""", (now_txt(), now_txt(), asignacion_id))
+            abort(403)
+        con.execute("UPDATE capacitacion_asignaciones SET estado='Completado', progreso=100, fecha_completado=? WHERE id=?", (now_txt(), asignacion_id))
         con.commit()
-        capacitacion_evento(asignacion_id, row['curso_id'], dni, 'Completado', 'El trabajador marcó el curso como completado.')
-    flash('Curso marcado como completado.', 'ok')
+    capacitacion_evento(asignacion_id, row['curso_id'], dni, 'Completado', 'El trabajador marcó como completado.')
+    flash('Capacitación completada.', 'ok')
     return redirect(url_for('mi_capacitacion'))
-
 
 
 @app.route('/capacitacion/asignacion/<int:asignacion_id>/examen', methods=['GET', 'POST'])
@@ -8253,53 +8385,44 @@ def capacitacion_examen(asignacion_id):
     asegurar_capacitacion_db()
     dni = normalizar_dni(session.get('dni'))
     with db() as con:
-        asig = con.execute("""SELECT a.*, c.titulo, c.descripcion, c.puntaje_minimo, c.requiere_examen
-            FROM capacitacion_asignaciones a LEFT JOIN capacitacion_cursos c ON c.id=a.curso_id
-            WHERE a.id=? AND a.dni=?""", (asignacion_id, dni)).fetchone()
+        asig = con.execute("""SELECT a.*, c.titulo, c.puntaje_minimo FROM capacitacion_asignaciones a
+            LEFT JOIN capacitacion_cursos c ON c.id=a.curso_id
+            WHERE a.id=? AND normalizar_dni_sql(a.dni)=?""", (asignacion_id,dni)).fetchone()
         if not asig:
-            abort(404)
+            abort(403)
         preguntas = con.execute("SELECT * FROM capacitacion_preguntas WHERE curso_id=? AND activo=1 ORDER BY id", (asig['curso_id'],)).fetchall()
         if request.method == 'POST':
-            if not preguntas:
-                flash('Este curso aún no tiene preguntas configuradas.', 'bad')
-                return redirect(url_for('mi_capacitacion'))
+            total = len(preguntas)
             correctas = 0
             detalle = []
-            for q in preguntas:
-                resp = clean(request.form.get(f"p_{q['id']}")) .upper()
-                ok = resp == clean(q['correcta']).upper()
-                if ok:
-                    correctas += 1
-                detalle.append(f"{q['id']}:{resp}:{'OK' if ok else 'NO'}")
-            nota = round((correctas / max(1, len(preguntas))) * 100, 2)
-            minimo = float(asig['puntaje_minimo'] or 80)
-            estado_exam = 'Aprobado' if nota >= minimo else 'Desaprobado'
-            nuevo_estado = 'Completado' if estado_exam == 'Aprobado' else 'En proceso'
-            progreso = 100 if estado_exam == 'Aprobado' else 75
-            con.execute("""INSERT INTO capacitacion_examenes(asignacion_id,curso_id,dni,nota,estado,detalle,fecha)
-                           VALUES(?,?,?,?,?,?,?)""", (asignacion_id, asig['curso_id'], dni, nota, estado_exam, ';'.join(detalle), now_txt()))
-            con.execute("""UPDATE capacitacion_asignaciones SET nota=?, estado=?, progreso=?, fecha_fin=?, fecha_completado=CASE WHEN ?='Completado' THEN ? ELSE fecha_completado END WHERE id=?""",
-                        (nota, nuevo_estado, progreso, now_txt(), nuevo_estado, now_txt(), asignacion_id))
+            for p in preguntas:
+                resp = clean(request.form.get(f"p_{p['id']}")).upper()
+                ok = resp == clean(p['correcta']).upper()
+                if ok: correctas += 1
+                detalle.append(f"{p['id']}:{resp}:{'OK' if ok else 'NO'}")
+            nota = round((correctas/total)*100, 2) if total else 100
+            estado = 'Aprobado' if nota >= float(asig['puntaje_minimo'] or 80) else 'Desaprobado'
+            con.execute("INSERT INTO capacitacion_examenes(asignacion_id,curso_id,dni,nota,estado,detalle,fecha) VALUES(?,?,?,?,?,?,?)",
+                        (asignacion_id, asig['curso_id'], dni, nota, estado, ';'.join(detalle), now_txt()))
+            con.execute("UPDATE capacitacion_asignaciones SET nota=?, estado=?, progreso=CASE WHEN ?>=puntaje_minimo THEN 100 ELSE progreso END, fecha_completado=CASE WHEN ?>=puntaje_minimo THEN ? ELSE fecha_completado END WHERE id=?",
+                        (nota, estado, nota, nota, now_txt(), asignacion_id))
             con.commit()
-            capacitacion_evento(asignacion_id, asig['curso_id'], dni, 'Examen', f'{estado_exam} con {nota}%')
-            flash(f'Examen finalizado: {estado_exam} con {nota}%.', 'ok' if estado_exam == 'Aprobado' else 'bad')
+            flash(f'Examen enviado. Nota: {nota} - {estado}', 'ok')
             return redirect(url_for('mi_capacitacion'))
-    preguntas_html = ''.join([f"""
-      <div class='question-card'>
-        <b>{h(q['pregunta'])}</b>
-        <label><input type='radio' name='p_{q['id']}' value='A' required> A) {h(q['opcion_a'])}</label><br>
-        <label><input type='radio' name='p_{q['id']}' value='B'> B) {h(q['opcion_b'])}</label><br>
-        {f"<label><input type='radio' name='p_{q['id']}' value='C'> C) {h(q['opcion_c'])}</label><br>" if clean(q['opcion_c']) else ''}
-        {f"<label><input type='radio' name='p_{q['id']}' value='D'> D) {h(q['opcion_d'])}</label><br>" if clean(q['opcion_d']) else ''}
-      </div>
-    """ for q in preguntas]) or "<div class='empty-note'>El administrador aún no configuró preguntas para este curso.</div>"
-    content = f"""
-    <div class='admin-shell capacitacion-page'>
-      <div class='admin-header'><div class='admin-title-row'><button class='hambox' onclick='toggleSide()'>☰</button><div class='admin-title'><h1>Examen: {h(asig['titulo'])}</h1><div class='role'>Trabajador</div><p>Puntaje mínimo para aprobar: {h(asig['puntaje_minimo'] or 80)}%</p></div></div><a class='btn-green' href='/capacitacion'>Volver</a></div>
-      <div class='card'><form method='post'>{preguntas_html}<button class='btn-green'>Enviar examen</button></form></div>
-    </div>
-    """
-    return render_page(content, active='Capacitacion')
+    if not preguntas:
+        return render_template_string("<h2>Este curso aún no tiene preguntas configuradas.</h2><a href='/capacitacion'>Volver</a>")
+    qs = ''.join([f"""
+      <div class='q'><h3>{h(p['pregunta'])}</h3>
+        <label><input type='radio' name='p_{p['id']}' value='A' required> A. {h(p['opcion_a'])}</label>
+        <label><input type='radio' name='p_{p['id']}' value='B'> B. {h(p['opcion_b'])}</label>
+        <label><input type='radio' name='p_{p['id']}' value='C'> C. {h(p['opcion_c'])}</label>
+        <label><input type='radio' name='p_{p['id']}' value='D'> D. {h(p['opcion_d'])}</label>
+      </div>""" for p in preguntas])
+    return render_template_string(f"""
+    <html><head><style>body{{font-family:Segoe UI,Arial;background:#f4faf7;padding:24px}}.q{{background:white;border:1px solid #baf3d2;border-radius:22px;padding:20px;margin:14px 0}}label{{display:block;margin:9px}}button{{background:#0f9f55;color:white;border:0;border-radius:14px;padding:14px 18px;font-weight:900}}</style></head>
+    <body><h1>📝 Examen: {h(asig['titulo'])}</h1><form method='post'>{qs}<button>Enviar examen</button></form></body></html>
+    """)
+
 
 @app.route('/capacitacion/curso/<int:curso_id>/archivo')
 def capacitacion_archivo(curso_id):
@@ -8308,9 +8431,12 @@ def capacitacion_archivo(curso_id):
     asegurar_capacitacion_db()
     with db() as con:
         curso = con.execute("SELECT * FROM capacitacion_cursos WHERE id=?", (curso_id,)).fetchone()
-    if not curso or not clean(curso['ruta_archivo']) or not Path(curso['ruta_archivo']).exists():
+    if not curso or not clean(curso['ruta_archivo']):
         abort(404)
-    return send_file(curso['ruta_archivo'], as_attachment=False, download_name=curso['archivo_nombre'] or Path(curso['ruta_archivo']).name)
+    path = Path(curso['ruta_archivo'])
+    if not path.exists():
+        abort(404)
+    return send_file(path, as_attachment=False, download_name=curso['archivo_nombre'] or path.name)
 
 
 @app.route('/admin/capacitacion/exportar')
@@ -8321,13 +8447,13 @@ def admin_capacitacion_exportar():
     wb = Workbook()
     ws = wb.active
     ws.title = "CAPACITACION"
-    headers = ['DNI','TRABAJADOR','EMPRESA','AREA','CARGO','CURSO','CATEGORIA','ESTADO','PROGRESO','FECHA ASIGNACION','FECHA INICIO','FECHA COMPLETADO']
+    headers = ['DNI','TRABAJADOR','EMPRESA','AREA','CARGO','CURSO','SUBMODULO','CATEGORIA','ESTADO','PROGRESO','NOTA','FECHA ASIGNACION','FECHA INICIO','FECHA COMPLETADO']
     ws.append(headers)
     with db() as con:
-        rows = con.execute("""SELECT a.*, c.titulo, c.categoria FROM capacitacion_asignaciones a
+        rows = con.execute("""SELECT a.*, c.titulo, c.categoria, c.submodulo FROM capacitacion_asignaciones a
             LEFT JOIN capacitacion_cursos c ON c.id=a.curso_id ORDER BY a.trabajador""").fetchall()
     for r in rows:
-        ws.append([r['dni'], r['trabajador'], r['empresa'], r['area'], r['cargo'], r['titulo'], r['categoria'], r['estado'], r['progreso'], r['fecha_asignacion'], r['fecha_inicio'], r['fecha_completado']])
+        ws.append([r['dni'], r['trabajador'], r['empresa'], r['area'], r['cargo'], r['titulo'], r['submodulo'], r['categoria'], r['estado'], r['progreso'], r['nota'], r['fecha_asignacion'], r['fecha_inicio'], r['fecha_completado']])
     for cell in ws[1]:
         cell.font = Font(bold=True, color='FFFFFF')
         cell.fill = PatternFill('solid', fgColor='16A34A')
