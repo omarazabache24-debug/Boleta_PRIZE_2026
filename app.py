@@ -3639,6 +3639,87 @@ nav{position:relative!important;z-index:1!important;padding-top:4px!important;}
 
 /* Capacitación debe visualizarse justo debajo de Gestión Vacacional en menú admin */
 
+/* === AJUSTE SOLICITADO: indicadores totalmente verdes con letras blancas === */
+.admin-shell .dashboard-panel .dash-metric,
+.admin-shell .dashboard-panel.green .dash-metric,
+.admin-shell .dashboard-panel.purple .dash-metric{
+  background:linear-gradient(135deg,#16a34a 0%,#059669 55%,#047857 100%)!important;
+  border:1px solid rgba(255,255,255,.20)!important;
+  border-left:0!important;
+  border-radius:18px!important;
+  min-height:78px!important;
+  padding:16px 18px 16px 78px!important;
+  box-shadow:0 14px 28px rgba(5,150,105,.22)!important;
+  color:#ffffff!important;
+  position:relative!important;
+  display:block!important;
+  overflow:hidden!important;
+}
+.admin-shell .dashboard-panel .dash-metric:before{
+  content:""!important;
+  position:absolute!important;
+  inset:0!important;
+  background:radial-gradient(circle at 90% 10%,rgba(255,255,255,.18),transparent 32%)!important;
+  pointer-events:none!important;
+}
+.admin-shell .dashboard-panel .dash-metric span{
+  display:block!important;
+  color:#ffffff!important;
+  font-size:13px!important;
+  font-weight:1000!important;
+  margin:1px 0 8px!important;
+  text-shadow:0 1px 2px rgba(0,0,0,.10)!important;
+  position:relative!important;
+  z-index:2!important;
+}
+.admin-shell .dashboard-panel .dash-metric b{
+  color:#ffffff!important;
+  font-size:30px!important;
+  line-height:1!important;
+  font-weight:1000!important;
+  text-shadow:0 2px 4px rgba(0,0,0,.12)!important;
+  position:relative!important;
+  z-index:2!important;
+}
+.admin-shell .dashboard-panel .dash-metric .mi{
+  position:absolute!important;
+  left:16px!important;
+  right:auto!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  width:46px!important;
+  height:46px!important;
+  border-radius:14px!important;
+  display:grid!important;
+  place-items:center!important;
+  background:#ffffff!important;
+  border:1px solid rgba(255,255,255,.70)!important;
+  color:#059669!important;
+  font-size:20px!important;
+  font-style:normal!important;
+  box-shadow:0 10px 22px rgba(0,0,0,.12)!important;
+  z-index:3!important;
+}
+.admin-shell .dashboard-panel .full-link,
+.admin-shell .dashboard-panel.green .full-link,
+.admin-shell .dashboard-panel.purple .full-link{
+  background:linear-gradient(135deg,#16a34a,#059669)!important;
+  color:#ffffff!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+  box-shadow:0 14px 28px rgba(5,150,105,.18)!important;
+  border-radius:18px!important;
+  padding:14px 18px!important;
+  font-weight:1000!important;
+}
+.admin-shell .dashboard-panel .full-link:hover{
+  background:linear-gradient(135deg,#059669,#047857)!important;
+  color:#ffffff!important;
+  transform:translateY(-1px)!important;
+}
+@media(max-width:640px){
+  .admin-shell .dashboard-panel .dash-metric{padding-left:74px!important;min-height:76px!important}
+}
+
 </style>
 <script>
 function side(){return document.querySelector('.side')}
