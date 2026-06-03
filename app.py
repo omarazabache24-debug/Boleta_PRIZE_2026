@@ -7858,14 +7858,14 @@ def cargar_demos_capacitacion_cursos(force=False):
             return
 
         demos = [
-            ('Inducción Corporativa PRIZE 2026','Bienvenida institucional, cultura, reglamento interno, uso del Portal HR y canales de atención.','Inducción','Presencial','45 min',1,'Activo','Video','', 'Capacitación Anual','2026-06-10','2026-06-20',0,80,'Manual de inducción + Reglamento Interno + video de bienvenida.'),
-            ('Seguridad y Salud en el Trabajo - SST','Capacitación obligatoria sobre IPERC, actos/condiciones subestándar, incidentes y uso de EPP.','SST','Mixta','2 horas',1,'Activo','Mixto','', 'Capacitación Anual','2026-06-15','2026-06-30',1,14,'Video SST + PDF IPERC + evaluación de 10 preguntas.'),
-            ('Buenas Prácticas de Manufactura - BPM','Lineamientos de higiene, manipulación, inocuidad, orden y limpieza para operaciones.','BPM','Presencial','1 hora',1,'Activo','PDF','', 'Capacitación Anual','2026-07-01','2026-07-15',1,14,'Manual BPM + infografía + lista de asistencia.'),
-            ('Excel para RR.HH.','Curso práctico para control de planillas, reportes, filtros, fórmulas y tablas dinámicas.','RRHH','Virtual','8 horas',0,'Activo','Video','', 'Curso Virtual','2026-06-05','2026-08-30',1,14,'Videos por módulos + archivo Excel de práctica + examen final.'),
-            ('Legislación Laboral Peruana','Curso base sobre CTS, gratificaciones, vacaciones, jornada, contratos y beneficios sociales.','Legal Laboral','Virtual','6 horas',1,'Activo','Mixto','', 'Curso Virtual','2026-06-08','2026-08-31',1,14,'PDF normativo + casos prácticos + evaluación final.'),
-            ('Liderazgo y Gestión de Equipos','Curso para supervisores y jefes sobre comunicación, feedback, clima laboral y manejo de conflictos.','Liderazgo','Virtual','4 horas',0,'Activo','Video','', 'Curso Virtual','2026-06-12','2026-09-15',1,14,'Video liderazgo + guía de conversación + caso práctico.'),
-            ('Uso Correcto de EPP en Campo y Packing','Entrenamiento visual sobre casco, lentes, guantes, botas, chaleco y control de riesgos.','SST','Virtual','35 min',1,'Activo','Video','', 'Curso Virtual','2026-06-18','2026-07-10',1,14,'Microvideo + checklist EPP + evaluación rápida.'),
-            ('Clima, Cultura y Bienestar Laboral','Sensibilización sobre convivencia, respeto, comunicación y bienestar emocional laboral.','Bienestar','Virtual','50 min',0,'Activo','Presentación','', 'Curso Virtual','2026-07-05','2026-08-05',0,80,'Presentación + guía de buenas prácticas + encuesta final.'),
+            ('Inducción Corporativa PRIZE 2026','Bienvenida institucional, cultura, reglamento interno, uso del Portal HR y canales de atención.','Inducción','Presencial','45 min',1,'Activo','Video','https://www.youtube.com/results?search_query=induccion+corporativa+rrhh', 'Capacitación Anual','2026-06-10','2026-06-20',0,80,'Manual de inducción + Reglamento Interno + video de bienvenida.'),
+            ('Seguridad y Salud en el Trabajo - SST','Capacitación obligatoria sobre IPERC, actos/condiciones subestándar, incidentes y uso de EPP.','SST','Mixta','2 horas',1,'Activo','Mixto','https://www.youtube.com/results?search_query=seguridad+y+salud+en+el+trabajo+IPERC+EPP', 'Capacitación Anual','2026-06-15','2026-06-30',1,14,'Video SST + PDF IPERC + evaluación de 10 preguntas.'),
+            ('Buenas Prácticas de Manufactura - BPM','Lineamientos de higiene, manipulación, inocuidad, orden y limpieza para operaciones.','BPM','Presencial','1 hora',1,'Activo','PDF','https://www.youtube.com/results?search_query=buenas+practicas+de+manufactura+BPM+capacitacion', 'Capacitación Anual','2026-07-01','2026-07-15',1,14,'Manual BPM + infografía + lista de asistencia.'),
+            ('Excel para RR.HH.','Curso práctico para control de planillas, reportes, filtros, fórmulas y tablas dinámicas.','RRHH','Virtual','8 horas',0,'Activo','Video','https://www.youtube.com/results?search_query=excel+para+recursos+humanos+tablas+dinamicas', 'Curso Virtual','2026-06-05','2026-08-30',1,14,'Videos por módulos + archivo Excel de práctica + examen final.'),
+            ('Legislación Laboral Peruana','Curso base sobre CTS, gratificaciones, vacaciones, jornada, contratos y beneficios sociales.','Legal Laboral','Virtual','6 horas',1,'Activo','Mixto','https://www.youtube.com/results?search_query=legislacion+laboral+peruana+CTS+gratificaciones+vacaciones', 'Curso Virtual','2026-06-08','2026-08-31',1,14,'PDF normativo + casos prácticos + evaluación final.'),
+            ('Liderazgo y Gestión de Equipos','Curso para supervisores y jefes sobre comunicación, feedback, clima laboral y manejo de conflictos.','Liderazgo','Virtual','4 horas',0,'Activo','Video','https://www.youtube.com/results?search_query=liderazgo+y+gestion+de+equipos+capacitacion', 'Curso Virtual','2026-06-12','2026-09-15',1,14,'Video liderazgo + guía de conversación + caso práctico.'),
+            ('Uso Correcto de EPP en Campo y Packing','Entrenamiento visual sobre casco, lentes, guantes, botas, chaleco y control de riesgos.','SST','Virtual','35 min',1,'Activo','Video','https://www.youtube.com/results?search_query=uso+correcto+de+EPP+seguridad+industrial', 'Curso Virtual','2026-06-18','2026-07-10',1,14,'Microvideo + checklist EPP + evaluación rápida.'),
+            ('Clima, Cultura y Bienestar Laboral','Sensibilización sobre convivencia, respeto, comunicación y bienestar emocional laboral.','Bienestar','Virtual','50 min',0,'Activo','Presentación','https://www.youtube.com/results?search_query=clima+cultura+bienestar+laboral+capacitacion', 'Curso Virtual','2026-07-05','2026-08-05',0,80,'Presentación + guía de buenas prácticas + encuesta final.'),
         ]
         curso_ids = {}
         for d in demos:
@@ -7876,15 +7876,18 @@ def cargar_demos_capacitacion_cursos(force=False):
 
         materiales_demo = [
             ('Inducción Corporativa PRIZE 2026','Manual de Inducción PRIZE 2026','PDF','Manual_Induccion_PRIZE_2026.pdf',''),
-            ('Inducción Corporativa PRIZE 2026','Video de bienvenida institucional','Video','Bienvenida_Gerencia.mp4','https://www.youtube.com/'),
-            ('Seguridad y Salud en el Trabajo - SST','IPERC y control de riesgos','PDF','IPERC_Control_Riesgos.pdf',''),
-            ('Seguridad y Salud en el Trabajo - SST','Uso correcto de EPP','Video','Uso_EPP_SST.mp4','https://www.youtube.com/'),
+            ('Inducción Corporativa PRIZE 2026','Video demo de inducción corporativa','Video','', 'https://www.youtube.com/results?search_query=induccion+corporativa+rrhh'),
+            ('Seguridad y Salud en el Trabajo - SST','Manual SUNAFIL - IPERC y control de riesgos','PDF','', 'https://www.gob.pe/institucion/sunafil/informes-publicaciones/3727397-manual-para-identificacion-de-peligros-y-evaluacion-de-riesgos-y-determinacion-de-controles'),
+            ('Seguridad y Salud en el Trabajo - SST','Video demo - uso correcto de EPP','Video','', 'https://www.youtube.com/results?search_query=uso+correcto+de+EPP+capacitacion'),
             ('Buenas Prácticas de Manufactura - BPM','Manual BPM para operaciones','PDF','Manual_BPM_Operaciones.pdf',''),
-            ('Excel para RR.HH.','Clase 01 - Fórmulas para planillas','Video','Excel_RRHH_Clase_01.mp4','https://www.youtube.com/'),
+            ('Excel para RR.HH.','Video demo - Excel para RR.HH. y planillas','Video','', 'https://www.youtube.com/results?search_query=excel+para+recursos+humanos+planillas'),
             ('Excel para RR.HH.','Archivo de práctica Excel','Excel','Practica_Excel_RRHH.xlsx',''),
-            ('Legislación Laboral Peruana','Guía CTS, gratificación y vacaciones','PDF','Guia_Laboral_Peru_RRHH.pdf',''),
-            ('Liderazgo y Gestión de Equipos','Guía de feedback y conflictos','PDF','Guia_Liderazgo_Feedback.pdf',''),
-            ('Clima, Cultura y Bienestar Laboral','Presentación cultura y bienestar','Presentación','Cultura_Bienestar_PRIZE.pptx',''),
+            ('Legislación Laboral Peruana','MTPE - Materiales de difusión laboral','PDF','', 'https://www2.trabajo.gob.pe/el-ministerio-2/sector-trabajo/dir-gen-de-insp-del-trab/materiales-de-difusion/'),
+            ('Liderazgo y Gestión de Equipos','Video demo - feedback y gestión de equipos','Video','', 'https://www.youtube.com/results?search_query=feedback+liderazgo+gestion+de+equipos'),
+            ('Clima, Cultura y Bienestar Laboral','Material demo - clima laboral y bienestar','Presentación','', 'https://www.youtube.com/results?search_query=clima+laboral+bienestar+organizacional'),
+            ('Seguridad y Salud en el Trabajo - SST','SERVIR - Modelos y formatos de SST','Excel / Formatos','', 'https://www.gob.pe/institucion/servir/informes-publicaciones/3572314-modelos-y-formatos-de-seguridad-y-salud-en-el-trabajo-sst'),
+            ('Legislación Laboral Peruana','Gob.pe - Calculadora de beneficios sociales','Herramienta web','', 'https://www.gob.pe/72288-calcular-la-liquidacion-de-beneficios-sociales-para-trabajadores-del-sector-privado'),
+            ('Clima, Cultura y Bienestar Laboral','MTPE - Hostigamiento sexual laboral / prevención','Guía web','', 'https://www.gob.pe/institucion/mtpe/informes-publicaciones/6539736-hostigamiento-sexual-laboral-acciones-para-su-prevencion-y-fiscalizacion'),
         ]
         demo_dir = capacitacion_upload_dir() / 'demo_materiales'
         demo_dir.mkdir(parents=True, exist_ok=True)
@@ -8161,6 +8164,67 @@ def admin_capacitacion():
                     flash('Pregunta agregada al banco de evaluación.', 'ok')
                 return redirect(url_for('admin_capacitacion', mod='evaluaciones'))
 
+
+            if accion == 'actualizar_curso':
+                curso_id = int(request.form.get('curso_id') or 0)
+                titulo = clean(request.form.get('titulo'))
+                if not curso_id or not titulo:
+                    flash('No se pudo actualizar: falta ID o título.', 'bad')
+                    return redirect(url_for('admin_capacitacion', mod=request.form.get('mod','capacitaciones')))
+                try:
+                    puntaje_minimo = float(request.form.get('puntaje_minimo') or 80)
+                except Exception:
+                    puntaje_minimo = 80
+                con.execute("""UPDATE capacitacion_cursos
+                    SET titulo=?, descripcion=?, categoria=?, modalidad=?, duracion=?, estado=?, material_tipo=?,
+                        video_url=?, submodulo=?, fecha_programada=?, fecha_cierre=?, requiere_examen=?,
+                        puntaje_minimo=?, material_recomendado=?
+                    WHERE id=?""", (
+                    titulo,
+                    clean(request.form.get('descripcion')),
+                    clean(request.form.get('categoria')) or 'General',
+                    clean(request.form.get('modalidad')) or 'Virtual',
+                    clean(request.form.get('duracion')) or 'Sin duración',
+                    clean(request.form.get('estado')) or 'Activo',
+                    clean(request.form.get('material_tipo')) or 'Archivo',
+                    clean(request.form.get('video_url')),
+                    clean(request.form.get('submodulo')) or 'Curso Virtual',
+                    clean(request.form.get('fecha_programada')),
+                    clean(request.form.get('fecha_cierre')),
+                    1 if request.form.get('requiere_examen') == '1' else 0,
+                    puntaje_minimo,
+                    clean(request.form.get('material_recomendado')),
+                    curso_id
+                ))
+                con.commit()
+                flash('Registro actualizado correctamente.', 'ok')
+                return redirect(url_for('admin_capacitacion', mod=request.form.get('mod','cursos')))
+
+            if accion == 'toggle_curso':
+                curso_id = int(request.form.get('curso_id') or 0)
+                row = con.execute("SELECT estado FROM capacitacion_cursos WHERE id=?", (curso_id,)).fetchone()
+                if row:
+                    nuevo_estado = 'Inactivo' if clean(row['estado']).lower() == 'activo' else 'Activo'
+                    con.execute("UPDATE capacitacion_cursos SET estado=? WHERE id=?", (nuevo_estado, curso_id))
+                    con.commit()
+                    flash(f'Estado cambiado a {nuevo_estado}. No se eliminó historial.', 'ok')
+                return redirect(url_for('admin_capacitacion', mod=request.form.get('mod','dashboard')))
+
+            if accion == 'eliminar_curso':
+                curso_id = int(request.form.get('curso_id') or 0)
+                # Baja lógica: no borra asistencia, notas ni certificados.
+                con.execute("UPDATE capacitacion_cursos SET estado='Inactivo' WHERE id=?", (curso_id,))
+                con.commit()
+                flash('Registro marcado como Inactivo. Se conserva historial de participantes, notas y certificados.', 'ok')
+                return redirect(url_for('admin_capacitacion', mod=request.form.get('mod','dashboard')))
+
+            if accion == 'eliminar_material':
+                material_id = int(request.form.get('material_id') or 0)
+                con.execute("DELETE FROM capacitacion_materiales WHERE id=?", (material_id,))
+                con.commit()
+                flash('Material eliminado de la biblioteca.', 'ok')
+                return redirect(url_for('admin_capacitacion', mod=request.form.get('mod','cursos')))
+
             if accion == 'config':
                 con.execute("""INSERT INTO capacitacion_configuracion(tipo,nombre,descripcion,estado,fecha)
                     VALUES(?,?,?,?,?)""", (
@@ -8218,7 +8282,23 @@ def admin_capacitacion():
               <h3>{h(c['titulo'])}</h3>
               <p>{h(c['descripcion'])}</p>
               <div class='course-meta'><b>{h(c['modalidad'])}</b><b>{h(c['duracion'])}</b><b>{badge}</b></div>
-              <div class='course-actions'>{mat}<a class='mini-btn btn-green' href='/admin/capacitacion/curso/{c['id']}'>Gestionar</a></div>
+              <div class='course-actions'>
+                {mat}
+                <span class='mini-chip'>{h(c['estado'] if 'estado' in c.keys() else 'Activo')}</span>
+                <a class='mini-btn btn-green' href='/admin/capacitacion/curso/{c['id']}'>Gestionar / Editar</a>
+                <form method='post' style='display:inline' onsubmit="return confirm('¿Cambiar estado Activo/Inactivo?');">
+                  <input type='hidden' name='accion' value='toggle_curso'>
+                  <input type='hidden' name='curso_id' value='{c['id']}'>
+                  <input type='hidden' name='mod' value='{h(mod)}'>
+                  <button class='mini-btn btn-blue' type='submit'>Activo/Inactivo</button>
+                </form>
+                <form method='post' style='display:inline' onsubmit="return confirm('Se marcará como Inactivo para conservar historial. ¿Continuar?');">
+                  <input type='hidden' name='accion' value='eliminar_curso'>
+                  <input type='hidden' name='curso_id' value='{c['id']}'>
+                  <input type='hidden' name='mod' value='{h(mod)}'>
+                  <button class='mini-btn btn-red' type='submit'>Dar de baja</button>
+                </form>
+              </div>
             </div>""")
         return ''.join(out)
 
@@ -8240,7 +8320,8 @@ def admin_capacitacion():
         if ruta:
             return f"<span class='mini-chip'>📎 {h(archivo or Path(ruta).name)}</span>"
         return h(archivo or 'Material demo')
-    materiales_rows = ''.join([f"<tr><td>{h(m['curso_titulo'])}</td><td>{h(m['titulo'])}</td><td>{h(m['tipo'])}</td><td>{material_accion(m)}</td></tr>" for m in materiales]) or "<tr><td colspan='4'>Sin materiales.</td></tr>"
+    materiales_rows = ''.join([f"""<tr><td>{h(m['curso_titulo'])}</td><td>{h(m['titulo'])}</td><td>{h(m['tipo'])}</td><td>{material_accion(m)}</td>
+        <td><form method='post' onsubmit=\"return confirm('¿Eliminar este material?');\"><input type='hidden' name='accion' value='eliminar_material'><input type='hidden' name='material_id' value='{m['id']}'><input type='hidden' name='mod' value='{h(mod)}'><button class='mini-btn btn-red' type='submit'>Eliminar</button></form></td></tr>""" for m in materiales]) or "<tr><td colspan='5'>Sin materiales.</td></tr>"
     config_rows = ''.join([f"<tr><td>{h(c['tipo'])}</td><td>{h(c['nombre'])}</td><td>{h(c['estado'])}</td></tr>" for c in configs]) or "<tr><td colspan='3'>Sin configuración personalizada.</td></tr>"
 
     dashboard_html = f"""
@@ -8332,7 +8413,7 @@ def admin_capacitacion():
             </form>
           </div></div>
           <h2 class='mt'>Cursos virtuales</h2><div class='cards-grid'>{curso_cards(cursos_virtuales,'curso')}</div>
-          <h2 class='mt'>Biblioteca digital</h2><table class='pro-table'><thead><tr><th>Curso</th><th>Material</th><th>Tipo</th><th>Archivo/Enlace</th></tr></thead><tbody>{materiales_rows}</tbody></table>
+          <h2 class='mt'>Biblioteca digital</h2><table class='pro-table'><thead><tr><th>Curso</th><th>Material</th><th>Tipo</th><th>Archivo/Enlace</th><th>Acción</th></tr></thead><tbody>{materiales_rows}</tbody></table>
         """
     elif mod == 'seguimiento':
         content = f"""
@@ -8549,6 +8630,68 @@ def admin_capacitacion_curso(curso_id):
     if request.method == 'POST':
         accion = clean(request.form.get('accion'))
         with db() as con:
+            if accion == 'actualizar_curso':
+                try:
+                    puntaje_minimo = float(request.form.get('puntaje_minimo') or 80)
+                except Exception:
+                    puntaje_minimo = 80
+                con.execute("""UPDATE capacitacion_cursos
+                    SET titulo=?, descripcion=?, categoria=?, modalidad=?, duracion=?, estado=?, material_tipo=?, video_url=?,
+                        submodulo=?, fecha_programada=?, fecha_cierre=?, requiere_examen=?, puntaje_minimo=?, material_recomendado=?
+                    WHERE id=?""", (
+                    clean(request.form.get('titulo')),
+                    clean(request.form.get('descripcion')),
+                    clean(request.form.get('categoria')),
+                    clean(request.form.get('modalidad')),
+                    clean(request.form.get('duracion')),
+                    clean(request.form.get('estado')) or 'Activo',
+                    clean(request.form.get('material_tipo')) or 'Mixto',
+                    clean(request.form.get('video_url')),
+                    clean(request.form.get('submodulo')) or 'Curso Virtual',
+                    clean(request.form.get('fecha_programada')),
+                    clean(request.form.get('fecha_cierre')),
+                    1 if request.form.get('requiere_examen') == '1' else 0,
+                    puntaje_minimo,
+                    clean(request.form.get('material_recomendado')),
+                    curso_id
+                ))
+                con.commit()
+                flash('Curso/capacitación actualizado correctamente.', 'ok')
+
+            if accion == 'subir_material':
+                titulo = clean(request.form.get('titulo')) or 'Material de estudio'
+                tipo = clean(request.form.get('tipo')) or 'PDF'
+                enlace = clean(request.form.get('enlace'))
+                f = request.files.get('archivo')
+                archivo_nombre = ''
+                ruta_archivo = ''
+                if f and f.filename:
+                    ext = Path(f.filename).suffix.lower()
+                    if ext in CAPACITACION_ALLOWED:
+                        fname = secure_filename(f"material_{curso_id}_{now_file()}_{f.filename}")
+                        folder = UPLOAD_DIR / 'capacitacion_materiales'
+                        folder.mkdir(parents=True, exist_ok=True)
+                        path = folder / fname
+                        f.save(path)
+                        archivo_nombre = f.filename
+                        ruta_archivo = str(path)
+                con.execute("""INSERT INTO capacitacion_materiales(curso_id,titulo,tipo,archivo_nombre,ruta_archivo,enlace,fecha,usuario)
+                    VALUES(?,?,?,?,?,?,?,?)""", (curso_id,titulo,tipo,archivo_nombre,ruta_archivo,enlace,now_txt(),'ADMIN'))
+                con.commit()
+                flash('Material agregado.', 'ok')
+
+            if accion == 'eliminar_material':
+                con.execute("DELETE FROM capacitacion_materiales WHERE id=?", (int(request.form.get('material_id') or 0),))
+                con.commit()
+                flash('Material eliminado.', 'ok')
+
+            if accion == 'toggle_estado':
+                row = con.execute("SELECT estado FROM capacitacion_cursos WHERE id=?", (curso_id,)).fetchone()
+                nuevo_estado = 'Inactivo' if row and clean(row['estado']).lower() == 'activo' else 'Activo'
+                con.execute("UPDATE capacitacion_cursos SET estado=? WHERE id=?", (nuevo_estado, curso_id))
+                con.commit()
+                flash(f'Estado cambiado a {nuevo_estado}.', 'ok')
+
             if accion == 'eliminar_pregunta':
                 con.execute("DELETE FROM capacitacion_preguntas WHERE id=?", (int(request.form.get('pregunta_id') or 0),))
                 con.commit()
@@ -8563,17 +8706,52 @@ def admin_capacitacion_curso(curso_id):
         materiales = con.execute("SELECT * FROM capacitacion_materiales WHERE curso_id=? ORDER BY id DESC", (curso_id,)).fetchall()
     rows = ''.join([f"<tr><td>{h(a['dni'])}</td><td>{h(a['trabajador'])}</td><td>{h(a['empresa'])}</td><td>{h(a['area'])}</td><td>{h(a['estado'])}</td><td>{h(a['progreso'])}%</td><td>{h(a['nota'])}</td></tr>" for a in asignaciones]) or "<tr><td colspan='7'>Sin participantes.</td></tr>"
     pregs = ''.join([f"<tr><td>{h(p['pregunta'])}</td><td>{h(p['correcta'])}</td></tr>" for p in preguntas]) or "<tr><td colspan='2'>Sin preguntas.</td></tr>"
-    mats = ''.join([f"<tr><td>{h(m['titulo'])}</td><td>{h(m['tipo'])}</td><td>{h(m['archivo_nombre'] or m['enlace'])}</td></tr>" for m in materiales]) or "<tr><td colspan='3'>Sin materiales.</td></tr>"
+    mats = ''.join([f"""<tr><td>{h(m['titulo'])}</td><td>{h(m['tipo'])}</td><td>{h(m['archivo_nombre'] or m['enlace'])}</td>
+        <td><form method='post' onsubmit=\"return confirm('¿Eliminar material?');\"><input type='hidden' name='accion' value='eliminar_material'><input type='hidden' name='material_id' value='{m['id']}'><button>Eliminar</button></form></td></tr>""" for m in materiales]) or "<tr><td colspan='4'>Sin materiales.</td></tr>"
+    def sel(valor, esperado):
+        return 'selected' if clean(valor).lower() == clean(esperado).lower() else ''
     return render_template_string(f"""
     <html><head><title>{h(curso['titulo'])}</title><style>
     body{{font-family:Segoe UI,Arial;background:#f4faf7;margin:0;padding:30px;color:#0f172a}} a{{color:#0f9f55;font-weight:900;text-decoration:none}}
     .panel{{background:white;border:1px solid #baf3d2;border-radius:24px;padding:24px;margin:16px 0;box-shadow:0 16px 35px rgba(2,58,38,.08)}}
     table{{width:100%;border-collapse:collapse}}td,th{{padding:12px;border-bottom:1px solid #e2e8f0;text-align:left}} .btn{{background:#0f9f55;color:white;padding:12px 16px;border-radius:12px;display:inline-block}}
+    input,select,textarea{{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:12px;margin-top:6px}} textarea{{min-height:80px}} .grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}} button{{border:0;border-radius:10px;padding:10px 12px;font-weight:800;cursor:pointer}} .ok{{background:#0f9f55;color:white}} .danger{{background:#dc2626;color:white}} .muted{{color:#64748b}}
     </style></head><body>
     <a href='/admin/capacitacion'>← Volver</a>
-    <div class='panel'><h1>🎓 {h(curso['titulo'])}</h1><p>{h(curso['descripcion'])}</p><p><b>Submódulo:</b> {h(curso['submodulo'])} · <b>Categoría:</b> {h(curso['categoria'])} · <b>Modalidad:</b> {h(curso['modalidad'])}</p>{capacitacion_material_html(curso)}</div>
+    <div class='panel'><h1>🎓 {h(curso['titulo'])}</h1><p>{h(curso['descripcion'])}</p><p><b>Estado:</b> {h(curso['estado'])} · <b>Submódulo:</b> {h(curso['submodulo'])} · <b>Categoría:</b> {h(curso['categoria'])} · <b>Modalidad:</b> {h(curso['modalidad'])}</p>{capacitacion_material_html(curso)}
+      <form method='post' style='margin-top:12px'><input type='hidden' name='accion' value='toggle_estado'><button class='ok'>Cambiar Activo/Inactivo</button></form>
+    </div>
+    <div class='panel'><h2>Editar capacitación / curso</h2>
+      <form method='post'>
+        <input type='hidden' name='accion' value='actualizar_curso'>
+        <div class='grid'>
+          <label>Título<input name='titulo' value='{h(curso['titulo'])}'></label>
+          <label>Submódulo<select name='submodulo'><option {sel(curso['submodulo'],'Capacitación Anual')}>Capacitación Anual</option><option {sel(curso['submodulo'],'Curso Virtual')}>Curso Virtual</option></select></label>
+          <label>Estado<select name='estado'><option {sel(curso['estado'],'Activo')}>Activo</option><option {sel(curso['estado'],'Inactivo')}>Inactivo</option></select></label>
+          <label>Categoría<input name='categoria' value='{h(curso['categoria'])}'></label>
+          <label>Modalidad<input name='modalidad' value='{h(curso['modalidad'])}'></label>
+          <label>Duración<input name='duracion' value='{h(curso['duracion'])}'></label>
+          <label>Fecha programada<input type='date' name='fecha_programada' value='{h(curso['fecha_programada'] if 'fecha_programada' in curso.keys() else '')}'></label>
+          <label>Fecha cierre<input type='date' name='fecha_cierre' value='{h(curso['fecha_cierre'] if 'fecha_cierre' in curso.keys() else '')}'></label>
+          <label>Material principal<input name='material_tipo' value='{h(curso['material_tipo'] if 'material_tipo' in curso.keys() else '')}'></label>
+          <label>Video / enlace internet<input name='video_url' value='{h(curso['video_url'] if 'video_url' in curso.keys() else '')}'></label>
+          <label>Requiere examen<select name='requiere_examen'><option value='0' {'selected' if int(curso['requiere_examen'] or 0)==0 else ''}>No</option><option value='1' {'selected' if int(curso['requiere_examen'] or 0)==1 else ''}>Sí</option></select></label>
+          <label>Nota mínima<input name='puntaje_minimo' value='{h(curso['puntaje_minimo'] if 'puntaje_minimo' in curso.keys() else 80)}'></label>
+        </div>
+        <label>Descripción<textarea name='descripcion'>{h(curso['descripcion'])}</textarea></label>
+        <label>Material recomendado<textarea name='material_recomendado'>{h(curso['material_recomendado'] if 'material_recomendado' in curso.keys() else '')}</textarea></label>
+        <button class='ok'>Guardar cambios</button>
+      </form>
+    </div>
+    <div class='panel'><h2>Agregar material / video internet</h2>
+      <form method='post' enctype='multipart/form-data'>
+        <input type='hidden' name='accion' value='subir_material'>
+        <div class='grid'><label>Título<input name='titulo'></label><label>Tipo<select name='tipo'><option>Video</option><option>PDF</option><option>Presentación</option><option>Manual</option><option>Herramienta web</option></select></label><label>Enlace internet<input name='enlace' placeholder='YouTube / Gob.pe / Drive / Vimeo'></label><label>Archivo local<input type='file' name='archivo'></label></div>
+        <button class='ok'>Agregar material</button>
+      </form>
+    </div>
     <div class='panel'><h2>Participantes</h2><table><tr><th>DNI</th><th>Trabajador</th><th>Empresa</th><th>Área</th><th>Estado</th><th>Avance</th><th>Nota</th></tr>{rows}</table></div>
-    <div class='panel'><h2>Materiales</h2><table><tr><th>Título</th><th>Tipo</th><th>Archivo/Enlace</th></tr>{mats}</table></div>
+    <div class='panel'><h2>Materiales</h2><table><tr><th>Título</th><th>Tipo</th><th>Archivo/Enlace</th><th>Acción</th></tr>{mats}</table></div>
     <div class='panel'><h2>Preguntas</h2><table><tr><th>Pregunta</th><th>Correcta</th></tr>{pregs}</table></div>
     </body></html>
     """)
