@@ -7772,6 +7772,27 @@ def asegurar_capacitacion_db():
             detalle TEXT,
             fecha TEXT
         )""")
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS capacitacion_configuracion(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT,
+            nombre TEXT,
+            descripcion TEXT,
+            estado TEXT DEFAULT 'Activo',
+            fecha TEXT
+        )""")
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS capacitacion_materiales(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            curso_id INTEGER,
+            titulo TEXT,
+            tipo TEXT,
+            archivo_nombre TEXT,
+            ruta_archivo TEXT,
+            enlace TEXT,
+            fecha TEXT,
+            usuario TEXT
+        )""")
         # Compatibilidad: agrega columnas nuevas si la base ya existía en Render/local.
         try:
             cols = [r['name'] for r in con.execute("PRAGMA table_info(capacitacion_cursos)").fetchall()]
@@ -7811,6 +7832,112 @@ def asegurar_capacitacion_db():
                 now_txt(),
                 'SISTEMA'
             ))
+        con.commit()
+
+
+def cargar_demos_capacitacion_cursos(force=False):
+    """Precarga demos visuales para Capacitaciones y Cursos Virtuales.
+    No borra información real. Si force=True, recrea solo los registros DEMO.
+    """
+    asegurar_capacitacion_db()
+    with db() as con:
+        if force:
+            ids = [r['id'] for r in con.execute("SELECT id FROM capacitacion_cursos WHERE creado_por='DEMO'").fetchall()]
+            if ids:
+                placeholders = ','.join(['?'] * len(ids))
+                con.execute(f"DELETE FROM capacitacion_materiales WHERE curso_id IN ({placeholders})", ids)
+                con.execute(f"DELETE FROM capacitacion_preguntas WHERE curso_id IN ({placeholders})", ids)
+                con.execute(f"DELETE FROM capacitacion_asignaciones WHERE curso_id IN ({placeholders})", ids)
+                con.execute(f"DELETE FROM capacitacion_eventos WHERE curso_id IN ({placeholders})", ids)
+                con.execute(f"DELETE FROM capacitacion_examenes WHERE curso_id IN ({placeholders})", ids)
+                con.execute(f"DELETE FROM capacitacion_cursos WHERE id IN ({placeholders})", ids)
+            con.execute("DELETE FROM capacitacion_configuracion WHERE descripcion LIKE 'DEMO:%'")
+            con.commit()
+        existe = con.execute("SELECT id FROM capacitacion_cursos WHERE creado_por='DEMO' LIMIT 1").fetchone()
+        if existe:
+            return
+
+        demos = [
+            ('Inducción Corporativa PRIZE 2026','Bienvenida institucional, cultura, reglamento interno, uso del Portal HR y canales de atención.','Inducción','Presencial','45 min',1,'Activo','Video','', 'Capacitación Anual','2026-06-10','2026-06-20',0,80,'Manual de inducción + Reglamento Interno + video de bienvenida.'),
+            ('Seguridad y Salud en el Trabajo - SST','Capacitación obligatoria sobre IPERC, actos/condiciones subestándar, incidentes y uso de EPP.','SST','Mixta','2 horas',1,'Activo','Mixto','', 'Capacitación Anual','2026-06-15','2026-06-30',1,14,'Video SST + PDF IPERC + evaluación de 10 preguntas.'),
+            ('Buenas Prácticas de Manufactura - BPM','Lineamientos de higiene, manipulación, inocuidad, orden y limpieza para operaciones.','BPM','Presencial','1 hora',1,'Activo','PDF','', 'Capacitación Anual','2026-07-01','2026-07-15',1,14,'Manual BPM + infografía + lista de asistencia.'),
+            ('Excel para RR.HH.','Curso práctico para control de planillas, reportes, filtros, fórmulas y tablas dinámicas.','RRHH','Virtual','8 horas',0,'Activo','Video','', 'Curso Virtual','2026-06-05','2026-08-30',1,14,'Videos por módulos + archivo Excel de práctica + examen final.'),
+            ('Legislación Laboral Peruana','Curso base sobre CTS, gratificaciones, vacaciones, jornada, contratos y beneficios sociales.','Legal Laboral','Virtual','6 horas',1,'Activo','Mixto','', 'Curso Virtual','2026-06-08','2026-08-31',1,14,'PDF normativo + casos prácticos + evaluación final.'),
+            ('Liderazgo y Gestión de Equipos','Curso para supervisores y jefes sobre comunicación, feedback, clima laboral y manejo de conflictos.','Liderazgo','Virtual','4 horas',0,'Activo','Video','', 'Curso Virtual','2026-06-12','2026-09-15',1,14,'Video liderazgo + guía de conversación + caso práctico.'),
+            ('Uso Correcto de EPP en Campo y Packing','Entrenamiento visual sobre casco, lentes, guantes, botas, chaleco y control de riesgos.','SST','Virtual','35 min',1,'Activo','Video','', 'Curso Virtual','2026-06-18','2026-07-10',1,14,'Microvideo + checklist EPP + evaluación rápida.'),
+            ('Clima, Cultura y Bienestar Laboral','Sensibilización sobre convivencia, respeto, comunicación y bienestar emocional laboral.','Bienestar','Virtual','50 min',0,'Activo','Presentación','', 'Curso Virtual','2026-07-05','2026-08-05',0,80,'Presentación + guía de buenas prácticas + encuesta final.'),
+        ]
+        curso_ids = {}
+        for d in demos:
+            con.execute("""INSERT INTO capacitacion_cursos
+                (titulo,descripcion,categoria,modalidad,duracion,obligatorio,estado,material_tipo,video_url,submodulo,fecha_programada,fecha_cierre,requiere_examen,puntaje_minimo,material_recomendado,fecha_creacion,creado_por)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (*d, now_txt(), 'DEMO'))
+            curso_ids[d[0]] = con.execute('SELECT last_insert_rowid() AS id').fetchone()['id']
+
+        materiales_demo = [
+            ('Inducción Corporativa PRIZE 2026','Manual de Inducción PRIZE 2026','PDF','Manual_Induccion_PRIZE_2026.pdf',''),
+            ('Inducción Corporativa PRIZE 2026','Video de bienvenida institucional','Video','Bienvenida_Gerencia.mp4','https://www.youtube.com/'),
+            ('Seguridad y Salud en el Trabajo - SST','IPERC y control de riesgos','PDF','IPERC_Control_Riesgos.pdf',''),
+            ('Seguridad y Salud en el Trabajo - SST','Uso correcto de EPP','Video','Uso_EPP_SST.mp4','https://www.youtube.com/'),
+            ('Buenas Prácticas de Manufactura - BPM','Manual BPM para operaciones','PDF','Manual_BPM_Operaciones.pdf',''),
+            ('Excel para RR.HH.','Clase 01 - Fórmulas para planillas','Video','Excel_RRHH_Clase_01.mp4','https://www.youtube.com/'),
+            ('Excel para RR.HH.','Archivo de práctica Excel','Excel','Practica_Excel_RRHH.xlsx',''),
+            ('Legislación Laboral Peruana','Guía CTS, gratificación y vacaciones','PDF','Guia_Laboral_Peru_RRHH.pdf',''),
+            ('Liderazgo y Gestión de Equipos','Guía de feedback y conflictos','PDF','Guia_Liderazgo_Feedback.pdf',''),
+            ('Clima, Cultura y Bienestar Laboral','Presentación cultura y bienestar','Presentación','Cultura_Bienestar_PRIZE.pptx',''),
+        ]
+        demo_dir = capacitacion_upload_dir() / 'demo_materiales'
+        demo_dir.mkdir(parents=True, exist_ok=True)
+        for curso, titulo, tipo, archivo, enlace in materiales_demo:
+            cid = curso_ids.get(curso)
+            ruta = ''
+            if archivo and not enlace:
+                path = demo_dir / secure_filename(archivo)
+                if not path.exists():
+                    path.write_text(f"MATERIAL DEMO - {titulo}\nCurso: {curso}\nTipo: {tipo}\nEste archivo es referencial para visualizar la biblioteca del módulo.\n", encoding='utf-8')
+                ruta = str(path)
+            con.execute("""INSERT INTO capacitacion_materiales(curso_id,titulo,tipo,archivo_nombre,ruta_archivo,enlace,fecha,usuario)
+                VALUES(?,?,?,?,?,?,?,?)""", (cid,titulo,tipo,archivo,ruta,enlace,now_txt(),'DEMO'))
+
+        preguntas_demo = [
+            ('Seguridad y Salud en el Trabajo - SST','¿Qué significa IPERC?','Identificación de Peligros, Evaluación de Riesgos y Controles','Informe de Personas y Riesgos','Inspección Preventiva','Índice de Productividad','A'),
+            ('Seguridad y Salud en el Trabajo - SST','¿Qué debe hacer un trabajador ante una condición insegura?','Reportarla de inmediato','Ignorarla','Continuar sin avisar','Esperar fin de mes','A'),
+            ('Buenas Prácticas de Manufactura - BPM','¿Cuál es una buena práctica antes de iniciar labores?','Lavado de manos y verificación de higiene','Ingresar sin control','Comer en zona operativa','Omitir EPP','A'),
+            ('Excel para RR.HH.','¿Qué herramienta resume bases grandes por campos?','Tabla dinámica','Paint','Bloc de notas','Calculadora','A'),
+            ('Legislación Laboral Peruana','¿Qué beneficio se deposita normalmente en mayo y noviembre?','CTS','Utilidades','Asignación familiar','Movilidad','A'),
+            ('Liderazgo y Gestión de Equipos','¿Qué práctica mejora el clima laboral?','Feedback respetuoso y oportuno','Gritos','Falta de comunicación','Sanción sin explicación','A'),
+        ]
+        for curso, preg, a, b, c, d, corr in preguntas_demo:
+            cid = curso_ids.get(curso)
+            con.execute("""INSERT INTO capacitacion_preguntas(curso_id,pregunta,opcion_a,opcion_b,opcion_c,opcion_d,correcta,activo,fecha_registro)
+                VALUES(?,?,?,?,?,?,?,?,?)""", (cid,preg,a,b,c,d,corr,1,now_txt()))
+
+        configs_demo = [
+            ('Categoría','Inducción','DEMO: Capacitación de ingreso y cultura organizacional.'),
+            ('Categoría','SST','DEMO: Seguridad y Salud en el Trabajo.'),
+            ('Categoría','BPM / Calidad','DEMO: Buenas prácticas, inocuidad y calidad.'),
+            ('Modalidad','Presencial / Virtual / Mixta','DEMO: Modalidades disponibles para programación.'),
+            ('Parámetro de examen','Nota mínima 14/20','DEMO: Regla sugerida para aprobar evaluaciones.'),
+            ('Intentos permitidos','2 intentos','DEMO: Control sugerido para cursos obligatorios.'),
+            ('Plantilla certificado','Certificado PRIZE con QR','DEMO: Emisión automática al completar o aprobar.'),
+        ]
+        for tipo, nombre, desc in configs_demo:
+            con.execute("""INSERT INTO capacitacion_configuracion(tipo,nombre,descripcion,estado,fecha)
+                VALUES(?,?,?,?,?)""", (tipo,nombre,desc,'Activo',now_txt()))
+
+        trabajadores = con.execute("SELECT * FROM trabajadores WHERE activo=1 ORDER BY nombre LIMIT 40").fetchall()
+        estados = [('Completado',100,18),('Aprobado',100,16),('En proceso',55,0),('Pendiente',0,0),('Vencido',20,0)]
+        for idx, t in enumerate(trabajadores):
+            for j, (curso, cid) in enumerate(list(curso_ids.items())[:5]):
+                if (idx + j) % 3 == 0 or j < 2:
+                    estado, progreso, nota = estados[(idx+j) % len(estados)]
+                    con.execute("""INSERT OR IGNORE INTO capacitacion_asignaciones
+                        (curso_id,dni,trabajador,empresa,area,cargo,estado,progreso,fecha_asignacion,fecha_inicio,fecha_fin,fecha_completado,nota,observacion,asignado_por)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
+                        cid, normalizar_dni(t['dni']), clean(t['nombre']), clean(t['empresa']), clean(t['area']), clean(t['cargo']),
+                        estado, progreso, now_txt(), '02/06/2026', '30/06/2026', now_txt() if progreso == 100 else '', nota,
+                        'Registro demo para visualizar seguimiento.', 'DEMO'
+                    ))
         con.commit()
 
 
@@ -7917,10 +8044,16 @@ def admin_capacitacion():
             usuario TEXT
         )""")
         con.commit()
+    cargar_demos_capacitacion_cursos(force=False)
 
     if request.method == 'POST':
         accion = clean(request.form.get('accion'))
         with db() as con:
+            if accion == 'cargar_demos':
+                cargar_demos_capacitacion_cursos(force=True)
+                flash('Demos de capacitaciones, cursos, videos, materiales, evaluaciones y seguimiento cargados correctamente.', 'ok')
+                return redirect(url_for('admin_capacitacion', mod=request.form.get('mod','dashboard')))
+
             if accion == 'crear_curso':
                 titulo = clean(request.form.get('titulo'))
                 if not titulo:
@@ -8098,13 +8231,29 @@ def admin_capacitacion():
         </tr>""" for a in asignaciones]) or "<tr><td colspan='8'>Sin asignaciones registradas.</td></tr>"
 
     preguntas_rows = ''.join([f"<tr><td>{h(p['titulo'])}</td><td>{h(p['pregunta'])}</td><td>{h(p['correcta'])}</td></tr>" for p in preguntas]) or "<tr><td colspan='3'>Sin preguntas.</td></tr>"
-    materiales_rows = ''.join([f"<tr><td>{h(m['curso_titulo'])}</td><td>{h(m['titulo'])}</td><td>{h(m['tipo'])}</td><td>{h(m['archivo_nombre'] or m['enlace'])}</td></tr>" for m in materiales]) or "<tr><td colspan='4'>Sin materiales.</td></tr>"
+    def material_accion(m):
+        enlace = clean(m['enlace'] if 'enlace' in m.keys() else '')
+        ruta = clean(m['ruta_archivo'] if 'ruta_archivo' in m.keys() else '')
+        archivo = clean(m['archivo_nombre'] if 'archivo_nombre' in m.keys() else '')
+        if enlace:
+            return f"<a class='mini-btn btn-green' target='_blank' href='{h(enlace)}'>Abrir enlace</a>"
+        if ruta:
+            return f"<span class='mini-chip'>📎 {h(archivo or Path(ruta).name)}</span>"
+        return h(archivo or 'Material demo')
+    materiales_rows = ''.join([f"<tr><td>{h(m['curso_titulo'])}</td><td>{h(m['titulo'])}</td><td>{h(m['tipo'])}</td><td>{material_accion(m)}</td></tr>" for m in materiales]) or "<tr><td colspan='4'>Sin materiales.</td></tr>"
     config_rows = ''.join([f"<tr><td>{h(c['tipo'])}</td><td>{h(c['nombre'])}</td><td>{h(c['estado'])}</td></tr>" for c in configs]) or "<tr><td colspan='3'>Sin configuración personalizada.</td></tr>"
 
     dashboard_html = f"""
       <div class='hero'>
         <div><h1>🎓 Capacitación y Desarrollo</h1><p>Administración separada por submódulos: capacitaciones, cursos virtuales, seguimiento, evaluaciones y configuración.</p></div>
-        <a class='hero-btn' href='{url_for('admin_capacitacion_exportar')}'>⬇ Exportar reporte</a>
+        <div class='hero-actions'>
+          <form method='post' style='display:inline'>
+            <input type='hidden' name='accion' value='cargar_demos'>
+            <input type='hidden' name='mod' value='{h(mod)}'>
+            <button class='hero-btn' type='submit'>✨ Recargar demos</button>
+          </form>
+          <a class='hero-btn' href='{url_for('admin_capacitacion_exportar')}'>⬇ Exportar reporte</a>
+        </div>
       </div>
       <div class='kpis'>
         <div class='kpi'><span>📅</span><b>{len(cap_anuales)}</b><p>Capacitaciones</p></div>
@@ -8112,6 +8261,10 @@ def admin_capacitacion():
         <div class='kpi'><span>👥</span><b>{total_asig}</b><p>Asignaciones</p></div>
         <div class='kpi'><span>✅</span><b>{completados}</b><p>Completados</p></div>
         <div class='kpi'><span>📝</span><b>{con_examen}</b><p>Con examen</p></div>
+      </div>
+      <div class='panel'>
+        <h2>✨ Vista demo cargada</h2>
+        <p>El módulo incluye ejemplos de inducción, SST, BPM, Excel para RR.HH., legislación laboral, liderazgo y bienestar; además trae biblioteca digital, enlaces de video, materiales referenciales, preguntas de evaluación, configuración y seguimiento por trabajador.</p>
       </div>
       <div class='module-grid'>
         <a class='big-module' href='{url_for('admin_capacitacion', mod='capacitaciones')}'><span>📅</span><h2>Capacitaciones</h2><p>Plan anual, programación, asistencia, evidencias, certificados e indicadores.</p></a>
@@ -8313,6 +8466,8 @@ textarea{{min-height:90px;resize:vertical}}
 .course-actions{{display:flex;gap:8px;flex-wrap:wrap}}
 .mini-btn{{text-decoration:none;border:0;border-radius:12px;padding:11px 13px;font-weight:900;display:inline-block}}
 .btn-green{{background:var(--green);color:white}} .btn-blue{{background:#e0f2fe;color:#075985}}
+.hero-actions{{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}}
+.mini-chip{{display:inline-flex;align-items:center;gap:6px;background:#e8fff3;color:#065f46;border:1px solid var(--line);border-radius:999px;padding:8px 11px;font-size:12px;font-weight:900}}
 .cap-video{{width:100%;max-height:170px;border-radius:16px;background:#000}}
 .pro-table{{width:100%;border-collapse:separate;border-spacing:0 10px;margin-top:10px}}
 .pro-table th{{text-align:left;color:#475569;font-size:13px;padding:10px 16px;font-weight:900}}
